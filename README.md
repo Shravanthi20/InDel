@@ -2,8 +2,8 @@
 
 **Team:** ImaginAI
 **Hackathon:** Guidewire DEVTrails 2026
-**Persona:** Food Delivery Partners (Swiggy / Zomato style)
-**Current Phase:** Phase 1 — Ideation and Foundation
+**Persona:** E-commerce 
+**Current Phase:** Phase 1 (Ideation)
 
 > **Note:** This README describes what we are planning to build. Specific values such as premium amounts, payout figures, coverage ratios, and threshold numbers are illustrative estimates used for design and modelling purposes. As stated in the hackathon guidelines, exact figures do not need to be defined at this stage and will be refined during development in collaboration with the relevant stakeholders. Any API integrations or third-party service references are subject to change as the project progresses.
 
@@ -268,18 +268,29 @@ Workers will receive a notification explaining the disruption event, the income 
 
 Workers will have access to a Maintenance Check feature for situations where they believe they should have been eligible for a claim but were not notified or faced a rejected eligibility check.
 
+**Phase 1 — Automated AI Response:**
+
 When a worker triggers a Maintenance Check:
 
 1. The system sends a query to an AI API with the worker's stored activity data, GPS records, disruption signals in their zone, and the SHAP-based explanation of why their claim was or was not flagged as eligible.
 2. The response is returned to the worker in plain language, explaining what signals were detected, what the model assessed, and what — if anything — may have gone wrong.
 3. The worker can review this output and, if they believe there is an error, escalate to insurer review with the explanation as supporting context.
 
+**Phase 2 — Human Reviewer Follow-Up:**
+
+After the AI response is delivered, the Maintenance Check is also logged in the insurer's admin queue. A designated maintenance reviewer on the insurer's side will independently examine the same data — the worker's activity records, the disruption signals, the AI output, and the SHAP breakdown — to check whether there is a systemic issue with the model's assessment or a data gap that caused an incorrect result.
+
+The reviewer will send a follow-up message to the worker confirming either that the AI explanation was accurate, that a correction has been made, or that the issue has been identified and escalated for a policy-level fix. This message is also delivered in the worker's preferred language.
+
+This two-step process means the worker is not left relying solely on an automated response. Every Maintenance Check has a human confirmation loop attached to it, which also serves as a feedback mechanism for the insurer to catch and fix model errors over time.
+
 **Design constraints for Maintenance Check:**
 - Limited to 3 uses per day per worker to prevent unnecessary API load
-- Available in all major Indian languages — the response will be returned in the worker's preferred language as set during onboarding, using a translation layer over the AI output
-- The check does not automatically approve a claim — it provides an auditable explanation that the worker and insurer can both reference
+- Available in all major Indian languages — both the AI response and the human follow-up message will be delivered in the worker's preferred language as set during onboarding
+- The check does not automatically approve a claim — it provides an auditable explanation that both the worker and insurer can reference
+- Human reviewer follow-up is targeted within a reasonable response window, to be defined during development
 
-This feature gives workers a way to understand the system's decisions in a language they are comfortable with, without needing to contact support for every query.
+This feature gives workers visibility into system decisions in a language they are comfortable with, and ensures there is always a human accountability layer behind the automated output.
 
 ---
 
@@ -472,7 +483,7 @@ Flow: Mobility model detects unusual zone shift with no Chennai activity history
 
 **Scenario 6 — Maintenance Check (Worker Disputes Eligibility)**
 Worker: InDel rider, believes they should have been eligible for a claim but system did not flag it.
-Flow: Worker triggers Maintenance Check from dashboard. System calls AI API with worker's activity data, zone disruption signals, and SHAP breakdown of the premium and eligibility model's assessment. Response is returned in Tamil (worker's preferred language) explaining what was detected and why the eligibility check did not trigger. Worker reviews and decides whether to escalate to insurer.
+Flow: Worker triggers Maintenance Check from dashboard. System calls AI API with worker's activity data, zone disruption signals, and SHAP breakdown of the eligibility model's assessment. Response is returned in Tamil (worker's preferred language) explaining what was detected and why the eligibility check did not trigger. Simultaneously, the check is logged in the insurer's admin queue. A maintenance reviewer examines the same data independently and sends a follow-up message to the worker in Tamil — confirming the AI explanation was accurate, or noting that a correction has been made, or flagging a model issue for escalation. Worker receives both messages and decides whether further action is needed.
 
 **Scenario 7 — National Lockdown**
 Event: National lockdown. 78% of InDel workers across all zones file claims in one week.
@@ -571,7 +582,7 @@ Interstate Transit Disruptions follow the Transit Disruption Event logic — sta
 - Disruption alerts active in their zone
 - Claim history and wallet balance
 - Continuity reward progress
-- Maintenance Check access (up to 3 uses per day)
+- Maintenance Check access (up to 3 uses per day) — shows AI response and human reviewer follow-up message when available
 - Language preference setting
 
 ### Platform Admin Dashboard
@@ -587,6 +598,7 @@ Interstate Transit Disruptions follow the Transit Disruption Event logic — sta
 - Fraud-flagged claims queue
 - Forecasted claim volume for next 7 days (Prophet output)
 - Reserve recommendation based on disruption forecast
+- Maintenance Check review queue — pending worker checks requiring human reviewer follow-up, with full AI output and worker data visible for each
 
 ---
 
@@ -623,41 +635,17 @@ Note: A production deployment would require the deploying insurer to handle IRDA
 
 ---
 
-## Development Roadmap
-
-**Phase 1 (Current — Due March 20)**
-- This README and idea documentation
-- Initial user research with gig workers
-- System architecture diagram
-- Financial model validation
-
-**Phase 2 (March 21 — April 4)**
-- Worker registration and onboarding flow (with optional insurance enrollment)
-- Basic delivery allocation management
-- Dynamic premium calculation engine with payment flexibility
-- Parametric trigger monitoring (5 triggers)
-- Worker-initiated claim filing and eligibility verification
-
-**Phase 3 (April 5 — April 17)**
-- Advanced fraud detection layer (Isolation Forest + DBSCAN + rules)
-- Transit Disruption Event handler
-- Simulated payout integration
-- Maintenance Check feature with multilingual AI output
-- Continuous model retraining pipeline
-- Three-dashboard system: Worker, Admin, Insurer
-- Final pitch deck and 5-minute demo video
-
----
-
 ## Why This Approach
 
-Most teams at this hackathon will build a standalone insurance app that depends on third-party delivery platform APIs they cannot realistically access. InDel's approach eliminates this dependency by combining the delivery management system and the insurance engine into a single product sold to insurers.
+Parametric insurance systems require reliable activity data to verify income loss events. In many real-world implementations, this data is owned by external delivery platforms, creating a dependency that makes verification difficult and fraud detection unreliable.
 
-Because InDel owns both sides of the data, fraud detection is grounded in verified first-party activity rather than self-reported claims. The risk model trains on actual order patterns rather than approximations. Income loss estimates use real earnings history rather than declared averages.
+InDel addresses this limitation by integrating delivery operations and the insurance engine into a single platform architecture. Because worker activity, order patterns, and earnings history are recorded directly within the system, the insurance layer always has access to verifiable first-party data.
 
-The claim filing model — where workers choose when to file rather than receiving fully automated payouts — keeps the worker in control while still using automated verification to confirm eligibility. This is also more defensible from a regulatory standpoint, since payouts require an active request from the insured party.
+This enables more accurate income loss estimation, stronger fraud detection, and faster claim verification compared to systems that depend on external data pipelines.
 
-The Maintenance Check feature adds a layer of transparency that most systems do not offer — workers can audit the system's decisions in their own language, which directly addresses the trust problem that has historically prevented gig workers from engaging with financial products.
+The worker-initiated claim model also ensures that payouts occur only when the worker confirms they experienced income loss, while automated verification ensures that eligibility checks remain consistent and scalable.
+
+Finally, the Maintenance Check feature introduces transparency into the system. Workers can request an explanation of how a claim decision was reached in their preferred language, allowing them to understand and audit the system’s reasoning without relying solely on customer support channels.
 
 ---
 
