@@ -1,4 +1,4 @@
-﻿# GigShield — Parametric Income Protection for Delivery Partners
+﻿# InDel: Insure,Deliver — Parametric Income Protection for Delivery Partners
 
 **Team:** ImaginAI
 **Hackathon:** Guidewire DEVTrails 2026
@@ -16,7 +16,7 @@ Traditional insurance does not address this. It covers accidents, vehicles, and 
 
 ## What We Are Building
 
-GigShield is a **parametric income protection engine** designed to be deployed by insurance companies for platform-based gig workers.
+InDel is a **parametric income protection engine** designed to be deployed by insurance companies for platform-based gig workers.
 
 It is not a standalone consumer app. It is B2B infrastructure — a white-label system that insurers can integrate into their product portfolio and distribute through delivery platforms like Swiggy, Zomato, and Blinkit.
 
@@ -27,10 +27,10 @@ When a defined external disruption crosses a measurable threshold, the system au
 ## The Three Stakeholders
 
 **Insurer (Primary Customer)**
-Purchases and deploys GigShield as a new product vertical. Gains access to a previously uninsured, high-volume customer segment with data-driven risk modelling and automated claims processing.
+Purchases and deploys InDel as a new product vertical. Gains access to a previously uninsured, high-volume customer segment with data-driven risk modelling and automated claims processing.
 
 **Delivery Platform (Distribution Channel)**
-Integrates GigShield into their existing rider dashboard. Can offer it as an opt-in benefit or bundle it into rider packages for retention. No additional app required for the worker.
+Integrates InDel into their existing rider dashboard. Can offer it as an opt-in benefit or bundle it into rider packages for retention. No additional app required for the worker.
 
 **Delivery Partner (End Beneficiary)**
 Receives automatic income compensation when disruptions occur. Experiences insurance as a background safety net, not a product they have to actively manage.
@@ -110,7 +110,7 @@ This maintains premium flow for the insurer while giving workers a tangible reas
 
 ## AI and ML Integration
 
-A key design decision in GigShield is that the parametric triggers are threshold conditions that *initiate* a claim event, but the AI layer sits above them to determine risk pricing, verify legitimacy, and predict future exposure. The system is not a rule engine. The thresholds are inputs to ML models, not the decision-makers themselves.
+A key design decision in InDel is that the parametric triggers are threshold conditions that *initiate* a claim event, but the AI layer sits above them to determine risk pricing, verify legitimacy, and predict future exposure. The system is not a rule engine. The thresholds are inputs to ML models, not the decision-makers themselves.
 
 **Model 1 — Dynamic Premium Calculation (XGBoost Regressor)**
 
@@ -176,7 +176,7 @@ The following model uses conservative assumptions for a cohort of 1,000 active w
 | Gross margin before ops cost | Rs. 24,000 (35%) |
 | Projected loss ratio | ~65% |
 
-A 65% loss ratio is within acceptable range for microinsurance products. Standard health microinsurance in India operates at 70–85% loss ratios. GigShield's parametric structure keeps loss ratios lower because payouts are capped and non-negotiable — there are no inflated claim settlements.
+A 65% loss ratio is within acceptable range for microinsurance products. Standard health microinsurance in India operates at 70–85% loss ratios. InDel's parametric structure keeps loss ratios lower because payouts are capped and non-negotiable — there are no inflated claim settlements.
 
 The loyalty mechanics (no-claim bonus, premium holiday) introduce a small retention cost but reduce churn-driven adverse selection, which is the larger actuarial risk.
 
@@ -194,13 +194,13 @@ The dynamic premium model is what keeps these loss ratios stable across differen
 
 ## Compliance and Regulatory Considerations
 
-GigShield is designed with awareness of India's insurance regulatory framework under IRDAI (Insurance Regulatory and Development Authority of India).
+InDel is designed with awareness of India's insurance regulatory framework under IRDAI (Insurance Regulatory and Development Authority of India).
 
 Key considerations:
 
-**Product Classification:** Parametric income protection products are categorised under general insurance. Any insurer deploying GigShield would need to file the product with IRDAI as a group microinsurance policy, which has a simplified approval pathway compared to individual policies.
+**Product Classification:** Parametric income protection products are categorised under general insurance. Any insurer deploying InDel would need to file the product with IRDAI as a group microinsurance policy, which has a simplified approval pathway compared to individual policies.
 
-**Data Privacy:** Worker data collected during onboarding (location, earnings, working hours) falls under the Digital Personal Data Protection Act 2023. GigShield's architecture separates PII from risk modelling inputs and does not store raw GPS trails beyond the claim verification window (72 hours).
+**Data Privacy:** Worker data collected during onboarding (location, earnings, working hours) falls under the Digital Personal Data Protection Act 2023. InDel's architecture separates PII from risk modelling inputs and does not store raw GPS trails beyond the claim verification window (72 hours).
 
 **Consent:** Opt-in is explicit and revocable. Workers can pause or cancel coverage at any time through the platform dashboard. Premium deductions require active consent confirmation at onboarding.
 
@@ -285,7 +285,7 @@ System response: Aggregate claims exceed 55% pool threshold. Catastrophic Event 
 
 ## Risk Controls and Edge Cases
 
-This section documents how GigShield handles failure modes and adversarial scenarios. Most insurance systems are designed for the happy path. The edge cases below represent real situations that would occur at scale and have been addressed in the system design.
+This section documents how InDel handles failure modes and adversarial scenarios. Most insurance systems are designed for the happy path. The edge cases below represent real situations that would occur at scale and have been addressed in the system design.
 
 ---
 
@@ -293,7 +293,7 @@ This section documents how GigShield handles failure modes and adversarial scena
 
 **The problem:** When an event like a pandemic lockdown or a citywide flood affects every worker simultaneously, the entire premium pool is at risk of being wiped out in a single week. This is called correlated risk and it is the primary actuarial failure mode for parametric insurance at scale.
 
-**How GigShield handles it:**
+**How InDel handles it:**
 
 A Catastrophic Event Cap is applied when aggregate claims in a single week exceed 55% of the active premium pool. When this threshold is crossed, individual payouts are proportionally reduced to ensure the pool survives. Workers are not refused payment — they receive a reduced payout calculated as their individual entitlement multiplied by the pool survival ratio.
 
@@ -309,7 +309,7 @@ A Lockdown Partial Coverage Clause defines government-mandated full lockdowns as
 
 **The problem:** A worker enrolls in a low-risk zone at a cheaper premium, then physically relocates to a high-risk zone before a known disruption event to claim a higher payout they did not pay for.
 
-**How GigShield handles it:**
+**How InDel handles it:**
 
 Zone Lock with Cooling Period: When a worker's declared working zone changes, the new zone's risk profile immediately applies to premium calculation. However, a 7-day waiting period is enforced before claims in the new zone are eligible. This directly eliminates the financial incentive to chase disruptions.
 
@@ -323,7 +323,7 @@ Premium Auto-Adjustment: If GPS activity data consistently shows the worker oper
 
 **The problem:** A worker is mid-delivery traveling from point A to point B when a flood occurs at point C, which lies between A and B. The delivery is stalled. The worker cannot file a claim because they have no connectivity. Their enrolled zone may be different from where the disruption occurred.
 
-**How GigShield handles it:**
+**How InDel handles it:**
 
 This scenario is handled as a distinct claim type called a Transit Disruption Event, separate from standard zone-based claims. The enrolled zone is irrelevant. The coverage anchor is the active delivery order.
 
@@ -345,13 +345,13 @@ The zone-lock cooling period and home zone rules do not apply to Transit Disrupt
 
 **The problem:** A worker's insurance is priced and calibrated for their home state. If they travel to another state, the risk model is operating outside its training data. Additionally, insurers may not hold product licenses in all states, creating a potential coverage gap the moment the worker crosses a state border.
 
-**How GigShield handles it:**
+**How InDel handles it:**
 
 Home Zone Anchor with Portable Coverage: The worker's policy is anchored to their registered state at enrollment. Coverage travels with them for up to 72 hours in another state, using the home zone's risk parameters and payout rules. This mirrors how vehicle insurance operates during interstate travel in India.
 
 Zone Migration for Extended Stays: If GPS data shows the worker has been consistently located in a new state beyond 72 hours, the system flags a zone migration event. The worker is notified and prompted to update their registered zone. A 7-day waiting period applies before claims under the new zone are valid. The premium is recalculated for the new state's risk profile at the start of the next weekly cycle.
 
-Regulatory Handling: Interstate coverage portability is managed at the insurer level through a group microinsurance product structure filed with IRDAI, which allows nationwide coverage under a single product registration. Individual state licensing is the responsibility of the deploying insurer and is outside the scope of the GigShield platform layer.
+Regulatory Handling: Interstate coverage portability is managed at the insurer level through a group microinsurance product structure filed with IRDAI, which allows nationwide coverage under a single product registration. Individual state licensing is the responsibility of the deploying insurer and is outside the scope of the InDel platform layer.
 
 Interstate Transit Disruptions follow the same Transit Disruption Event logic described above. State boundaries do not affect coverage eligibility when the worker is mid-delivery on an active order.
 
@@ -372,9 +372,9 @@ Interstate Transit Disruptions follow the same Transit Disruption Event logic de
 
 
 
-Most teams at this hackathon will build a consumer insurance app. GigShield is positioned differently — it is insurer-facing infrastructure with a consumer delivery layer on top. This mirrors how real insurance technology actually works and speaks directly to what a B2B company like Guidewire evaluates.
+Most teams at this hackathon will build a consumer insurance app. InDel is positioned differently — it is insurer-facing infrastructure with a consumer delivery layer on top. This mirrors how real insurance technology actually works and speaks directly to what a B2B company like Guidewire evaluates.
 
-The parametric model eliminates the single biggest operational cost in microinsurance: claims processing. Traditional claims in microinsurance take 3–7 days and require human review. GigShield's automated pipeline targets under 15 minutes from trigger to payout with zero human involvement for standard claims. That is an estimated 80–90% reduction in claims processing overhead for the insurer.
+The parametric model eliminates the single biggest operational cost in microinsurance: claims processing. Traditional claims in microinsurance take 3–7 days and require human review. InDel's automated pipeline targets under 15 minutes from trigger to payout with zero human involvement for standard claims. That is an estimated 80–90% reduction in claims processing overhead for the insurer.
 
 The platform integration eliminates the single biggest adoption barrier: distribution. No separate app, no marketing spend per worker, no trust gap — the insurance lives inside the app the worker already uses every day.
 
