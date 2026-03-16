@@ -1,4 +1,5 @@
-# InDel — Integrated Delivery and Income Protection Platform
+# InDel — Insure, Deliver
+A platform that combines **delivery management and parametric income insurance** so gig workers are protected when disruptions stop them from working.
 
 **Team:** ImaginAI
 **Hackathon:** Guidewire DEVTrails 2026
