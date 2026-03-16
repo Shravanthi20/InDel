@@ -181,9 +181,9 @@ The model will output a continuous risk score mapped to a weekly premium. Two wo
 
 Workers will have flexibility in how they pay their weekly premium. The plan includes three modes:
 
-**Automatic deduction (default):** Premium is deducted from weekly earnings within the platform at the end of each week. No separate action needed.
+**Automatic deduction:** Premium is deducted from weekly earnings within the platform at the end of each week. No separate action needed.
 
-**Manual payment:** Workers can turn off automatic deduction and instead choose to pay their premium at any point during the week — as a single payment or split across multiple days — as long as the total is settled before the week ends. This gives workers who prefer to control their own payment timing the option to do so.
+**Manual payment (default):** Workers can turn on automatic deduction or instead choose to pay their premium at any point during the week — as a single payment or split across multiple days — as long as the total is settled before the week ends. This gives workers who prefer to control their own payment timing the option to do so.
 
 **Advance partial payment:** A worker can pay a lump sum of approximately half the standard weekly premium amount upfront (for example, if the weekly premium is Rs. 20, they may pay Rs. 200 in advance). This advance covers their premium for the corresponding number of weeks that amount covers, plus two additional weeks beyond that at no charge. After this period ends, normal weekly payments resume.
 
