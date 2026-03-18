@@ -39,6 +39,8 @@ Insurance Provider deploys InDel → delivery system + insurance engine share on
 ```
 
 ---
+## Architecture Diagram
+<img width="3900" height="2643" alt="detailed_diagram" src="https://github.com/user-attachments/assets/60e2d7c4-24f1-4592-ade3-c14ed2d6a94b" />
 
 ## Stakeholders
 
