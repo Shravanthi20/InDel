@@ -658,7 +658,7 @@ Finally, the Maintenance Check feature introduces transparency into the system. 
 |---|---|
 | Shravanthi Satyanarayanan | Backend & AI/ML |
 | Gayathri U | Frontend & UX |
-| Rithanya K | Insurance Model & Research |
+| Rithanya K A | Insurance Model & Research |
 | Saravana Priyaa | Delivery Platform & DevOps |
 | Subikha MV | System Design & Integration |
 
