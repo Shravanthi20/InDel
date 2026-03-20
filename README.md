@@ -1,6 +1,6 @@
 # InDel — Insure, Deliver
 
-> An AI-powered parametric income insurance platform for gig delivery workers — combining delivery management and automated income protection into a single integrated system.
+> An AI-powered parametric income insurance platform for gig delivery workers — combining delivery management and automated income protection into a single integrated system. [You can also refer to our QUESTIONS_ANSWERS.md for questions that might come up when you read this document]
 
 **Team:** ImaginAI
 **Hackathon:** Guidewire DEVTrails 2026
