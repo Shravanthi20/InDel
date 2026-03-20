@@ -56,14 +56,14 @@ InDel is a **B2B platform built for insurance providers** that combines a delive
 
 The insurance provider is the primary customer. InDel gives them a ready-to-deploy infrastructure that handles delivery worker management, real-time disruption monitoring, income loss calculation, claim verification, and payout processing — all in one system, without depending on third-party delivery app data.
 
-InDel owns the delivery operations side too: workers receive assignments through the platform, complete deliveries, and earn — just like any delivery management platform. The insurance layer runs in the background using the same first-party activity data the delivery system already collects.
+InDel owns the delivery operations side too: workers receive assignments through the platform, complete deliveries, and earn — just like any delivery management platform. In the primary deployment model, InDel operates as a **white-label layer integrated with an existing delivery platform** (e.g. Swiggy, Zomato) via API — the platform routes orders to InDel-enrolled workers, and InDel handles assignment, GPS tracking, earnings recording, and the insurance engine on top of the same data layer. InDel does not independently generate consumer delivery demand; the platform partner brings the order flow. The insurance layer runs in the background using the same first-party activity data the delivery system already collects.
 
 ```
 Traditional Approach:
 Insurance Provider → needs data from Swiggy/Zomato → API access unlikely → incomplete data → weak fraud detection
 
-InDel Approach:
-Insurance Provider deploys InDel → delivery system + insurance engine share one data layer → accurate verification → reliable payouts
+InDel Approach (White-Label Integration):
+Insurance Provider deploys InDel → InDel integrates with platform via API → delivery system + insurance engine share one data layer → accurate verification → reliable payouts
 ```
 
 ---
@@ -73,8 +73,8 @@ Insurance Provider deploys InDel → delivery system + insurance engine share on
 **Insurance Provider (Primary B2B Customer)**
 Purchases and deploys InDel. Gets access to a previously uninsured worker segment with an integrated data pipeline, automated claim processing, and risk analytics — without negotiating data agreements with existing delivery platforms.
 
-**Delivery Platform Partner (e.g. Swiggy, Zomato)**
-InDel is not replacing consumer delivery apps. InDel handles the worker management and insurance layer; the platform partner benefits from having their delivery workers covered and financially protected.
+**Delivery Platform Partner (e.g. Swiggy, Zomato) — Optional Integration**
+InDel is not replacing consumer delivery apps. InDel operates as a **white-label delivery management layer** that sits inside or alongside an existing platform's worker operations. The platform partner routes orders to InDel-enrolled workers through an API integration; InDel handles assignment, tracking, earnings recording, and the insurance layer on top. The platform benefits from having their delivery workforce covered and financially protected without building any insurance infrastructure themselves. This is the primary deployment model — InDel does not independently generate consumer delivery demand, which would require capital-intensive marketplace buildout outside the scope of this product. In zones where no platform partner integration exists, InDel can operate as a standalone delivery management system for insurer-deployed worker cohorts, but this is a secondary use case.
 
 **Delivery Worker (End Beneficiary)**
 Uses InDel for delivery assignments. Can opt into income protection at onboarding or any point thereafter. Coverage runs in the background based on actual activity — no active management required.
@@ -156,7 +156,7 @@ Automated Claim Generation + Payout Guardrails
 Hybrid Approval + Worker Notification
         ↓
 Asynchronous Payout Processing
-(queue-based: Kafka / RabbitMQ — UPI / Wallet / Bank)
+(queue-based: Apache Kafka — UPI / Wallet / Bank)
         ↓
 Zone Risk Update + AI/ML Feedback Loop
 ```
@@ -285,7 +285,7 @@ Income loss            = Expected earnings − Actual earnings
 Payout amount          = Income loss × coverage ratio (capped at weekly maximum)
 ```
 
-**Cold Start Handling:** For new workers without a 4-week history, baseline is derived from zone average or peer group average for the same zone and vehicle type.
+**Cold Start Handling:** For new workers without a 4-week earnings history, baseline is derived from the zone average or peer group average for the same zone and vehicle type. A worker is eligible for cold-start baseline substitution only after completing a minimum of **20 verified deliveries on InDel**, establishing a credible activity record before any claim window opens. This threshold ensures the zone average is applied to workers who are genuinely active on the platform, not to accounts created opportunistically ahead of a known disruption event. To prevent gaming during the grace period, claims filed within the first **7 days of enrollment** are automatically held for manual review regardless of fraud score — the cold-start grace period cannot be exploited to file an immediate claim using a borrowed zone baseline.
 
 **Illustrative example:**
 
@@ -370,7 +370,7 @@ The system pre-approves the payout. The worker is notified with:
 
 Payout is either auto-credited after a short delay or optionally confirmed by the worker.
 
-All payouts are processed **asynchronously** via a queue-based system (e.g., Kafka or RabbitMQ). This enables:
+All payouts are processed **asynchronously** via **Apache Kafka**. Kafka is chosen over RabbitMQ for this use case because its log-based architecture provides durable event replay — critical for re-processing payouts after a payment gateway failure during a mass disruption event — and its persistent offset model gives a complete audit trail of every payout attempt, which is a regulatory expectation for insurance products. RabbitMQ's queue-deletion model makes audit replay harder to guarantee. This enables:
 
 - Batch processing of large volumes during mass disruption events
 - Automatic retry on payment failure
@@ -486,6 +486,8 @@ See Step 7 above for full layer-by-layer description.
 **Use:** Insurer reserve planning only — not used for individual claim decisions.
 
 **Retraining cadence:** Weekly.
+
+**Prototype limitation:** Prophet operates independently per zone — it has no mechanism to model cross-zone correlation. This is an acknowledged limitation: a cyclone or citywide flood simultaneously affects dozens of zones, and Prophet treats each as a separate time series with no shared signal. In practice this means the prototype may underestimate aggregate claim volume during correlated mass disruption events, where the true risk is systemic rather than zonal. This is why DeepAR is the planned upgrade: it learns joint disruption patterns across zones, allowing a rainfall signal in Zone A to inform the forecast for adjacent zones B and C. Until sufficient real zone-level data is available (estimated 6+ months post-launch), this limitation is mitigated by the reinsurance layer and Catastrophic Event Cap described in the Risk Controls section.
 
 Prophet is selected for the prototype for its reliability on small datasets and strong handling of seasonal patterns.
 
@@ -653,6 +655,27 @@ If all four conditions are met, the claim is flagged as eligible. Zone-lock and 
 
 > Conservative assumptions for a cohort of 1,000 active workers in Chennai during a standard month. These figures validate directional viability, not final projections.
 
+### InDel Revenue Model
+
+The figures below represent the insurer's economics — InDel's own revenue sits on top of the premium pool as a platform fee charged to the deploying insurer. InDel's revenue model is **SaaS-style with a per-worker monthly fee**, not a cut of premiums (which would create misaligned incentives around claim approval).
+
+| InDel Revenue Component | Basis | Illustrative Value |
+|---|---|---|
+| Platform fee per active worker/month | Charged to insurer | Rs. 30 |
+| Total platform fee (1,000 workers) | | Rs. 30,000/month |
+| Claim processing fee (per approved claim) | Charged to insurer | Rs. 15 |
+| Estimated approved claims/month (80 events × ~70% approval) | | ~56 claims |
+| Total claim processing fee | | Rs. 840/month |
+| **InDel gross revenue (1,000 workers, one month)** | | **~Rs. 30,840** |
+
+Platform fees are fixed regardless of claim volume, which keeps InDel's incentives aligned with accurate claim processing rather than claim minimisation. The claim processing fee recovers the marginal cost of running fraud detection and payout infrastructure per approved claim. These figures are illustrative; final pricing will be negotiated with insurer partners.
+
+---
+
+### Insurer Economics
+
+> Conservative assumptions for a cohort of 1,000 active workers in Chennai during a standard month.
+
 | Assumption | Value |
 |---|---|
 | Average weekly premium | Rs. 17 |
@@ -740,7 +763,7 @@ Worker believes they should have been eligible for a claim. Triggers Maintenance
 
 **Payout Classification:** Payouts are compensation for income loss, not indemnity for an insured asset. Payouts below Rs. 2,50,000 annually are unlikely to create tax obligations for gig workers at current income levels.
 
-**Language Support:** All worker-facing communications — including Maintenance Check outputs — will support all major Indian languages via a translation layer. This is a core accessibility requirement, not an optional feature.
+**Language Support:** All worker-facing communications — including Maintenance Check outputs — will support all major Indian languages. This is a core accessibility requirement, not an optional feature. The translation layer will use the **Google Cloud Translation API** (or IndicTrans2 as an open-source alternative for Indic language fidelity), applied after content is generated in English. However, raw SHAP outputs — which contain technical terms like "feature contribution" and signed numerical values — cannot be directly translated and remain comprehensible. Before translation, SHAP breakdowns are converted into plain-language templates: e.g., "Your premium is Rs. 18 mainly because your area has a high flood risk (Rs. 6) and recent pollution levels were high (Rs. 3)." These templated strings are then translated, not the raw model output. For workers with low text literacy, the Maintenance Check response is additionally rendered with icon-based visual cues alongside the translated text — a warning icon for risk factors increasing premium, a shield icon for factors reducing it — so that the explanation is interpretable without requiring the worker to read the full paragraph. The specific icon vocabulary and template strings will be validated with a sample worker group during the pilot phase.
 
 > Note: A production deployment would require the deploying insurer to handle IRDAI product registration and KYC/AML obligations. These are outside the scope of the hackathon prototype.
 
@@ -753,7 +776,7 @@ Worker believes they should have been eligible for a claim. Triggers Maintenance
 | Backend | Python (FastAPI) |
 | Frontend | React.js |
 | Database | PostgreSQL |
-| Message Queue (Async Payouts) | Kafka / RabbitMQ |
+| Message Queue (Async Payouts) | Apache Kafka (chosen over RabbitMQ for log-based event replay and audit trail durability) |
 | AI / ML (Prototype) | scikit-learn, XGBoost, SHAP, Prophet, DBSCAN, Isolation Forest |
 | AI / ML (Future) | DeepAR, Temporal Fusion Transformer |
 | Weather API | OpenWeatherMap (free tier) |
