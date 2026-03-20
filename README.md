@@ -295,7 +295,7 @@ A worker earns Rs. 120/hour on average. A flood event is logged from 11:40 AM to
 Expected earnings:       Rs. 120 × 5.83 hrs = Rs. 700
 Actual earnings:         2 partial deliveries = Rs. 80
 Estimated income loss:   Rs. 620
-Estimated payout:        Rs. 558 (at ~90% coverage ratio)
+Estimated payout:        Rs. 527 (at 85% coverage ratio)
 ```
 
 **Edge cases covered:**
@@ -537,7 +537,7 @@ Prophet is selected for the prototype for its reliability on small datasets and 
 
 - **Automatic deduction:** Deducted from weekly earnings at end of week.
 - **Manual payment:** Worker pays at any point during the week, in full or split across days, as long as the total is settled before week-end.
-- **Advance partial payment:** Worker pays approximately half the standard weekly premium as a lump sum (e.g., Rs. 200 if weekly premium is Rs. 20), covering the corresponding number of weeks plus two additional weeks at no charge. Normal weekly payments resume after this period.
+- **Advance partial payment:** Worker pays approximately half the standard weekly premium as a lump sum (e.g., Rs. 200 if weekly premium is Rs. 20), covering the corresponding number of weeks plus two additional weeks at no charge. The lump sum locks coverage at the risk tier active at the time of payment. If the zone risk tier increases during the covered period (e.g., monsoon season onset), a top-up premium equal to the tier difference is charged at the start of the higher-risk week. Normal weekly payments resume after the advance period ends.
 
 **Non-payment consequences:**
 - 1 missed week → coverage pauses from following week
@@ -587,7 +587,7 @@ InDel verifies **economic impact**, not presence.
 **Response:**
 - **Catastrophic Event Cap:** When aggregate claims exceed a defined percentage of the active pool in a single week, individual payouts are proportionally reduced. Formula: `Individual payout = Calculated entitlement × (Available pool / Total eligible claims)`
 - **Reinsurance Layer:** Insurer purchases reinsurance activating when weekly aggregate claims exceed a set threshold. Included in the financial model; not in the hackathon prototype.
-- **Lockdown Partial Coverage Clause:** Government-mandated full lockdowns are a special category. Coverage is capped at a reduced rate for up to 2 consecutive weeks; beyond that, coverage pauses and premiums are suspended. Disclosed at onboarding.
+- **Lockdown Partial Coverage Clause:** Government-mandated full lockdowns are classified as catastrophic events and treated as a named exclusion under the policy — standard practice in microinsurance. For weeks 1–2 of a lockdown, the reinsurance layer absorbs aggregate claims above the pool threshold, allowing full per-worker payouts to continue. From week 3 onward, if the lockdown persists, coverage pauses and premiums are suspended until operations resume. This exclusion is disclosed prominently at onboarding and in the worker dashboard, not buried in policy terms.
 
 ---
 
@@ -624,7 +624,7 @@ If all four conditions are met, the claim is flagged as eligible. Zone-lock and 
 **Problem:** Worker's insurance is calibrated for their home state. Travel elsewhere puts the risk model outside its training data.
 
 **Response:**
-- **Under 72 hours:** Coverage travels with the worker using home zone parameters.
+- **Under 72 hours:** Coverage travels with the worker. Payout parameters follow the higher of the home zone or the travel zone — a Pune worker travelling to Chennai during monsoon season is assessed against Chennai disruption thresholds and eligible for Chennai-level payouts. Premium is not adjusted for stays under 72 hours; the top-up exposure is absorbed as an acceptable short-duration risk given the rarity of the scenario.
 - **Over 72 hours:** System flags a zone migration event. Worker is prompted to update their registered zone. 7-day waiting period applies; premium recalculated at next weekly cycle.
 - Interstate transit disruptions follow Transit Disruption Event logic — state boundaries do not affect coverage on an active InDel order.
 
