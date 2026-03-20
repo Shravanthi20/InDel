@@ -113,7 +113,7 @@ Uses InDel for delivery assignments. Can opt into income protection at onboardin
 +----------------------------------------------------------+
 ```
 ---
-<img width="1697" height="1081" alt="image" src="https://github.com/user-attachments/assets/f9e22d7d-18ce-42ce-8640-ea3bdee098e7" />
+<img width="1697" height="928" alt="diagram-export-20-3-2026-9_25_42-pm" src="https://github.com/user-attachments/assets/4b37b1fc-1692-4fa0-b7fb-d9d94d373b8b" />
 
 ---
 
