@@ -657,7 +657,7 @@ If all four conditions are met, the claim is flagged as eligible. Zone-lock and 
 |---|---|
 | Average weekly premium | Rs. 17 |
 | Active weeks per month | 4 |
-| Disruption events per worker per month | 0.8 |
+| Disruption events per worker per month | 0.08 |
 | Average payout per event | Rs. 550 |
 
 | Metric | Value |
