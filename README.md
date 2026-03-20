@@ -795,7 +795,7 @@ Worker believes they should have been eligible for a claim. Triggers Maintenance
 | Shravanthi Satyanarayanan | Backend & AI/ML |
 | Gayathri U | Frontend & UX |
 | Rithanya K A | Insurance Model & Research |
-| Saravana Priyaa | Delivery Platform & DevOps |
+| Saravana Priyaa C R| Delivery Platform & DevOps |
 | Subikha MV | System Design & Integration |
 
 ---
