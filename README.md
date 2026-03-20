@@ -1,34 +1,62 @@
 # InDel — Insure, Deliver
-A platform that combines **delivery management and parametric income insurance** so gig workers are protected when disruptions stop them from working.
+
+> An AI-powered parametric income insurance platform for gig delivery workers — combining delivery management and automated income protection into a single integrated system.
 
 **Team:** ImaginAI
 **Hackathon:** Guidewire DEVTrails 2026
-**Persona:** E-commerce 
+**Persona:** E-commerce
 **Current Phase:** Phase 1 (Ideation)
 
-> **Note:** This README describes what we are planning to build. Specific values such as premium amounts, payout figures, coverage ratios, and threshold numbers are illustrative estimates used for design and modelling purposes. As stated in the hackathon guidelines, exact figures do not need to be defined at this stage and will be refined during development in collaboration with the relevant stakeholders. Any API integrations or third-party service references are subject to change as the project progresses.
+> **Note:** Specific values such as premium amounts, payout figures, coverage ratios, and trigger thresholds are illustrative estimates for design and modelling purposes only. Final figures will be refined during development in collaboration with relevant stakeholders. API integrations and third-party service references are subject to change.
+
+---
+
+## Table of Contents
+
+1. [The Problem](#the-problem)
+2. [What We Plan to Build](#what-we-plan-to-build)
+3. [Stakeholders](#stakeholders)
+4. [System Architecture](#system-architecture)
+5. [End-to-End Pipeline](#end-to-end-pipeline)
+6. [How the System Works — Step by Step](#how-the-system-works--step-by-step)
+7. [AI and ML Models](#ai-and-ml-models)
+8. [Weekly Premium Model](#weekly-premium-model)
+9. [Fraud Prevention — Economic Activity Consistency Defense](#fraud-prevention--economic-activity-consistency-defense)
+10. [Risk Controls and Edge Cases](#risk-controls-and-edge-cases)
+11. [Illustrative Unit Economics](#illustrative-unit-economics)
+12. [Scenario Walkthroughs](#scenario-walkthroughs)
+13. [Dashboards](#dashboards)
+14. [Compliance and Regulatory Considerations](#compliance-and-regulatory-considerations)
+15. [Tech Stack](#tech-stack)
+16. [Team ImaginAI](#team-imaginai)
 
 ---
 
 ## The Problem
 
-India's gig delivery workers earn based on completed orders. When external disruptions occur — heavy rain, extreme heat, severe pollution, curfews, or sudden order drops — deliveries stop and income drops significantly. Workers can lose 20–30% of monthly earnings during these events with no financial protection in place.
+India's gig delivery workers earn based on completed orders. When external disruptions occur — heavy rain, extreme heat, severe pollution, curfews, strikes, or sudden order drops — deliveries stop and income falls sharply. Workers can lose 20–30% of monthly earnings during these events with no financial protection in place.
 
-Traditional insurance covers accidents, vehicles, and health. Income lost because conditions made it impossible to work falls outside the scope of any existing product available to these workers.
+**Valid claim triggers under the problem scope:**
 
-Existing parametric insurance solutions that attempt to address this face a structural problem: they depend on third-party delivery platforms to share worker activity data. Platforms have no strong incentive to share this data, making verification unreliable and fraud detection weak.
+| Category | Disruption Types |
+|---|---|
+| Environmental | Extreme heat, heavy rain, floods, flash floods, severe pollution |
+| Social | Curfews, strikes, zone closures |
+| Platform | Significant order volume drop in zone |
+
+Traditional insurance covers accidents, vehicles, and health. Income lost because conditions made it impossible to work falls entirely outside the scope of any product available to these workers.
+
+Existing parametric insurance attempts face a structural problem: they depend on third-party delivery platforms to share worker activity data. Those platforms have no incentive to share this data, making verification unreliable and fraud detection weak.
 
 ---
 
 ## What We Plan to Build
 
-InDel (Income Defense for Delivery Workers) is planned as a **B2B platform built for insurance providers**, combining a delivery management system and a parametric income protection engine into a single integrated product.
+InDel is a **B2B platform built for insurance providers** that combines a delivery management system and an automated parametric income protection engine into a single integrated product.
 
-The insurance provider is the primary customer. InDel gives them a ready-to-deploy infrastructure that handles delivery worker management, real-time disruption monitoring, income loss calculation, claim verification, and payout processing — all in one system, without depending on data from third-party delivery apps.
+The insurance provider is the primary customer. InDel gives them a ready-to-deploy infrastructure that handles delivery worker management, real-time disruption monitoring, income loss calculation, claim verification, and payout processing — all in one system, without depending on third-party delivery app data.
 
-On the delivery side, InDel will handle delivery allocation and assignment for partner workers — similar to how delivery management platforms work, not as a consumer-facing food ordering app. Workers log in, receive assignments, complete deliveries, and earn. The insurance layer runs in the background using the same activity data the delivery system already collects.
-
-This is the core advantage: because InDel owns both sides of the data, the insurance engine has accurate, verifiable, first-party information to work with at all times.
+InDel owns the delivery operations side too: workers receive assignments through the platform, complete deliveries, and earn — just like any delivery management platform. The insurance layer runs in the background using the same first-party activity data the delivery system already collects.
 
 ```
 Traditional Approach:
@@ -39,25 +67,21 @@ Insurance Provider deploys InDel → delivery system + insurance engine share on
 ```
 
 ---
-## Architecture Diagram
-<img width="3900" height="2643" alt="detailed_diagram" src="https://github.com/user-attachments/assets/60e2d7c4-24f1-4592-ade3-c14ed2d6a94b" />
 
 ## Stakeholders
 
 **Insurance Provider (Primary B2B Customer)**
-Purchases and deploys InDel. Gets access to a previously uninsured worker segment with an integrated data pipeline, automated claim processing, and risk analytics — without needing to negotiate data agreements with existing delivery platforms.
+Purchases and deploys InDel. Gets access to a previously uninsured worker segment with an integrated data pipeline, automated claim processing, and risk analytics — without negotiating data agreements with existing delivery platforms.
 
 **Delivery Platform Partner (e.g. Swiggy, Zomato)**
-InDel is not replacing consumer delivery apps. The collaboration model is that InDel handles the delivery-side worker management and insurance layer, while the platform partner benefits from having their delivery workers covered and financially protected. The platform's role here is delivery allocation and worker coordination — InDel sits alongside that and handles the protection layer.
+InDel is not replacing consumer delivery apps. InDel handles the worker management and insurance layer; the platform partner benefits from having their delivery workers covered and financially protected.
 
 **Delivery Worker (End Beneficiary)**
-Uses InDel for delivery assignments. Can choose to opt into the income protection plan at onboarding or at any point after. If enrolled, their coverage runs in the background based on their actual activity — they do not need to manage it actively.
+Uses InDel for delivery assignments. Can opt into income protection at onboarding or any point thereafter. Coverage runs in the background based on actual activity — no active management required.
 
 ---
 
-## Proposed System Architecture
-
-InDel will be composed of four integrated layers sharing a single data backbone.
+## System Architecture
 
 ```
 +----------------------------------------------------------+
@@ -91,244 +115,329 @@ InDel will be composed of four integrated layers sharing a single data backbone.
 
 ---
 
-## Planned Platform Flow
+## End-to-End Pipeline
+
+InDel operates as an **event-driven**, zone-based parametric insurance platform. Rather than continuously polling data sources, the system reacts to structured events generated by external services and internal platform activity. This makes it more efficient, scalable, and resilient to API delays.
 
 ```
-Worker Receives Delivery Assignment via InDel
-        |
-        v
-Worker Activity Recorded (GPS, session, orders, earnings)
-        |
-        v
-AI Engine Monitors Environment + Internal Order Patterns
-        |
-        v
-Disruption Detected (weather / AQI / order drop / zone closure)
-        |
-        v
-Income Loss Estimated from Worker Earnings Baseline
-        |
-        v
-Worker Files Claim Request (or uses Maintenance Check)
-        |
-        v
-Fraud Verification (GPS + activity + anomaly model)
-        |
-        v
-Claim Approved
-        |
-        v
-Payout to Worker via UPI / Wallet
+Onboarding & Policy Initialization
+        ↓
+Event-Driven Data Ingestion
+(WEATHER_ALERT / AQI_ALERT / ORDER_DROP_DETECTED / WORKER_ACTIVITY_UPDATE)
+        ↓
+Zone Aggregation & Monitoring
+(sliding time windows — rolling order volume, active worker counts)
+        ↓
+Disruption Detection + Confidence Scoring
+(multi-signal: environmental + order drop + worker activity)
+        ↓
+Multi-Signal Validation
+(external signal + internal order drop both required)
+        ↓
+Disruption Window Creation
+(start = first valid trigger, end = signals return to normal)
+        ↓
+Worker Eligibility Evaluation
+(active before + during disruption, acceptance rate threshold)
+        ↓
+Fairness Validation
+(platform allocation bias check)
+        ↓
+Income Loss Computation
+(baseline vs actual earnings during disruption window)
+        ↓
+Behavioral Validation
+        ↓
+Fraud Detection + Risk-Based Routing
+(Isolation Forest + DBSCAN + Identity checks)
+        ↓
+Automated Claim Generation + Payout Guardrails
+        ↓
+Hybrid Approval + Worker Notification
+        ↓
+Asynchronous Payout Processing
+(queue-based: Kafka / RabbitMQ — UPI / Wallet / Bank)
+        ↓
+Zone Risk Update + AI/ML Feedback Loop
 ```
 
 ---
 
-## How the System Is Designed to Work
+## How the System Works — Step by Step
 
-### Step 1 — Worker Onboarding
+### Step 1 — Worker Onboarding and Enrollment
 
-Workers will register on InDel as delivery partners. Onboarding will collect:
+Workers register on InDel as delivery partners. Onboarding collects:
 
-- Name, location, working zone
+- Name, location, home zone
 - Preferred working hours
-- Bank account or UPI ID for payouts
+- Bank account / UPI ID for payouts
 - Delivery vehicle type
+- Device ID (for identity linking and fraud prevention)
 
-Income protection enrollment is **optional** and presented as a separate choice during onboarding. Workers who decline can still use the platform for deliveries and can choose to enroll in the protection plan at any later point from their dashboard. Workers who enroll will have their coverage start from the following weekly cycle.
+Income protection enrollment is **optional** and presented as a separate choice. Workers who decline can still use the platform and enroll later from their dashboard. Coverage starts from the following weekly cycle on enrollment.
 
----
-
-### Step 2 — Delivery Operations
-
-Workers will receive and complete delivery assignments through InDel. The system will continuously record:
-
-- Active session timestamps
-- GPS location and movement trails
-- Orders assigned, accepted, completed, and dropped
-- Earnings per order and per session
-- Zone activity patterns over time
-
-This data serves dual purpose: powering delivery allocation and continuously updating the worker's risk profile and earnings baseline for insurance calculations.
+**Edge cases covered:**
+- Multiple accounts detected via device + bank + phone identity linking
+- Fake onboarding mitigated through KYC validation
 
 ---
 
-### Step 3 — AI Risk Profiling and Weekly Premium Calculation
+### Step 2 — Event-Driven Data Ingestion
 
-At the start of each week, the AI engine will calculate the worker's premium based on their current risk profile.
+Instead of continuously polling data sources, the system uses an **event-driven architecture**. Multiple data sources generate structured real-time events that feed into the platform:
 
-The premium model is planned to use an XGBoost Regressor trained on:
+| Event Type | Source | Trigger |
+|---|---|---|
+| `WEATHER_ALERT` | OpenWeatherMap | Rainfall / temperature / flood threshold crossed |
+| `AQI_ALERT` | OpenAQ / WAQI | Pollution level exceeds safe limits |
+| `ORDER_DROP_DETECTED` | InDel internal | Zone-level order flow anomaly |
+| `WORKER_ACTIVITY_UPDATE` | InDel platform | Login, acceptance, completion events |
+| `ZONE_CLOSURE_ALERT` | Traffic API / Govt alerts | Curfew, strike, or zone restriction detected |
 
-- Zone-level historical disruption frequency (past 24 months)
-- Seasonal risk score (monsoon proximity, heat wave history by city)
-- Rolling 4-week AQI average for the zone
-- Worker's average daily active hours over the past 4 weeks
-- Platform-level order density variance in the zone (InDel internal)
-- Worker's income stability score (variance in weekly earnings over past 8 weeks)
+Each event is structured and typed. The system buffers incoming events to handle API delays and falls back to internal platform signals when external APIs are unavailable.
 
-Training data in the early phase will be a synthetic dataset generated from IMD historical weather records, CPCB AQI archives, and simulated InDel platform disruption and order logs. As the platform accumulates real delivery data, the model will be updated through a continuous retraining pipeline — this runs in the background without requiring any manual intervention.
-
-The model will output a continuous risk score mapped to a weekly premium. Two workers in the same city but different zones will receive different premiums based on learned zone-level risk.
-
-> Note: Premium amounts shown below are illustrative estimates for design purposes only. Final amounts will be determined during development.
-
-| Worker Zone | Risk Level | Weekly Premium (est.) | Max Weekly Payout (est.) |
-|---|---|---|---|
-| Koramangala, Bengaluru (low flood risk) | Low | Rs. 12 | Rs. 600 |
-| Rohini, Delhi (heat zone) | Medium | Rs. 17 | Rs. 700 |
-| Tambaram, Chennai (flood-prone) | High | Rs. 22 | Rs. 800 |
+**Edge cases covered:**
+- API failure → fallback to InDel internal order and activity signals
+- Delayed API responses → buffered time windows with lag tolerance
 
 ---
 
-### Step 4 — Premium Payment Options
+### Step 3 — Zone Aggregation and Monitoring
 
-Workers will have flexibility in how they pay their weekly premium. The plan includes three modes:
+All incoming events are aggregated at the **zone level** rather than the individual worker level — a deliberate design choice for scalability and noise reduction.
 
-**Automatic deduction:** Premium is deducted from weekly earnings within the platform at the end of each week. No separate action needed.
+For each zone, the system maintains rolling metrics using **sliding time windows** (e.g., last 30–60 minutes):
 
-**Manual payment (default):** Workers can turn on automatic deduction or instead choose to pay their premium at any point during the week — as a single payment or split across multiple days — as long as the total is settled before the week ends. This gives workers who prefer to control their own payment timing the option to do so.
+- Current order volume vs historical average
+- Current active workers vs historical average
 
-**Advance partial payment:** A worker can pay a lump sum of approximately half the standard weekly premium amount upfront (for example, if the weekly premium is Rs. 20, they may pay Rs. 200 in advance). This advance covers their premium for the corresponding number of weeks that amount covers, plus two additional weeks beyond that at no charge. After this period ends, normal weekly payments resume.
-
-**Non-payment consequences:** If a worker misses a weekly payment, coverage pauses from the following week until the outstanding amount is cleared. Consecutive missed payments for more than two weeks will result in the policy being suspended. A suspended policy requires re-enrollment and a fresh waiting period before claims are eligible again. Workers will be notified before suspension occurs.
+This zone-level aggregation allows the system to detect localized disruptions while smoothing out short-term fluctuations. Individual worker data is only evaluated once a zone-level disruption has been confirmed.
 
 ---
 
-### Step 5 — Parametric Trigger Monitoring
+### Step 4 — Disruption Detection and Confidence Scoring
 
-The system will continuously monitor external data sources and internal platform metrics. When a trigger threshold is crossed, the system logs a disruption event for the relevant zone and notifies affected workers.
+When a triggering event is received, the system generates a disruption candidate for the corresponding zone. Candidate triggers include:
 
-> Note: Trigger thresholds listed below are indicative. Final values will be calibrated during development.
-
-| Disruption Type | Indicative Trigger Condition | Data Source |
+| Disruption Type | Indicative Trigger | Source |
 |---|---|---|
 | Heavy Rain | Rainfall above threshold in worker's zone | OpenWeatherMap |
 | Extreme Heat | Temperature above threshold during active hours | OpenWeatherMap |
-| Severe Pollution | AQI above hazardous level in worker's city | OpenAQ / WAQI |
-| Curfew / Bandh | Verified zone closure | Traffic API / Government alert |
-| Platform Order Drop | Significant order volume drop sustained over time in zone | InDel internal data |
-| Flash Flood | Flood alert issued for zone by IMD | Weather alert API |
+| Severe Pollution | AQI above hazardous level | OpenAQ / WAQI |
+| Curfew / Bandh | Verified zone closure | Traffic API / Govt alert |
+| Platform Order Drop | Significant order volume drop in zone | InDel internal |
+| Flash Flood | Flood alert issued by IMD | Weather alert API |
 
-Because InDel will own its platform data, the order volume drop trigger will be particularly useful — no external API is needed to detect when deliveries in a zone have effectively stopped.
+A **Trigger Confidence Score** is then computed from multiple signals:
+
+- Environmental signals (weather, AQI)
+- Order volume drop (InDel internal)
+- Worker activity drop
+
+A disruption is considered valid only if the confidence score exceeds a predefined threshold. Below threshold, the event is ignored or placed under continued monitoring. This prevents false positives from noisy or incomplete data.
+
+**Multi-Signal Validation:** A disruption is confirmed only when both an external signal (weather/AQI/curfew) **and** an internal signal (zone-level order drop) are simultaneously present. Environmental anomalies with no observable delivery impact do not trigger payouts. A time-lag window accounts for cases where environmental changes and operational impact are not perfectly synchronized.
+
+**Edge cases covered:**
+- False positives from weak or noisy signals suppressed by confidence threshold
+- Delayed impact captured via time-lag window
+- Multiple triggers in the same zone merged into a single disruption event
 
 ---
 
-### Step 6 — Income Loss Calculation
+### Step 5 — Disruption Window Management
 
-When a disruption event is logged, the system will estimate the worker's income loss for that window.
+Once a disruption is confirmed, the system creates a **disruption window** for the affected zone:
+
+- **Start time:** Defined as the first valid trigger crossing the confidence threshold
+- **End time:** Defined as the point at which all signals return to normal levels
+
+This window represents the period during which workers may have experienced income loss. The system supports both short-duration (micro) disruptions and longer disruptions, with duration caps applied to prevent excessive exposure per event.
+
+---
+
+### Step 6 — Worker Eligibility Evaluation and Fairness Validation
+
+For each worker in the affected zone, eligibility requires:
+
+- Worker was active on InDel before the disruption began
+- Worker was logged in during the disruption window
+- Worker's order acceptance rate is above a defined threshold
+
+**Fairness Validation:** If a worker's orders during the disruption are significantly below the zone average due to apparent allocation bias (platform under-assigning orders to them regardless of disruption), this is treated as a platform issue rather than disruption impact and excluded from claim calculation.
+
+**Edge cases covered:**
+- Idle workers excluded from payouts
+- Fake participation filtered
+- Platform allocation bias prevented from generating false claims
+
+---
+
+### Step 7 — Income Loss Computation
 
 ```
-Baseline hourly rate  = Average hourly earnings over past 4 weeks (from InDel data)
-Disruption window     = Time from disruption start to end
-Expected earnings     = Baseline hourly rate x disruption hours
-Actual earnings       = Earnings recorded in InDel during disruption window
-Income loss           = Expected earnings - Actual earnings
-Payout amount         = Income loss x coverage ratio (capped at weekly maximum)
+Baseline hourly rate   = Average hourly earnings over past 4 weeks (InDel data)
+Disruption window      = Time from disruption start to resolution
+Expected earnings      = Baseline hourly rate × disruption hours
+Actual earnings        = Earnings recorded in InDel during the disruption window
+Income loss            = Expected earnings − Actual earnings
+Payout amount          = Income loss × coverage ratio (capped at weekly maximum)
 ```
 
-> Note: The coverage ratio is an estimated figure for modelling purposes and will be confirmed during the financial design phase.
+**Cold Start Handling:** For new workers without a 4-week history, baseline is derived from zone average or peer group average for the same zone and vehicle type.
 
 **Illustrative example:**
 
-A worker earns an average of Rs. 120/hour over 4 weeks. A flood event is logged from 11:40 AM to 5:30 PM (approximately 5 hours 50 minutes).
+A worker earns Rs. 120/hour on average. A flood event is logged from 11:40 AM to 5:30 PM (~5h 50m).
 
 ```
-Expected earnings:          Rs. 120 x 5.83 hrs  = Rs. 700
-Actual earnings:            2 partial deliveries = Rs. 80
-Estimated income loss:      Rs. 700 - Rs. 80     = Rs. 620
-Estimated payout (approx.): Rs. 558
+Expected earnings:       Rs. 120 × 5.83 hrs = Rs. 700
+Actual earnings:         2 partial deliveries = Rs. 80
+Estimated income loss:   Rs. 620
+Estimated payout:        Rs. 558 (at ~90% coverage ratio)
 ```
+
+**Edge cases covered:**
+- New workers without earnings history (cold start)
+- Partial disruptions pay proportional loss
+- No income drop → no payout
 
 ---
 
-### Step 7 — Claim Filing
+### Step 8 — Behavioral Validation and Fraud Detection
 
-Unlike fully automated payout systems, InDel is planned to let the worker decide when to file a claim. When a disruption event has been logged for their zone and they believe they have experienced income loss, the worker files a claim request through their dashboard.
+**Behavioral Validation** confirms:
 
-Once filed, the system runs eligibility verification:
+- Work pattern consistency during the disruption window
+- Session continuity and active delivery attempts
+- Similarity with other workers in the same zone during the same event
 
-- Was the worker logged into InDel during the disruption window?
-- Does GPS confirm presence in the affected zone?
-- Does InDel order activity confirm reduced earnings during the window?
-- Is the claim behavior consistent with the zone-wide claim cluster?
+**Fraud Detection Stack (three independent layers):**
 
-If eligibility is confirmed, the claim is approved and payout is initiated. This approach keeps the worker in control of when they claim while still using automated verification to confirm legitimacy.
+**Layer 1 — Isolation Forest (Anomaly Detection)**
+Trained on expected claim behavior patterns. Flags workers whose claim profile deviates statistically from the zone-wide cluster.
+
+Input features:
+- GPS trail consistency during disruption window
+- Ratio of claimed loss to historical earnings baseline
+- Claim frequency over rolling 8-week window
+- Zone-wide claim clustering (are others in the zone also claiming?)
+- Mobility pattern score (how stable is the worker's operating zone)
+
+**Layer 2 — DBSCAN Cluster-Based Behavior Analysis**
+Workers in the same zone during the same disruption should show similar claim patterns. DBSCAN clusters workers by behavior per disruption event. Workers who fall outside any cluster (noise points) are flagged — this catches fraud that Isolation Forest alone misses: a worker whose individual claim history looks normal but whose behavior diverges from everyone else during a specific event.
+
+**Layer 3 — Rule Overlay (Hard Disqualifiers)**
+- Worker GPS not in affected zone at trigger time → auto-reject
+- InDel platform shows completed deliveries during claimed disruption window → auto-reject
+- Anomaly score above threshold from Layer 1 → route to manual review queue
+
+All three layers are independent. A claim must clear all three to proceed.
+
+**Confidence-Based Routing:**
+- Low-risk claims → auto-approved
+- Medium-risk claims → delayed for additional validation
+- High-risk claims → manual review queue
 
 ---
 
-### Step 8 — Payout
+### Step 9 — Automated Claim Generation and Payout Guardrails
 
-Approved payouts will be sent to the worker via:
+A claim is automatically generated when:
+
+- Disruption is confirmed as valid
+- Worker is eligible
+- Income loss exceeds a minimum threshold
+- All fraud checks pass
+
+**Payout Guardrails:**
+- Maximum payout per worker per week
+- Maximum payout per disruption event
+- No duplicate payouts for overlapping disruptions (merged into single window)
+
+Final payout is capped accordingly.
+
+---
+
+### Step 10 — Hybrid Approval and Asynchronous Payout Processing
+
+The system pre-approves the payout. The worker is notified with:
+
+- Disruption event details
+- Income loss calculation breakdown
+- Final payout amount
+
+Payout is either auto-credited after a short delay or optionally confirmed by the worker.
+
+All payouts are processed **asynchronously** via a queue-based system (e.g., Kafka or RabbitMQ). This enables:
+
+- Batch processing of large volumes during mass disruption events
+- Automatic retry on payment failure
+- Horizontal scalability without blocking the main claim pipeline
+
+Payment is sent via:
 
 - UPI direct transfer
-- InDel in-app wallet (can be applied toward future premium payments)
+- InDel in-app wallet (can offset future premiums)
 - Bank transfer (next-day settlement for amounts above a defined threshold)
 
-Workers will receive a notification explaining the disruption event, the income loss estimate, and the amount approved. This is a deliberate design choice — transparency about how a payout was calculated builds trust over time.
+Workers receive transparent communication on the full payout breakdown.
+
+**Edge cases covered:**
+- Payment failures handled via retry logic within the async queue
+- High-volume simultaneous payout scenarios handled through batching
 
 ---
 
-### Step 9 — Maintenance Check (Self-Service Claim Audit)
+### Step 11 — Zone Risk Update and AI/ML Feedback Loop
 
-Workers will have access to a Maintenance Check feature for situations where they believe they should have been eligible for a claim but were not notified or faced a rejected eligibility check.
+After each disruption event:
+
+- Zone risk score is updated
+- Disruption frequency for the zone is updated
+- Claim density is updated
+
+All three ML models are retrained using new data from the event. A temporal adjustment layer accounts for delay between the disruption trigger and observable order drop impact.
+
+---
+
+### Step 12 — Maintenance Check (Self-Service Claim Audit)
+
+Workers who believe they should have been eligible for a claim but were not notified or had their eligibility check fail can trigger a Maintenance Check from their dashboard.
 
 **Phase 1 — Automated AI Response:**
 
-When a worker triggers a Maintenance Check:
-
-1. The system sends a query to an AI API with the worker's stored activity data, GPS records, disruption signals in their zone, and the SHAP-based explanation of why their claim was or was not flagged as eligible.
-2. The response is returned to the worker in plain language, explaining what signals were detected, what the model assessed, and what — if anything — may have gone wrong.
-3. The worker can review this output and, if they believe there is an error, escalate to insurer review with the explanation as supporting context.
+1. System sends a query to the AI API with the worker's activity data, GPS records, zone disruption signals, and SHAP-based explanation of the eligibility model's assessment.
+2. Response is returned in the worker's preferred language, explaining what signals were detected, what the model assessed, and what (if anything) went wrong.
+3. Worker can escalate to insurer review using this explanation as supporting context.
 
 **Phase 2 — Human Reviewer Follow-Up:**
 
-After the AI response is delivered, the Maintenance Check is also logged in the insurer's admin queue. A designated maintenance reviewer on the insurer's side will independently examine the same data — the worker's activity records, the disruption signals, the AI output, and the SHAP breakdown — to check whether there is a systemic issue with the model's assessment or a data gap that caused an incorrect result.
+The Maintenance Check is simultaneously logged in the insurer's admin queue. A designated reviewer independently examines the same data — activity records, disruption signals, AI output, and SHAP breakdown — and sends a follow-up message to the worker confirming either:
+- The AI explanation was accurate, or
+- A correction has been made, or
+- The issue has been escalated for a policy-level fix.
 
-The reviewer will send a follow-up message to the worker confirming either that the AI explanation was accurate, that a correction has been made, or that the issue has been identified and escalated for a policy-level fix. This message is also delivered in the worker's preferred language.
+All messages are delivered in the worker's preferred language.
 
-This two-step process means the worker is not left relying solely on an automated response. Every Maintenance Check has a human confirmation loop attached to it, which also serves as a feedback mechanism for the insurer to catch and fix model errors over time.
-
-**Design constraints for Maintenance Check:**
-- Limited to 3 uses per day per worker to prevent unnecessary API load
-- Available in all major Indian languages — both the AI response and the human follow-up message will be delivered in the worker's preferred language as set during onboarding
-- The check does not automatically approve a claim — it provides an auditable explanation that both the worker and insurer can reference
-- Human reviewer follow-up is targeted within a reasonable response window, to be defined during development
-
-This feature gives workers visibility into system decisions in a language they are comfortable with, and ensures there is always a human accountability layer behind the automated output.
-
----
-
-## Weekly Premium Model
-
-**Planned base structure:**
-
-> Note: All figures below are illustrative estimates. The hackathon guidelines state that specific amounts do not need to be finalised at this stage and will be determined during development.
-
-- Weekly premium range: Rs. 10 — Rs. 25 (dynamically calculated per worker per zone)
-- Coverage ratio: Estimated at 80–90% of calculated income loss
-- Maximum weekly payout: Estimated at Rs. 800
-- Premium deduction: Automatic by default, with manual and advance payment options available
-
-**Continuity rewards:**
-
-Workers who maintain consistent premium payments without claims over time will receive incremental benefits — reduced premiums in upcoming weeks, extended coverage periods, or increases to their maximum payout ceiling. The specific milestones and reward values will be defined during the product design phase. The intent is to make consistent enrollment worthwhile without creating a system that feels like it is withholding something until certain conditions are met.
-
-**Non-payment consequences:**
-
-Missed payments pause coverage from the following week. Two or more consecutive missed weeks result in policy suspension, requiring re-enrollment and a fresh waiting period before claims are valid again.
+**Design constraints:**
+- Maximum 3 uses per day per worker
+- Does not automatically approve a claim — provides an auditable explanation
+- Human reviewer follow-up targeted within a defined response window
+- Available in all major Indian languages
 
 ---
 
-## Planned AI and ML Integration
+## AI and ML Models
 
-A core design principle of InDel is that parametric triggers are threshold conditions that initiate a disruption log, but the AI layer sits above them to determine risk pricing, verify claim legitimacy, and forecast future exposure. The system is not intended to be a rule engine — thresholds are inputs to ML models, not the decision-makers themselves.
+A core design principle: parametric triggers are threshold conditions that initiate a disruption log, but the AI layer sits above them to determine risk pricing, verify claim legitimacy, and forecast future exposure. The system is not a rule engine — thresholds are inputs to ML models, not the decision-makers.
 
----
+### Model 1 — Dynamic Premium Calculation (XGBoost Regressor + SHAP)
 
-### Model 1 — Dynamic Premium Calculation (XGBoost Regressor with SHAP Explainability)
+**Purpose:** Predict expected weekly income loss probability per worker and zone.
 
-Will predict the expected weekly income loss probability for a given worker profile and zone.
-
-**Planned input features:**
+**Input features:**
 - Zone-level historical disruption frequency (past 24 months)
 - Seasonal risk score (monsoon proximity, heat wave history)
 - Rolling 4-week AQI average for the zone
@@ -336,14 +445,15 @@ Will predict the expected weekly income loss probability for a given worker prof
 - Platform order density variance in the zone (InDel internal)
 - Worker income stability score (earnings variance over past 8 weeks)
 
-**Training data:** Synthetic dataset from IMD historical weather records, CPCB AQI archives, and simulated InDel order disruption logs during the early phase. A continuous background retraining pipeline will update the model as real platform data accumulates — no manual intervention required.
+**Training data:** Synthetic dataset from IMD historical weather records, CPCB AQI archives, and simulated InDel order disruption logs. Continuous background retraining pipeline updates the model as real data accumulates.
 
 **Output:** Continuous risk score (0–1) mapped to weekly premium.
 
 **Retraining cadence:** Monthly in prototype; continuous pipeline in production.
 
-**Explainability — SHAP Integration:**
-The model will use SHAP (SHapley Additive exPlanations) values to make premium calculations auditable. Each worker's premium will be explainable in terms of contributing factors:
+**SHAP Explainability:**
+
+Each worker's premium is explainable in terms of contributing factors:
 
 ```
 Premium = Rs. 18 because:
@@ -353,51 +463,31 @@ Premium = Rs. 18 because:
   Base rate                  Rs. 7
 ```
 
-This breakdown is used in the Maintenance Check feature and is available to insurers for regulatory and audit purposes.
+This breakdown is surfaced in the Maintenance Check feature and available to insurers for regulatory and audit purposes.
 
 ---
 
-### Model 2 — Fraud Detection (Isolation Forest + DBSCAN Clustering + Rule Overlay)
+### Model 2 — Fraud Detection (Isolation Forest + DBSCAN + Rule Overlay)
 
-A three-layer stack where each layer catches a different class of fraudulent behavior.
+See Step 7 above for full layer-by-layer description.
 
-**Layer 1 — Isolation Forest anomaly detection:**
-
-Trained on expected claim behavior patterns across the worker pool. Flags workers whose claim profile deviates statistically from the zone-wide cluster.
-
-Planned input features:
-- GPS trail consistency during disruption window
-- Ratio of claimed loss to historical earnings baseline
-- Claim frequency per worker over rolling 8-week window
-- Zone-wide claim clustering (are other workers in the same zone also claiming?)
-- Mobility pattern score (how stable is the worker's operating zone week over week)
-
-**Layer 2 — DBSCAN Cluster-Based Behavior Analysis:**
-
-Workers in the same zone during the same disruption should show similar claim patterns. DBSCAN groups workers into behavioral clusters per disruption event. Workers who fall outside any cluster — noise points — are flagged for review. This catches fraud that Isolation Forest alone can miss: a worker whose individual claim history looks normal but whose behavior during a specific event diverges from everyone else in the same zone at the same time.
-
-**Layer 3 — Rule overlay for hard disqualifiers:**
-- Worker GPS not in the affected zone at trigger time: auto-reject
-- InDel platform shows completed deliveries during the claimed disruption window: auto-reject
-- Anomaly score above threshold from Layer 1: route to manual review queue
-
-Each layer is independent. A claim must clear all three to be approved.
+**Retraining cadence:** Weekly.
 
 ---
 
 ### Model 3 — Disruption Forecasting (Facebook Prophet — Time Series)
 
-A forward-looking model forecasting likely disruption events and associated claim volume for the coming week, broken down by zone. Feeds the insurer dashboard for reserve planning.
+**Purpose:** Forward-looking forecast of likely disruption events and associated claim volume for the coming week, broken down by zone. Used exclusively for insurer reserve planning.
 
-**Planned input:** Historical weather, AQI trends, InDel order volume history by zone and season.
+**Input:** Historical weather, AQI trends, InDel order volume history by zone and season.
 
-**Output:** Zone-level claim probability for next 7 days.
+**Output:** Zone-level claim probability for the next 7 days.
 
 **Use:** Insurer reserve planning only — not used for individual claim decisions.
 
 **Retraining cadence:** Weekly.
 
-Prophet is selected for the prototype because it is reliable on small datasets and handles seasonal patterns well. As real data accumulates, this model is planned for upgrade.
+Prophet is selected for the prototype for its reliability on small datasets and strong handling of seasonal patterns.
 
 ---
 
@@ -405,31 +495,163 @@ Prophet is selected for the prototype because it is reliable on small datasets a
 
 | Model | Type | Primary Input | Output | Retraining |
 |---|---|---|---|---|
-| Premium Calculator | XGBoost + SHAP | Zone risk features + worker profile | Weekly premium + breakdown | Monthly / continuous |
+| Premium Calculator | XGBoost + SHAP | Zone risk features + worker profile | Weekly premium + SHAP breakdown | Monthly / continuous |
 | Fraud Detector | Isolation Forest + DBSCAN + Rules | GPS + claim behavior + InDel activity | Anomaly score + cluster verdict + decision | Weekly |
-| Disruption Forecaster | Prophet Time Series | Historical weather + InDel order logs | Zone claim probability | Weekly |
+| Disruption Forecaster | Prophet Time Series | Historical weather + InDel order logs | Zone claim probability (7-day) | Weekly |
 
 ---
 
 ### Future Model Upgrades
 
-As InDel accumulates real historical data, the forecasting component is planned for upgrade:
-
-**DeepAR** — A probabilistic deep learning model that learns correlated disruption patterns across multiple zones simultaneously. Unlike Prophet which handles each zone independently, DeepAR will learn that when zone A shows a rainfall-driven order drop, nearby zone B is likely to follow. Planned once at least 6 months of real zone-level data is available.
-
-**Temporal Fusion Transformer (TFT)** — A state-of-the-art multi-horizon forecasting model that combines attention mechanisms with recurrent networks and can incorporate multiple time-varying features simultaneously. Outputs interpretable attention weights showing which inputs drove each forecast. Planned as a longer-term upgrade once compute infrastructure is in place.
-
 | Component | Prototype | Production |
 |---|---|---|
 | Risk Pricing | XGBoost + SHAP | Same, larger training corpus |
 | Fraud Detection | Isolation Forest + DBSCAN + Rules | Same stack, larger corpus |
-| Disruption Forecasting | Prophet | DeepAR → TFT |
+| Disruption Forecasting | Prophet | DeepAR → Temporal Fusion Transformer |
+
+**DeepAR** — Probabilistic deep learning model that learns correlated disruption patterns across multiple zones simultaneously. Unlike Prophet (per-zone), DeepAR learns that a rainfall-driven order drop in Zone A predicts a similar drop in Zone B shortly after. Planned after 6+ months of real zone-level data.
+
+**Temporal Fusion Transformer (TFT)** — Multi-horizon forecasting model combining attention mechanisms with recurrent networks. Outputs interpretable attention weights showing which inputs drove each forecast. Planned as a longer-term upgrade once compute infrastructure is in place.
+
+---
+
+## Weekly Premium Model
+
+> All figures are illustrative estimates. Final amounts will be determined during development.
+
+**Base structure:**
+- Weekly premium range: Rs. 10 – Rs. 25 (dynamically calculated per worker per zone)
+- Coverage ratio: Estimated 80–90% of calculated income loss
+- Maximum weekly payout: Estimated Rs. 800
+- Default: Automatic deduction from weekly earnings
+
+**Sample zone premiums:**
+
+| Worker Zone | Risk Level | Weekly Premium (est.) | Max Weekly Payout (est.) |
+|---|---|---|---|
+| Koramangala, Bengaluru | Low | Rs. 12 | Rs. 600 |
+| Rohini, Delhi | Medium | Rs. 17 | Rs. 700 |
+| Tambaram, Chennai | High | Rs. 22 | Rs. 800 |
+
+**Payment options:**
+
+- **Automatic deduction:** Deducted from weekly earnings at end of week.
+- **Manual payment:** Worker pays at any point during the week, in full or split across days, as long as the total is settled before week-end.
+- **Advance partial payment:** Worker pays approximately half the standard weekly premium as a lump sum (e.g., Rs. 200 if weekly premium is Rs. 20), covering the corresponding number of weeks plus two additional weeks at no charge. Normal weekly payments resume after this period.
+
+**Non-payment consequences:**
+- 1 missed week → coverage pauses from following week
+- 2+ consecutive missed weeks → policy suspended
+- Suspended policy requires re-enrollment and a fresh waiting period before claims are valid again
+
+**Continuity rewards:**
+
+Workers who maintain consistent payments without claims over time receive incremental benefits — reduced premiums, extended coverage periods, or increases to their maximum payout ceiling. Specific milestones to be defined during the product design phase.
+
+---
+
+## Fraud Prevention — Economic Activity Consistency Defense
+
+To mitigate GPS spoofing and coordinated fraud, InDel shifts claim verification from location-based validation to **economic activity validation**.
+
+**Core principle:** Instead of asking "Was the worker present in the disruption zone?", the system evaluates: "Did the worker experience a loss of earning opportunity consistent with other workers in the same zone?"
+
+**Zone-Level Economic Impact Modeling:**
+
+For each disruption event, the system constructs a baseline comparison — expected earnings pattern under normal conditions vs actual earnings during the disruption window — across all active workers in the affected zone.
+
+**Worker-Level Consistency Evaluation:**
+
+| Genuine Worker Characteristics | Fraudulent Behavior Indicators |
+|---|---|
+| Earnings drop consistent with peer workers | No meaningful change in activity pattern |
+| Increased idle time due to reduced order availability | Lack of delivery attempts or unrealistic inactivity |
+| Multiple failed or reduced delivery attempts | Earnings pattern deviates from zone-wide trend |
+
+**Additional anti-spoofing signals:**
+- Distance traveled from last confirmed delivery checkpoint (catches fake GPS positioning)
+- Order pickup and non-pickup patterns
+- Weather API cross-referencing with government alerts
+- Group-level request scaling for high-volume disruption events
+
+InDel verifies **economic impact**, not presence.
+
+---
+
+## Risk Controls and Edge Cases
+
+### Edge Case 1 — Global Lockdown / Mass Correlated Disruption
+
+**Problem:** Large-scale event hits all workers simultaneously. Premium pool risks depletion in one week.
+
+**Response:**
+- **Catastrophic Event Cap:** When aggregate claims exceed a defined percentage of the active pool in a single week, individual payouts are proportionally reduced. Formula: `Individual payout = Calculated entitlement × (Available pool / Total eligible claims)`
+- **Reinsurance Layer:** Insurer purchases reinsurance activating when weekly aggregate claims exceed a set threshold. Included in the financial model; not in the hackathon prototype.
+- **Lockdown Partial Coverage Clause:** Government-mandated full lockdowns are a special category. Coverage is capped at a reduced rate for up to 2 consecutive weeks; beyond that, coverage pauses and premiums are suspended. Disclosed at onboarding.
+
+---
+
+### Edge Case 2 — Zone Hopping (Deliberate Location Fraud)
+
+**Problem:** Worker enrolls in a low-risk zone, then moves GPS to a high-risk zone before a disruption.
+
+**Response:**
+- **Zone Lock with Cooling Period:** When GPS detects a zone change, the new zone's risk profile immediately applies to premiums. A 7-day waiting period is enforced before claims in the new zone are eligible.
+- **Mobility Pattern Scoring:** Zone-change frequency is a feature in the fraud model. Workers appearing in a high-risk zone with no prior activity history get a high anomaly score.
+- **Premium Auto-Adjustment:** If GPS activity consistently shows the worker outside their declared zone over a rolling 2-week period, the risk profile is automatically reclassified.
+
+---
+
+### Edge Case 3 — Transit Disruption (Mid-Delivery Disruption)
+
+**Problem:** Worker is mid-delivery when a disruption occurs between their start and destination. They may be offline. Their enrolled zone differs from the disruption location.
+
+**Response:**
+
+Transit Disruption Events are a distinct claim type. Coverage anchor is the active InDel delivery order, not the enrolled zone. Eligibility requires all four conditions to be satisfied:
+
+1. Active InDel delivery order existed at the time of disruption
+2. GPS trail shows directional movement consistent with the delivery route before stoppage
+3. The disruption zone had a verified trigger active at the time of GPS stoppage
+4. GPS stoppage occurred **after** the trigger fired, not before
+
+If all four conditions are met, the claim is flagged as eligible. Zone-lock and home-zone rules do not apply to Transit Disruption Events. During mass events, the system falls back to zone-cluster verification rather than individual route tracing.
+
+---
+
+### Edge Case 4 — Interstate Travel
+
+**Problem:** Worker's insurance is calibrated for their home state. Travel elsewhere puts the risk model outside its training data.
+
+**Response:**
+- **Under 72 hours:** Coverage travels with the worker using home zone parameters.
+- **Over 72 hours:** System flags a zone migration event. Worker is prompted to update their registered zone. 7-day waiting period applies; premium recalculated at next weekly cycle.
+- Interstate transit disruptions follow Transit Disruption Event logic — state boundaries do not affect coverage on an active InDel order.
+
+---
+
+### Edge Case 5 — Additional Cases
+
+| Scenario | Detection Method | System Response |
+|---|---|---|
+| Global lockdown / mass event | Aggregate claims exceed pool threshold | Proportional reduction + reinsurance activation |
+| Zone hopping | Mobility anomaly score + GPS zone mismatch | 7-day zone lock + premium auto-adjustment |
+| Mid-delivery transit disruption | Active order + GPS trail + trigger timing | Eligible claim queued; worker files on reconnection |
+| Interstate travel under 72 hours | GPS state detection | Home zone rules apply, coverage continues |
+| Interstate travel over 72 hours | Persistent GPS state mismatch | Zone migration prompt + 7-day waiting period |
+| Connectivity loss during disruption | Worker offline | Disruption logged; claim processed on reconnection |
+| API failure | Internal signals only | System uses InDel order data as fallback |
+| Overlapping disruptions | Temporal deduplication | Merged into single payout window |
+| Worker joins after disruption | Onboarding timestamp check | Not eligible |
+| Inactive worker during event | Activity check | No payout |
+| Event but no income loss | Loss calculation check | No payout |
+| Multiple IDs / accounts | Identity linking | Accounts merged, payout capped at single-worker limit |
 
 ---
 
 ## Illustrative Unit Economics
 
-Conservative assumptions for a cohort of 1,000 active workers in Chennai during a standard month. These figures are used to validate that the financial model is directionally viable, not as final projections.
+> Conservative assumptions for a cohort of 1,000 active workers in Chennai during a standard month. These figures validate directional viability, not final projections.
 
 | Assumption | Value |
 |---|---|
@@ -445,7 +667,7 @@ Conservative assumptions for a cohort of 1,000 active workers in Chennai during 
 | Gross margin before ops cost | Rs. 24,000 (35%) |
 | Projected loss ratio | ~65% |
 
-A 65% loss ratio is within the acceptable range for microinsurance. Standard health microinsurance in India operates at 70–85%. InDel's parametric structure should keep loss ratios predictable because payouts are capped and calculated algorithmically.
+A 65% loss ratio is within the acceptable range for microinsurance. Standard health microinsurance in India operates at 70–85%.
 
 | City | Risk Profile | Avg. Weekly Premium | Expected Monthly Loss Ratio |
 |---|---|---|---|
@@ -457,127 +679,30 @@ A 65% loss ratio is within the acceptable range for microinsurance. Standard hea
 
 ## Scenario Walkthroughs
 
-These scenarios illustrate how the system is designed to behave. They are based on current design assumptions and will be validated through simulation during development.
-
 **Scenario 1 — Flood Event (Chennai, August)**
-Worker: InDel rider, Tambaram, earns Rs. 4,200/week, premium Rs. 22.
-Event: Heavy rainfall logged above threshold at 11:40 AM.
-Flow: System logs disruption in Tambaram zone. Worker files claim via dashboard at 1:00 PM. Eligibility check: GPS confirms zone presence, InDel confirms order drop, fraud check passes. Payout of Rs. 360 (estimated 6-hour window loss) approved. Worker receives payment via UPI shortly after.
+Worker in Tambaram, earning Rs. 4,200/week, premium Rs. 22. Heavy rainfall logged above threshold at 11:40 AM. System logs disruption. Worker files claim at 1:00 PM. GPS confirms zone presence, InDel confirms order drop, fraud check passes. Payout of ~Rs. 360 approved via UPI.
 
 **Scenario 2 — Heat Wave (Delhi, May)**
-Worker: InDel rider, Rohini, earns Rs. 3,800/week, premium Rs. 19.
-Event: Temperature threshold crossed at 1:00 PM.
-Flow: Disruption logged. Worker files claim. InDel activity shows significant order drop. GPS in zone confirmed. Payout for 4-hour window estimated at Rs. 270, approved.
+Worker in Rohini, earning Rs. 3,800/week, premium Rs. 19. Temperature threshold crossed at 1:00 PM. Disruption logged. InDel shows significant order drop. GPS in zone confirmed. Payout for 4-hour window (~Rs. 270) approved.
 
 **Scenario 3 — Continuity Reward (Pune, February)**
-Worker: InDel rider, Kothrud, earns Rs. 3,500/week, premium Rs. 11.
-Event: Several consecutive weeks without a claim.
-Flow: System applies continuity reward — reduced premium or extended coverage period depending on milestone reached. Worker notified.
+Worker in Kothrud, earning Rs. 3,500/week, premium Rs. 11. Several consecutive weeks without a claim. System applies continuity reward — reduced premium or extended coverage period. Worker notified.
 
 **Scenario 4 — Transit Disruption (Mid-Delivery Flood)**
-Worker: InDel rider, active delivery from Adyar to Velachery, Chennai.
-Event: Flash flood logged in Guindy (between Adyar and Velachery) at 3:15 PM.
-Flow: InDel confirms active order at 3:15 PM. GPS shows rider stopped in Guindy at 3:18 PM. Flood logged in Guindy at 3:12 PM. All four transit verification conditions satisfied. Worker offline — claim is queued. When worker reconnects, they are notified of the disruption event and can file the claim. Payout processed on filing.
+Worker doing an active delivery from Adyar to Velachery, Chennai. Flash flood logged in Guindy (between the two points) at 3:12 PM. InDel confirms active order. GPS shows rider stopped in Guindy at 3:18 PM, after the trigger fired. All four transit conditions satisfied. Worker is offline — claim queued. On reconnection, worker is notified and files. Payout processed.
 
-**Scenario 5 — Zone Hopping Attempt (Fraud Caught)**
-Worker: InDel rider, Pune (low risk), premium Rs. 11.
-Event: Worker moves GPS to Chennai flood zone the day before a major rainfall event.
-Flow: Mobility model detects unusual zone shift with no Chennai activity history. Anomaly score high. Zone lock active — Chennai claims ineligible for 7 days. If claim is filed, it is auto-rejected. Premium auto-adjusts to Chennai risk profile from next cycle.
+**Scenario 5 — Zone Hopping (Fraud Caught)**
+Worker based in Pune (low risk, premium Rs. 11) moves GPS to Chennai flood zone the day before a major rainfall event. Mobility model detects zone shift with no Chennai activity history. Anomaly score high. Zone lock active — Chennai claims ineligible for 7 days. Filed claim auto-rejected. Premium auto-adjusts to Chennai risk profile from next cycle.
 
 **Scenario 6 — Maintenance Check (Worker Disputes Eligibility)**
-Worker: InDel rider, believes they should have been eligible for a claim but system did not flag it.
-Flow: Worker triggers Maintenance Check from dashboard. System calls AI API with worker's activity data, zone disruption signals, and SHAP breakdown of the eligibility model's assessment. Response is returned in Tamil (worker's preferred language) explaining what was detected and why the eligibility check did not trigger. Simultaneously, the check is logged in the insurer's admin queue. A maintenance reviewer examines the same data independently and sends a follow-up message to the worker in Tamil — confirming the AI explanation was accurate, or noting that a correction has been made, or flagging a model issue for escalation. Worker receives both messages and decides whether further action is needed.
+Worker believes they should have been eligible for a claim. Triggers Maintenance Check from dashboard. System calls AI API with activity data, zone disruption signals, and SHAP breakdown. Response returned in Tamil explaining what was detected and why eligibility did not trigger. Simultaneously, check is logged in insurer admin queue. Human reviewer examines the same data and sends a follow-up in Tamil — confirming accuracy, noting a correction, or flagging a model issue for escalation.
 
 **Scenario 7 — National Lockdown**
-Event: National lockdown. 78% of InDel workers across all zones file claims in one week.
-Flow: Aggregate claims exceed pool threshold. Catastrophic Cap activated. Individual payouts reduced proportionally. Workers notified. Reinsurance layer activated for insurer. From week 3: Lockdown Partial Coverage Clause applies — reduced payout rate, premiums suspended.
+78% of InDel workers across all zones file claims in one week. Aggregate claims exceed pool threshold. Catastrophic Cap activated. Individual payouts reduced proportionally. Workers notified. Reinsurance layer activated for insurer. From week 3: Lockdown Partial Coverage Clause applies — reduced payout rate, premiums suspended.
 
 ---
 
-## Risk Controls and Edge Cases
-
-This section documents how InDel is designed to handle failure modes and adversarial scenarios.
-
----
-
-### Edge Case 1 — Global Lockdown or Mass Correlated Disruption
-
-**The problem:** A large-scale event hits every worker simultaneously. The premium pool risks depletion in a single week — correlated risk is the primary actuarial failure mode for parametric insurance at scale.
-
-**Our design approach:**
-
-A Catastrophic Event Cap will activate when aggregate claims exceed a defined percentage of the active premium pool in a single week. Individual payouts will be proportionally reduced — workers receive less, not nothing.
-
-Formula: Individual payout = Calculated entitlement x (Available pool / Total eligible claims)
-
-A Reinsurance Layer is modelled into the insurer deployment architecture. The deploying insurer purchases reinsurance activating when weekly aggregate claims exceed a set threshold. This is included in the financial model to demonstrate production viability, not in the hackathon prototype.
-
-A Lockdown Partial Coverage Clause will define government-mandated full lockdowns as a special disruption category. Coverage will be capped at a reduced rate for up to 2 consecutive weeks. Beyond that, coverage pauses and premiums are suspended. This is disclosed at onboarding.
-
----
-
-### Edge Case 2 — Zone Hopping (Deliberate Location Fraud)
-
-**The problem:** A worker enrolls in a low-risk zone, then relocates to a high-risk zone before a disruption to claim a payout they underpaid for.
-
-**Our design approach:**
-
-Zone Lock with Cooling Period: When GPS detects a zone change, the new zone's risk profile immediately applies to premium calculation. A 7-day waiting period is enforced before claims in the new zone are eligible.
-
-Mobility Pattern Scoring: The fraud model will include zone-change frequency as a feature. Workers who suddenly appear in a high-risk zone with no prior activity history there will receive a high anomaly score.
-
-Premium Auto-Adjustment: If GPS activity consistently shows the worker outside their declared zone over a rolling 2-week period, the system will reclassify their risk profile to reflect actual operating location.
-
----
-
-### Edge Case 3 — Transit Disruption (Disruption Between Delivery Points)
-
-**The problem:** Worker is mid-delivery when a disruption occurs between their start and destination. They may have no connectivity. Their enrolled zone differs from the disruption location.
-
-**Our design approach:**
-
-Transit Disruption Events will be a distinct claim type. The enrolled zone is irrelevant — the coverage anchor is the active InDel delivery order.
-
-Verification uses four conditions:
-- Active InDel delivery order existed at the time of disruption
-- GPS trail shows directional movement consistent with the delivery route before stoppage
-- The disruption zone had a verified trigger active at the time of GPS stoppage
-- GPS stoppage occurred after the trigger fired, not before
-
-If all four conditions are met, the system flags the claim as eligible. When the worker reconnects, they are notified and can file. Zone-lock and home-zone rules do not apply to Transit Disruption Events.
-
-Scalability consideration: During mass events, the system falls back to zone-cluster verification rather than individual route tracing. Individual route analysis is reserved for anomaly-flagged claims only.
-
----
-
-### Edge Case 4 — Interstate Travel
-
-**The problem:** A worker's insurance is calibrated for their home state. Travel elsewhere puts the risk model outside its training data.
-
-**Our design approach:**
-
-Home Zone Anchor with Portable Coverage: Coverage travels with the worker for up to 72 hours in another state using home zone parameters.
-
-Zone Migration for Extended Stays: Beyond 72 hours, the system flags a zone migration event. The worker is prompted to update their registered zone. A 7-day waiting period applies before claims in the new zone are valid. Premium is recalculated at the next weekly cycle.
-
-Interstate Transit Disruptions follow the Transit Disruption Event logic — state boundaries do not affect coverage when the worker is mid-delivery on an active InDel order.
-
----
-
-### Edge Case Summary
-
-| Scenario | Detection Method | Planned System Response |
-|---|---|---|
-| Global lockdown / mass event | Aggregate claims exceed pool threshold | Proportional payout reduction + reinsurance activation |
-| Zone hopping | Mobility anomaly score + GPS zone mismatch | 7-day zone lock + premium auto-adjustment |
-| Mid-delivery transit disruption | Active order + GPS trail + trigger timing | Claim flagged as eligible, worker files on reconnection |
-| Interstate travel under 72 hours | GPS state detection | Home zone rules apply, coverage continues |
-| Interstate travel over 72 hours | Persistent GPS state mismatch | Zone migration prompt + 7-day waiting period |
-| Connectivity loss during disruption | Worker offline | Disruption logged, worker files claim on reconnection |
-
----
-
-## Planned Dashboards
+## Dashboards
 
 ### Worker Dashboard
 - Active coverage status and current weekly premium
@@ -585,7 +710,7 @@ Interstate Transit Disruptions follow the Transit Disruption Event logic — sta
 - Disruption alerts active in their zone
 - Claim history and wallet balance
 - Continuity reward progress
-- Maintenance Check access (up to 3 uses per day) — shows AI response and human reviewer follow-up message when available
+- Maintenance Check (up to 3/day) — shows AI response and human reviewer follow-up when available
 - Language preference setting
 
 ### Platform Admin Dashboard
@@ -601,23 +726,23 @@ Interstate Transit Disruptions follow the Transit Disruption Event logic — sta
 - Fraud-flagged claims queue
 - Forecasted claim volume for next 7 days (Prophet output)
 - Reserve recommendation based on disruption forecast
-- Maintenance Check review queue — pending worker checks requiring human reviewer follow-up, with full AI output and worker data visible for each
+- Maintenance Check review queue with full AI output and worker data visible per check
 
 ---
 
 ## Compliance and Regulatory Considerations
 
-**Product Classification:** Parametric income protection falls under general insurance. The deploying insurer would file with IRDAI as a group microinsurance policy, which carries a simplified approval pathway.
+**Product Classification:** Parametric income protection falls under general insurance. The deploying insurer would file with IRDAI as a group microinsurance policy — a simplified approval pathway.
 
-**Data Privacy:** Worker data will fall under the Digital Personal Data Protection Act 2023. The planned architecture separates PII from risk modelling inputs and will not store raw GPS trails beyond the claim verification window (72 hours post-disruption).
+**Data Privacy:** Worker data falls under the Digital Personal Data Protection Act 2023. Architecture separates PII from risk modelling inputs. Raw GPS trails are not stored beyond the claim verification window (72 hours post-disruption).
 
 **Consent:** Insurance enrollment is opt-in. Workers can pause or cancel coverage at any time. Premium deductions require explicit consent at enrollment.
 
 **Payout Classification:** Payouts are compensation for income loss, not indemnity for an insured asset. Payouts below Rs. 2,50,000 annually are unlikely to create tax obligations for gig workers at current income levels.
 
-**Language Support:** The platform and all worker-facing communications — including Maintenance Check outputs — are planned to support all major Indian languages via a translation layer. This is a core accessibility requirement, not an optional feature.
+**Language Support:** All worker-facing communications — including Maintenance Check outputs — will support all major Indian languages via a translation layer. This is a core accessibility requirement, not an optional feature.
 
-Note: A production deployment would require the deploying insurer to handle IRDAI product registration and KYC/AML obligations. These are outside the scope of the hackathon prototype.
+> Note: A production deployment would require the deploying insurer to handle IRDAI product registration and KYC/AML obligations. These are outside the scope of the hackathon prototype.
 
 ---
 
@@ -628,27 +753,14 @@ Note: A production deployment would require the deploying insurer to handle IRDA
 | Backend | Python (FastAPI) |
 | Frontend | React.js |
 | Database | PostgreSQL |
-| AI / ML (Prototype) | scikit-learn, XGBoost, SHAP, Prophet, DBSCAN |
+| Message Queue (Async Payouts) | Kafka / RabbitMQ |
+| AI / ML (Prototype) | scikit-learn, XGBoost, SHAP, Prophet, DBSCAN, Isolation Forest |
 | AI / ML (Future) | DeepAR, Temporal Fusion Transformer |
 | Weather API | OpenWeatherMap (free tier) |
 | AQI API | OpenAQ / WAQI |
 | Traffic / Zone Alerts | Mock API (simulated) |
 | Payment | Razorpay test mode / UPI simulator |
 | Hosting | AWS / Render |
-
----
-
-## Why This Approach
-
-Parametric insurance systems require reliable activity data to verify income loss events. In many real-world implementations, this data is owned by external delivery platforms, creating a dependency that makes verification difficult and fraud detection unreliable.
-
-InDel addresses this limitation by integrating delivery operations and the insurance engine into a single platform architecture. Because worker activity, order patterns, and earnings history are recorded directly within the system, the insurance layer always has access to verifiable first-party data.
-
-This enables more accurate income loss estimation, stronger fraud detection, and faster claim verification compared to systems that depend on external data pipelines.
-
-The worker-initiated claim model also ensures that payouts occur only when the worker confirms they experienced income loss, while automated verification ensures that eligibility checks remain consistent and scalable.
-
-Finally, the Maintenance Check feature introduces transparency into the system. Workers can request an explanation of how a claim decision was reached in their preferred language, allowing them to understand and audit the system’s reasoning without relying solely on customer support channels.
 
 ---
 
