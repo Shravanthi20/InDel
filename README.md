@@ -113,8 +113,7 @@ Uses InDel for delivery assignments. Can opt into income protection at onboardin
 +----------------------------------------------------------+
 ```
 ---
-<img width="1697" height="928" alt="diagram-export-20-3-2026-9_25_42-pm" src="https://github.com/user-attachments/assets/4b37b1fc-1692-4fa0-b7fb-d9d94d373b8b" />
-
+<img width="1685" height="1004" alt="saved_new" src="https://github.com/user-attachments/assets/88f820f3-0f21-43dc-9615-24784c77385f" />
 ---
 
 ## End-to-End Pipeline
