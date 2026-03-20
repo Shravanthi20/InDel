@@ -1,6 +1,6 @@
 # InDel — Frequently Asked Questions
 
-> This document anticipates questions judges, insurers, and stakeholders may raise about InDel's design, business model, research, and feasibility. Answers reflect the thinking behind each decision, not just the decision itself.
+> This document anticipates questions judges, insurers, and stakeholders may raise about InDel's design, business model, research, and feasibility. Answers reflect the thinking behind each decision, not just the decision itself. We have talked to gig workers through online(reddit) and offline(locally). I have added screenshots from the reddit post.
 
 ---
 
