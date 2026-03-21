@@ -40,6 +40,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           working-directory: backend
+          version: v1.64.8
 
   ml-tests:
     runs-on: ubuntu-latest
