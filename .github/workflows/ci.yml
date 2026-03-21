@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: indel_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          go test -v ./...
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v3
+        with:
+          working-directory: backend
+
+  ml-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ml/requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run ML tests
+        run: |
+          cd ml
+          pytest .
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies (insurer)
+        run: |
+          cd insurer-dashboard
+          npm install
+
+      - name: Build insurer dashboard
+        run: |
+          cd insurer-dashboard
+          npm run build
+
+      - name: Install dependencies (platform)
+        run: |
+          cd platform-dashboard
+          npm install
+
+      - name: Build platform dashboard
+        run: |
+          cd platform-dashboard
+          npm run build
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, ml-tests]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build backend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          push: false
+          tags: indel-backend:latest
+
+      - name: Build premium ML image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./ml
+          file: ./ml/premium/Dockerfile
+          push: false
+          tags: indel-premium-ml:latest
+
+      - name: Build fraud ML image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./ml
+          file: ./ml/fraud/Dockerfile
+          push: false
+          tags: indel-fraud-ml:latest
+
+      - name: Build forecast ML image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./ml
+          file: ./ml/forecast/Dockerfile
+          push: false
+          tags: indel-forecast-ml:latest

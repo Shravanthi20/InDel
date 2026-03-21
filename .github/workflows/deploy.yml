@@ -1,0 +1,42 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy to Render
+        uses: render-org/render-github-action@v2
+        with:
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          api-token: ${{ secrets.RENDER_API_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy insurer dashboard
+        uses: render-org/render-github-action@v2
+        with:
+          service-id: ${{ secrets.RENDER_INSURER_DASHBOARD_ID }}
+          api-token: ${{ secrets.RENDER_API_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy platform dashboard
+        uses: render-org/render-github-action@v2
+        with:
+          service-id: ${{ secrets.RENDER_PLATFORM_DASHBOARD_ID }}
+          api-token: ${{ secrets.RENDER_API_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'InDel deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
