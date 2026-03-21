@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: indel
+      POSTGRES_PASSWORD: demo_password
+      POSTGRES_DB: indel_demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./scripts/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql
+      - postgres_demo_data:/var/lib/postgresql/data
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  core:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      INDEL_ENV: demo
+      DB_HOST: postgres
+      DB_PORT: 5432
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - kafka
+
+  worker-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      INDEL_ENV: demo
+      SERVICE: worker-gateway
+      CORE_URL: http://core:8000
+    ports:
+      - "8001:8001"
+    depends_on:
+      - core
+
+  insurer-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      INDEL_ENV: demo
+      SERVICE: insurer-gateway
+      CORE_URL: http://core:8000
+    ports:
+      - "8002:8002"
+    depends_on:
+      - core
+
+  platform-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      INDEL_ENV: demo
+      SERVICE: platform-gateway
+      CORE_URL: http://core:8000
+    ports:
+      - "8003:8003"
+    depends_on:
+      - core
+
+  premium-ml:
+    build:
+      context: ./ml
+      dockerfile: premium/Dockerfile
+    ports:
+      - "9001:8000"
+    environment:
+      SERVICE_PORT: 8000
+
+  fraud-ml:
+    build:
+      context: ./ml
+      dockerfile: fraud/Dockerfile
+    ports:
+      - "9002:8000"
+    environment:
+      SERVICE_PORT: 8000
+
+  forecast-ml:
+    build:
+      context: ./ml
+      dockerfile: forecast/Dockerfile
+    ports:
+      - "9003:8000"
+    environment:
+      SERVICE_PORT: 8000
+
+volumes:
+  postgres_demo_data:
