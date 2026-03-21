@@ -1,0 +1,5 @@
+worker_id,earnings_volatility,disruption_frequency,zone_risk_rating,account_age_days,premium
+1,0.35,2,0.3,45,280
+2,0.42,3,0.5,30,350
+3,0.28,1,0.4,60,300
+4,0.55,4,0.6,20,420
