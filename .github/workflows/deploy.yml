@@ -12,6 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Validate deploy secrets
+        env:
+          RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_INSURER_DASHBOARD_ID: ${{ secrets.RENDER_INSURER_DASHBOARD_ID }}
+          RENDER_PLATFORM_DASHBOARD_ID: ${{ secrets.RENDER_PLATFORM_DASHBOARD_ID }}
+        run: |
+          test -n "$RENDER_API_TOKEN" || (echo "Missing secret: RENDER_API_TOKEN" && exit 1)
+          test -n "$RENDER_SERVICE_ID" || (echo "Missing secret: RENDER_SERVICE_ID" && exit 1)
+          test -n "$RENDER_INSURER_DASHBOARD_ID" || (echo "Missing secret: RENDER_INSURER_DASHBOARD_ID" && exit 1)
+          test -n "$RENDER_PLATFORM_DASHBOARD_ID" || (echo "Missing secret: RENDER_PLATFORM_DASHBOARD_ID" && exit 1)
+
       - name: Deploy backend on Render
         run: |
           curl -sSf -X POST "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
@@ -41,5 +53,6 @@ jobs:
         with:
           status: ${{ job.status }}
           text: 'InDel deployment ${{ job.status }}'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         if: always()
