@@ -14,7 +14,7 @@ No develop branch. No release branches. Feature branches are short-lived — ope
 
 ---
 
-## GitHub Rules — Share This With Your Team
+## GitHub Rules
 
 ### Branch naming
 ```
