@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 HOST = os.environ.get("INDEL_MOCK_HOST", "0.0.0.0")
+PUBLIC_HOST = os.environ.get("INDEL_MOCK_PUBLIC_HOST", "192.168.1.6")
 PORT = int(os.environ.get("INDEL_MOCK_PORT", "8082"))
 
 
@@ -92,6 +93,48 @@ class MockState:
                 "processed_at": "2026-03-19T09:10:00Z",
             }
         ]
+        self.orders = [
+            {
+                "order_id": "ord-001",
+                "pickup_area": "Tambaram West",
+                "drop_area": "Selaiyur",
+                "distance_km": 3.8,
+                "earning_inr": 78,
+                "status": "assigned",
+                "assigned_at": "2026-03-23T11:10:00Z",
+            },
+            {
+                "order_id": "ord-002",
+                "pickup_area": "Chromepet",
+                "drop_area": "Pallavaram",
+                "distance_km": 2.9,
+                "earning_inr": 62,
+                "status": "assigned",
+                "assigned_at": "2026-03-23T11:15:00Z",
+            },
+        ]
+        self.notifications = [
+            {
+                "id": "ntf-001",
+                "type": "disruption_alert",
+                "title": "Heavy rain detected",
+                "body": "Heavy rain detected in Tambaram. You are protected.",
+                "created_at": "2026-03-23T10:00:00Z",
+                "read": False,
+            },
+            {
+                "id": "ntf-002",
+                "type": "payout_credited",
+                "title": "Payout credited",
+                "body": "Rs 696 credited to your wallet for claim clm-001.",
+                "created_at": "2026-03-23T10:30:00Z",
+                "read": False,
+            },
+        ]
+
+    def reset_demo(self) -> None:
+        # Reinitialize all in-memory state to the same known baseline.
+        self.__init__()
 
 
 STATE = MockState()
@@ -153,6 +196,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/worker/payouts":
             limit = int(query.get("limit", ["10"])[0])
             return self._ok({"payouts": STATE.payouts[: max(limit, 1)]})
+        if path == "/api/v1/worker/orders/assigned":
+            assigned_orders = [order for order in STATE.orders if order["status"] == "assigned"]
+            return self._ok({"orders": assigned_orders})
+        if path == "/api/v1/worker/orders":
+            return self._ok({"orders": STATE.orders})
+        if path == "/api/v1/worker/notifications":
+            return self._ok({"notifications": STATE.notifications})
 
         return self._not_found("endpoint_not_found")
 
@@ -238,6 +288,50 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
 
+        if path == "/api/v1/demo/reset":
+            STATE.reset_demo()
+            return self._ok({"message": "demo_reset", "time": now_iso()})
+
+        if path == "/api/v1/demo/trigger-disruption":
+            disruption_type = body.get("disruption_type", "heavy_rain")
+            zone = body.get("zone", "Tambaram, Chennai")
+            STATE.notifications.insert(
+                0,
+                {
+                    "id": f"ntf-{len(STATE.notifications) + 1:03d}",
+                    "type": "disruption_alert",
+                    "title": "Disruption detected",
+                    "body": f"{disruption_type.replace('_', ' ').title()} detected in {zone}. You are protected.",
+                    "created_at": now_iso(),
+                    "read": False,
+                },
+            )
+            return self._ok(
+                {
+                    "message": "disruption_triggered",
+                    "disruption_type": disruption_type,
+                    "zone": zone,
+                    "time": now_iso(),
+                }
+            )
+
+        if path == "/api/v1/demo/simulate-orders":
+            count = int(body.get("count", 3))
+            base_index = len(STATE.orders) + 1
+            for idx in range(count):
+                STATE.orders.append(
+                    {
+                        "order_id": f"ord-{base_index + idx:03d}",
+                        "pickup_area": "Tambaram",
+                        "drop_area": "Camp Road",
+                        "distance_km": round(2.5 + idx * 0.4, 1),
+                        "earning_inr": 55 + idx * 8,
+                        "status": "assigned",
+                        "assigned_at": now_iso(),
+                    }
+                )
+            return self._ok({"message": "orders_simulated", "count": count})
+
         return self._not_found("endpoint_not_found")
 
     def do_PUT(self) -> None:  # noqa: N802
@@ -262,7 +356,49 @@ class Handler(BaseHTTPRequestHandler):
                 worker["enrolled"] = False
             return self._ok({"message": "policy_cancelled", "policy": STATE.policy})
 
+        if path.startswith("/api/v1/worker/orders/") and path.endswith("/accept"):
+            order_id = path.split("/")[-2]
+            response = self._update_order_status(order_id, "accepted", "order_accepted")
+            if "error" in response:
+                return self._not_found(response["error"])
+            return self._ok(response)
+
+        if path.startswith("/api/v1/worker/orders/") and path.endswith("/picked-up"):
+            order_id = path.split("/")[-2]
+            response = self._update_order_status(order_id, "picked_up", "order_picked_up")
+            if "error" in response:
+                return self._not_found(response["error"])
+            return self._ok(response)
+
+        if path.startswith("/api/v1/worker/orders/") and path.endswith("/delivered"):
+            order_id = path.split("/")[-2]
+            response = self._update_order_status(order_id, "delivered", "order_delivered")
+            if "error" in response:
+                return self._not_found(response["error"])
+            # Delivered order contributes to quick demo earnings progression.
+            order = response.get("order")
+            if order:
+                STATE.earnings["this_week_actual"] += int(order.get("earning_inr", 0))
+                today_earning_note = {
+                    "id": f"ntf-{len(STATE.notifications) + 1:03d}",
+                    "type": "order_delivered",
+                    "title": "Order delivered",
+                    "body": f"{order['order_id']} delivered. Rs {order['earning_inr']} added to earnings.",
+                    "created_at": now_iso(),
+                    "read": False,
+                }
+                STATE.notifications.insert(0, today_earning_note)
+            return self._ok(response)
+
         return self._not_found("endpoint_not_found")
+
+    def _update_order_status(self, order_id: str, new_status: str, message: str) -> dict[str, Any]:
+        order = next((item for item in STATE.orders if item["order_id"] == order_id), None)
+        if not order:
+            return {"error": "order_not_found"}
+        order["status"] = new_status
+        order["updated_at"] = now_iso()
+        return {"message": message, "order": order}
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         # Keep logs concise while still showing useful request info.
@@ -325,6 +461,7 @@ class Handler(BaseHTTPRequestHandler):
 def run() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"InDel worker mock backend running at http://{HOST}:{PORT}")
+    print(f"Phone-access URL: http://{PUBLIC_HOST}:{PORT}")
     print("Press Ctrl+C to stop")
     try:
         server.serve_forever()
