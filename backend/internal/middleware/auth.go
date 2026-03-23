@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -25,8 +26,18 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		secret := os.Getenv("JWT_SECRET")
+		if secret == "" {
+			c.JSON(500, gin.H{"error": "missing JWT secret"})
+			c.Abort()
+			return
+		}
+
 		token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
-			return []byte(os.Getenv("JWT_SECRET")), nil
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte(secret), nil
 		})
 
 		if err != nil || !token.Valid {
@@ -35,7 +46,20 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("userId", token.Claims)
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(401, gin.H{"error": "invalid token claims"})
+			c.Abort()
+			return
+		}
+
+		if userID, exists := claims["user_id"]; exists {
+			c.Set("userId", userID)
+		}
+		if role, exists := claims["role"]; exists {
+			c.Set("role", role)
+		}
+		c.Set("claims", claims)
 		c.Next()
 	}
 }
