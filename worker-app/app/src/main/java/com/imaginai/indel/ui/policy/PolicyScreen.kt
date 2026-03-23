@@ -3,13 +3,13 @@ package com.imaginai.indel.ui.policy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +32,7 @@ fun PolicyScreen(
     viewModel: PolicyViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         topBar = {
@@ -50,15 +51,20 @@ fun PolicyScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()
-            .background(BackgroundWarmWhite)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.padding(padding)
         ) {
-            when (val state = uiState) {
-                is PolicyUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                is PolicyUiState.Success -> PolicyContent(state.policy, navController, viewModel)
-                is PolicyUiState.Error -> Text(state.message, color = ErrorRed, modifier = Modifier.align(Alignment.Center))
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundWarmWhite)
+            ) {
+                when (val state = uiState) {
+                    is PolicyUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    is PolicyUiState.Success -> PolicyContent(state.policy, navController, viewModel)
+                    is PolicyUiState.Error -> ErrorState(state.message) { viewModel.loadPolicy() }
+                }
             }
         }
     }
@@ -202,4 +208,18 @@ fun FlowRow(
         horizontalArrangement = horizontalArrangement,
         content = { content() }
     )
+}
+
+@Composable
+fun ErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(message, color = ErrorRed)
+        Button(onClick = onRetry, modifier = Modifier.padding(top = 16.dp)) {
+            Text("Retry")
+        }
+    }
 }

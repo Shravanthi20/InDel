@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,7 +27,6 @@ import com.imaginai.indel.data.model.Claim
 import com.imaginai.indel.data.model.WalletResponse
 import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +35,7 @@ fun ClaimsScreen(
     viewModel: ClaimsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         topBar = {
@@ -53,15 +54,20 @@ fun ClaimsScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()
-            .background(BackgroundWarmWhite)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.padding(padding)
         ) {
-            when (val state = uiState) {
-                is ClaimsUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                is ClaimsUiState.Success -> ClaimsContent(state.claims, state.wallet, navController)
-                is ClaimsUiState.Error -> Text(state.message, color = ErrorRed, modifier = Modifier.align(Alignment.Center))
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundWarmWhite)
+            ) {
+                when (val state = uiState) {
+                    is ClaimsUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    is ClaimsUiState.Success -> ClaimsContent(state.claims, state.wallet, navController)
+                    is ClaimsUiState.Error -> ErrorState(state.message) { viewModel.loadClaimsData() }
+                }
             }
         }
     }
@@ -89,7 +95,7 @@ fun ClaimsContent(
                 Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Available Payout", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
-                        Text("₹${wallet.availableBalance}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = BrandOrange)
+                        Text("₹${wallet.availableBalance.toInt()}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = BrandOrange)
                     }
                     Box(
                         modifier = Modifier.size(48.dp).background(OrangeSoft, RoundedCornerShape(12.dp)),
@@ -136,8 +142,9 @@ fun ClaimCard(claim: Claim, onClick: () -> Unit) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
+                    val disruption = claim.disruptionType.replace("_", " ").uppercase()
                     Text(
-                        text = claim.disruptionType.replace("_", " ").uppercase(),
+                        text = disruption,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = BrandOrange
@@ -154,7 +161,7 @@ fun ClaimCard(claim: Claim, onClick: () -> Unit) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("Payout Amount", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                    Text("₹${claim.payoutAmount}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                    Text("₹${claim.payoutAmount.toInt()}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = SuccessGreen)
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
             }
@@ -187,5 +194,19 @@ fun StatusBadge(status: String) {
             fontWeight = FontWeight.Bold,
             color = color
         )
+    }
+}
+
+@Composable
+fun ErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(message, color = ErrorRed)
+        Button(onClick = onRetry, modifier = Modifier.padding(top = 16.dp)) {
+            Text("Retry")
+        }
     }
 }

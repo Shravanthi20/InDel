@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.AssignmentReturn
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,8 @@ import com.imaginai.indel.data.model.Policy
 import com.imaginai.indel.data.model.WorkerProfile
 import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +39,9 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val lastUpdated = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date()) }
 
     Scaffold(
         topBar = {
@@ -43,7 +49,7 @@ fun HomeScreen(
                 title = { 
                     Column {
                         Text("InDel", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Text("Worker Partner", style = MaterialTheme.typography.labelSmall)
+                        Text("Last updated: $lastUpdated", style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 actions = {
@@ -62,15 +68,20 @@ fun HomeScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()
-            .background(BackgroundWarmWhite)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.padding(padding)
         ) {
-            when (val state = uiState) {
-                is HomeUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                is HomeUiState.Success -> HomeContent(state.worker, state.policy, state.earnings, navController)
-                is HomeUiState.Error -> ErrorState(state.message) { viewModel.loadDashboard() }
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundWarmWhite)
+            ) {
+                when (val state = uiState) {
+                    is HomeUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    is HomeUiState.Success -> HomeContent(state.worker, state.policy, state.earnings, isOnline, navController, viewModel)
+                    is HomeUiState.Error -> ErrorState(state.message) { viewModel.loadDashboard() }
+                }
             }
         }
     }
@@ -81,7 +92,9 @@ fun HomeContent(
     worker: WorkerProfile,
     policy: Policy,
     earnings: Earnings,
-    navController: NavController
+    isOnline: Boolean,
+    navController: NavController,
+    viewModel: HomeViewModel
 ) {
     Column(
         modifier = Modifier
@@ -91,12 +104,12 @@ fun HomeContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. Worker Status Card
-        StatusCard(worker)
+        StatusCard(worker, isOnline) { viewModel.toggleOnlineStatus(it) }
 
         // 2. Earnings Today Card
         DashboardCard(
             title = "Earnings Today",
-            value = "₹${earnings.thisWeekActual}", // Simplified for demo
+            value = "₹${earnings.thisWeekActual.toInt()}",
             subtitle = "Completed: 8 Orders",
             icon = Icons.Default.CurrencyRupee,
             onClick = { navController.navigate(Screen.Earnings.route) }
@@ -133,7 +146,7 @@ fun HomeContent(
 }
 
 @Composable
-fun StatusCard(worker: WorkerProfile) {
+fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -152,20 +165,32 @@ fun StatusCard(worker: WorkerProfile) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (worker.name.isNotEmpty()) worker.name.take(1) else "?",
+                    text = if (!worker.name.isNullOrEmpty()) worker.name!!.take(1) else "?",
                     fontWeight = FontWeight.Bold,
                     color = BrandOrange
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(worker.name.ifEmpty { "Unknown Worker" }, fontWeight = FontWeight.Bold)
-                Text(worker.zone, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(worker.name ?: "Unknown Worker", fontWeight = FontWeight.Bold)
+                Text(worker.zone ?: "No Zone", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             // Online Toggle
             Column(horizontalAlignment = Alignment.End) {
-                Text("Online", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = SuccessGreen)
-                Switch(checked = true, onCheckedChange = {}, colors = SwitchDefaults.colors(checkedThumbColor = SuccessGreen))
+                Text(
+                    text = if (isOnline) "Online" else "Offline",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isOnline) SuccessGreen else TextSecondary
+                )
+                Switch(
+                    checked = isOnline,
+                    onCheckedChange = onToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = SuccessGreen,
+                        checkedTrackColor = SuccessGreen.copy(alpha = 0.5f)
+                    )
+                )
             }
         }
     }

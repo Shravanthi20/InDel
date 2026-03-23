@@ -7,6 +7,7 @@ import com.imaginai.indel.data.repository.EarningsRepository
 import com.imaginai.indel.data.repository.PolicyRepository
 import com.imaginai.indel.data.repository.WorkerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -22,6 +23,12 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
+    private val _isOnline = MutableStateFlow(true)
+    val isOnline = _isOnline.asStateFlow()
+
     init {
         loadDashboard()
     }
@@ -29,32 +36,50 @@ class HomeViewModel @Inject constructor(
     fun loadDashboard() {
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
-            try {
-                val profileRes = workerRepository.getProfile()
-                val policyRes = policyRepository.getPolicy()
-                val earningsRes = earningsRepository.getEarnings()
-
-                if (profileRes.isSuccessful && policyRes.isSuccessful && earningsRes.isSuccessful) {
-                    val summary = earningsRes.body()!!
-                    val earnings = Earnings(
-                        thisWeekActual = summary.thisWeekActual.toDouble(),
-                        thisWeekBaseline = summary.thisWeekBaseline.toDouble(),
-                        protectedIncome = summary.protectedIncome.toDouble(),
-                        history = summary.history.map { EarningRecord(it.week, it.actual.toDouble()) }
-                    )
-                    
-                    _uiState.value = HomeUiState.Success(
-                        worker = profileRes.body()!!.worker,
-                        policy = policyRes.body()!!.policy,
-                        earnings = earnings
-                    )
-                } else {
-                    _uiState.value = HomeUiState.Error("Failed to load dashboard data")
-                }
-            } catch (e: Exception) {
-                _uiState.value = HomeUiState.Error(e.message ?: "Unknown error")
-            }
+            fetchData()
         }
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            fetchData()
+            delay(500) // Small delay for better UX
+            _isRefreshing.value = false
+        }
+    }
+
+    private suspend fun fetchData() {
+        try {
+            val profileRes = workerRepository.getProfile()
+            val policyRes = policyRepository.getPolicy()
+            val earningsRes = earningsRepository.getEarnings()
+
+            if (profileRes.isSuccessful && policyRes.isSuccessful && earningsRes.isSuccessful) {
+                val summary = earningsRes.body()!!
+                val earnings = Earnings(
+                    thisWeekActual = summary.thisWeekActual.toDouble(),
+                    thisWeekBaseline = summary.thisWeekBaseline.toDouble(),
+                    protectedIncome = summary.protectedIncome.toDouble(),
+                    history = summary.history.map { EarningRecord(it.week, it.actual.toDouble()) }
+                )
+                
+                _uiState.value = HomeUiState.Success(
+                    worker = profileRes.body()!!.worker,
+                    policy = policyRes.body()!!.policy,
+                    earnings = earnings
+                )
+            } else {
+                _uiState.value = HomeUiState.Error("Failed to load dashboard data")
+            }
+        } catch (e: Exception) {
+            _uiState.value = HomeUiState.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    fun toggleOnlineStatus(online: Boolean) {
+        _isOnline.value = online
+        // In a real app, you'd call an API here: workerRepository.updateStatus(online)
     }
 }
 

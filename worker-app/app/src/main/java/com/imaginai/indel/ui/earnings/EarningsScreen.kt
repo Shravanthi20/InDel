@@ -1,5 +1,6 @@
 package com.imaginai.indel.ui.earnings
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,8 +10,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +35,7 @@ fun EarningsScreen(
     viewModel: EarningsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         topBar = {
@@ -50,15 +54,20 @@ fun EarningsScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()
-            .background(BackgroundWarmWhite)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.padding(padding)
         ) {
-            when (val state = uiState) {
-                is EarningsUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                is EarningsUiState.Success -> EarningsContent(state.earnings)
-                is EarningsUiState.Error -> Text(state.message, color = ErrorRed, modifier = Modifier.align(Alignment.Center))
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundWarmWhite)
+            ) {
+                when (val state = uiState) {
+                    is EarningsUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    is EarningsUiState.Success -> EarningsContent(state.earnings)
+                    is EarningsUiState.Error -> ErrorState(state.message) { viewModel.loadEarnings() }
+                }
             }
         }
     }
@@ -81,15 +90,15 @@ fun EarningsContent(earnings: Earnings) {
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("Weekly Earnings", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
-                    Text("₹${earnings.thisWeekActual}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = BrandOrange)
+                    Text("₹${earnings.thisWeekActual.toInt()}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = BrandOrange)
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider(color = BackgroundWarmWhite)
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        EarningItem("Baseline", "₹${earnings.thisWeekBaseline}", TextSecondary)
-                        EarningItem("Protected", "₹${earnings.protectedIncome}", SuccessGreen)
+                        EarningItem("Baseline", "₹${earnings.thisWeekBaseline.toInt()}", TextSecondary)
+                        EarningItem("Protected", "₹${earnings.protectedIncome.toInt()}", SuccessGreen)
                     }
                 }
             }
@@ -97,20 +106,35 @@ fun EarningsContent(earnings: Earnings) {
 
         // 2. Insight Panel
         item {
-            val loss = maxOf(0.0, earnings.thisWeekBaseline - earnings.thisWeekActual)
+            val gap = earnings.thisWeekBaseline - earnings.thisWeekActual
+            val isGapped = gap > 0
+            
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = OrangeSoft.copy(alpha = 0.5f))
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isGapped) OrangeSoft.copy(alpha = 0.5f) else SuccessGreen.copy(alpha = 0.1f)
+                )
             ) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = BrandOrange)
+                    Icon(
+                        if (isGapped) Icons.Default.Info else Icons.Default.TrendingUp,
+                        contentDescription = null,
+                        tint = if (isGapped) BrandOrange else SuccessGreen
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text("Income Insight", fontWeight = FontWeight.Bold, color = OrangeDeep)
                         Text(
-                            if (loss > 0) "You have a gap of ₹$loss from your baseline due to external factors. Protection payout is being calculated." 
-                            else "You are performing above your baseline. Great work!",
+                            "Income Insight",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isGapped) OrangeDeep else SuccessGreen
+                        )
+                        Text(
+                            if (isGapped) {
+                                "Due to reduced activity (likely disruption), your earnings dropped by ₹${gap.toInt()}. Your protection ensures you receive ₹${earnings.protectedIncome.toInt()}."
+                            } else {
+                                "You've exceeded your baseline by ₹${(-gap).toInt()}. Great job! Your protection remains active for next week."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = TextPrimary
                         )
@@ -120,11 +144,11 @@ fun EarningsContent(earnings: Earnings) {
         }
 
         item {
-            Text("History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Weekly History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
 
         items(earnings.history) { record ->
-            HistoryItem(record.date, record.amount)
+            HistoryItem(record.date, record.amount, earnings.thisWeekBaseline)
         }
     }
 }
@@ -138,7 +162,9 @@ fun EarningItem(label: String, value: String, valueColor: Color) {
 }
 
 @Composable
-fun HistoryItem(date: String, amount: Double) {
+fun HistoryItem(date: String, amount: Double, baseline: Double) {
+    val isAboveBaseline = amount >= baseline
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -149,17 +175,43 @@ fun HistoryItem(date: String, amount: Double) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(40.dp).background(BackgroundWarmWhite, CircleShape),
+                modifier = Modifier.size(40.dp).background(
+                    if (isAboveBaseline) SuccessGreen.copy(alpha = 0.1f) else ErrorRed.copy(alpha = 0.1f),
+                    CircleShape
+                ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.TrendingUp, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(20.dp))
+                Icon(
+                    if (isAboveBaseline) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                    contentDescription = null,
+                    tint = if (isAboveBaseline) SuccessGreen else ErrorRed,
+                    modifier = Modifier.size(20.dp)
+                )
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(date, fontWeight = FontWeight.SemiBold)
-                Text("Completed shift", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                Text(
+                    if (isAboveBaseline) "Above Baseline" else "Below Baseline",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isAboveBaseline) SuccessGreen else ErrorRed
+                )
             }
-            Text("₹$amount", fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("₹${amount.toInt()}", fontWeight = FontWeight.Bold, color = TextPrimary)
+        }
+    }
+}
+
+@Composable
+fun ErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(message, color = ErrorRed)
+        Button(onClick = onRetry, modifier = Modifier.padding(top = 16.dp)) {
+            Text("Retry")
         }
     }
 }
