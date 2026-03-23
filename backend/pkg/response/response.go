@@ -1,14 +1,23 @@
 package response
 
-import "github.com/gin-gonic/gin"
+import (
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
 
 // Success returns a standard success response
 func Success(c *gin.Context, statusCode int, data interface{}) {
+	requestID := c.GetString("request_id")
+	if requestID == "" {
+		requestID = c.GetHeader("X-Request-ID")
+	}
+
 	c.JSON(statusCode, gin.H{
 		"data": data,
 		"meta": gin.H{
-			"timestamp":  "",
-			"request_id": "",
+			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+			"request_id": requestID,
 		},
 	})
 }
