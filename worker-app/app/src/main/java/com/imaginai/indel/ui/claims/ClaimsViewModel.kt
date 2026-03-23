@@ -3,7 +3,6 @@ package com.imaginai.indel.ui.claims
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.model.Claim
-import com.imaginai.indel.data.model.Payout
 import com.imaginai.indel.data.model.WalletResponse
 import com.imaginai.indel.data.repository.ClaimsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,13 +29,11 @@ class ClaimsViewModel @Inject constructor(
             try {
                 val claimsRes = claimsRepository.getClaims()
                 val walletRes = claimsRepository.getWallet()
-                val payoutsRes = claimsRepository.getPayouts()
 
-                if (claimsRes.isSuccessful && walletRes.isSuccessful && payoutsRes.isSuccessful) {
+                if (claimsRes.isSuccessful && walletRes.isSuccessful) {
                     _uiState.value = ClaimsUiState.Success(
                         claims = claimsRes.body()?.claims ?: emptyList(),
-                        wallet = walletRes.body()!!,
-                        payouts = payoutsRes.body()?.payouts ?: emptyList()
+                        wallet = walletRes.body()!!
                     )
                 } else {
                     _uiState.value = ClaimsUiState.Error("Failed to load claims data")
@@ -52,8 +49,7 @@ sealed class ClaimsUiState {
     object Loading : ClaimsUiState()
     data class Success(
         val claims: List<Claim>,
-        val wallet: WalletResponse,
-        val payouts: List<Payout>
+        val wallet: WalletResponse
     ) : ClaimsUiState()
     data class Error(val message: String) : ClaimsUiState()
 }

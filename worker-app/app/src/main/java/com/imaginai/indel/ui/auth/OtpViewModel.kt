@@ -34,12 +34,17 @@ class OtpViewModel @Inject constructor(
     }
 
     fun sendOtp() {
+        if (_phone.value.isBlank()) {
+             _uiState.value = OtpUiState.Error("Please enter phone number")
+             return
+        }
         viewModelScope.launch {
             _uiState.value = OtpUiState.Loading
             try {
                 val response = authRepository.sendOtp(_phone.value)
                 if (response.isSuccessful) {
-                    _uiState.value = OtpUiState.OtpSent(response.body()?.otpForTesting)
+                    val body = response.body()
+                    _uiState.value = OtpUiState.OtpSent(body?.otpForTesting)
                 } else {
                     _uiState.value = OtpUiState.Error("Failed to send OTP")
                 }
@@ -50,6 +55,10 @@ class OtpViewModel @Inject constructor(
     }
 
     fun verifyOtp() {
+        if (_otp.value.isBlank()) {
+            _uiState.value = OtpUiState.Error("Please enter OTP")
+            return
+        }
         viewModelScope.launch {
             _uiState.value = OtpUiState.Loading
             try {
@@ -68,12 +77,14 @@ class OtpViewModel @Inject constructor(
     private suspend fun checkWorkerProfile() {
         try {
             val response = workerRepository.getProfile()
+            // Updated to handle WorkerProfileResponse which wraps the worker object
             if (response.isSuccessful && response.body()?.worker?.name?.isNotEmpty() == true) {
                 _uiState.value = OtpUiState.Success(hasProfile = true)
             } else {
                 _uiState.value = OtpUiState.Success(hasProfile = false)
             }
         } catch (e: Exception) {
+            // If profile check fails, assume onboarding is needed
             _uiState.value = OtpUiState.Success(hasProfile = false)
         }
     }

@@ -2,9 +2,7 @@ package com.imaginai.indel.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.imaginai.indel.data.model.EarningsSummary
-import com.imaginai.indel.data.model.Policy
-import com.imaginai.indel.data.model.WorkerProfile
+import com.imaginai.indel.data.model.*
 import com.imaginai.indel.data.repository.EarningsRepository
 import com.imaginai.indel.data.repository.PolicyRepository
 import com.imaginai.indel.data.repository.WorkerRepository
@@ -37,10 +35,18 @@ class HomeViewModel @Inject constructor(
                 val earningsRes = earningsRepository.getEarnings()
 
                 if (profileRes.isSuccessful && policyRes.isSuccessful && earningsRes.isSuccessful) {
+                    val summary = earningsRes.body()!!
+                    val earnings = Earnings(
+                        thisWeekActual = summary.thisWeekActual.toDouble(),
+                        thisWeekBaseline = summary.thisWeekBaseline.toDouble(),
+                        protectedIncome = summary.protectedIncome.toDouble(),
+                        history = summary.history.map { EarningRecord(it.week, it.actual.toDouble()) }
+                    )
+                    
                     _uiState.value = HomeUiState.Success(
-                        worker = profileRes.body()?.worker!!,
-                        policy = policyRes.body()?.policy!!,
-                        earnings = earningsRes.body()!!
+                        worker = profileRes.body()!!.worker,
+                        policy = policyRes.body()!!.policy,
+                        earnings = earnings
                     )
                 } else {
                     _uiState.value = HomeUiState.Error("Failed to load dashboard data")
@@ -57,7 +63,7 @@ sealed class HomeUiState {
     data class Success(
         val worker: WorkerProfile,
         val policy: Policy,
-        val earnings: EarningsSummary
+        val earnings: Earnings
     ) : HomeUiState()
     data class Error(val message: String) : HomeUiState()
 }

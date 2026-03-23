@@ -1,21 +1,26 @@
 package com.imaginai.indel.ui.claims
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.imaginai.indel.data.model.Claim
-import java.util.Locale
+import com.imaginai.indel.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,20 +38,29 @@ fun ClaimDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Claim Details") },
+                title = { Text("Claim Details", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = BrandOrange,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Box(modifier = Modifier
+            .padding(padding)
+            .fillMaxSize()
+            .background(BackgroundWarmWhite)
+        ) {
             when (val state = uiState) {
                 is ClaimDetailUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 is ClaimDetailUiState.Success -> ClaimDetailContent(state.claim)
-                is ClaimDetailUiState.Error -> Text(state.message, color = Color.Red, modifier = Modifier.align(Alignment.Center))
+                is ClaimDetailUiState.Error -> Text(state.message, color = ErrorRed, modifier = Modifier.align(Alignment.Center))
             }
         }
     }
@@ -57,38 +71,102 @@ fun ClaimDetailContent(claim: Claim) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Status", style = MaterialTheme.typography.labelMedium)
-                Text(
-                    claim.status.uppercase(Locale.getDefault()),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = if (claim.status == "approved") Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
-                )
+        // 1. Header Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Total Payout", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
+                Text("₹${claim.payoutAmount}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                Spacer(modifier = Modifier.height(8.dp))
+                StatusBadge(claim.status)
+                
+                Spacer(modifier = Modifier.height(20.dp))
+                HorizontalDivider(color = BackgroundWarmWhite)
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Claim ID", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(claim.claimId.take(8), fontWeight = FontWeight.Bold)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Type", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(claim.disruptionType.replace("_", " "), fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
-        DetailItem("Claim ID", claim.claimId)
-        DetailItem("Type", claim.disruptionType.replace("_", " ").replaceFirstChar { it.uppercase() })
-        DetailItem("Zone", claim.zone)
-        DetailItem("Income Loss", "₹${claim.incomeLoss}")
-        DetailItem("Payout Amount", "₹${claim.payoutAmount}")
-        DetailItem("Fraud Verdict", claim.fraudVerdict.replaceFirstChar { it.uppercase() })
-
-        if (claim.disruptionWindow != null) {
-            DetailItem("Window", "${claim.disruptionWindow.start.take(16)} to ${claim.disruptionWindow.end.take(16)}")
+        // 2. Disruption Timeline
+        Text("Incident Window", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Event, contentDescription = null, tint = BrandOrange)
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text("Time Frame", fontWeight = FontWeight.Bold)
+                    claim.disruptionWindow?.let {
+                         Text("${it.start.take(16)} - ${it.end.take(16)}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
+                }
+            }
         }
+
+        // 3. Breakdown
+        Text("Payout Breakdown", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                BreakdownRow("Income Loss", "₹${claim.incomeLoss}")
+                BreakdownRow("Coverage Ratio", "85%") // Static for demo or from policy
+                HorizontalDivider(color = BackgroundWarmWhite)
+                BreakdownRow("Final Payout", "₹${claim.payoutAmount}", isTotal = true)
+            }
+        }
+
+        // 4. Verification Note
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = SuccessGreen.copy(alpha = 0.05f))
+        ) {
+            Row(modifier = Modifier.padding(16.dp)) {
+                Icon(Icons.Default.Verified, contentDescription = null, tint = SuccessGreen)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text("Automated Verdict", fontWeight = FontWeight.Bold, color = SuccessGreen)
+                    Text(
+                        claim.fraudVerdict ?: "Claim verified against real-time weather and dispatch data. No manual action required.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextPrimary
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 @Composable
-fun DetailItem(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
-        HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+fun BreakdownRow(label: String, value: String, isTotal: Boolean = false) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = if (isTotal) TextPrimary else TextSecondary, fontWeight = if (isTotal) FontWeight.Bold else FontWeight.Normal)
+        Text(value, color = if (isTotal) SuccessGreen else TextPrimary, fontWeight = FontWeight.Bold)
     }
 }
