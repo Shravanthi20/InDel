@@ -11,7 +11,8 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:name=".InDelApplication"
-        android:theme="@style/Theme.InDel">
+        android:theme="@style/Theme.InDel"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
