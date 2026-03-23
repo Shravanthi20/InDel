@@ -14,6 +14,7 @@ import com.imaginai.indel.ui.policy.PremiumPayScreen
 import com.imaginai.indel.ui.earnings.EarningsScreen
 import com.imaginai.indel.ui.claims.ClaimsScreen
 import com.imaginai.indel.ui.claims.ClaimDetailScreen
+import com.imaginai.indel.ui.orders.OrdersScreen
 
 sealed class Screen(val route: String) {
     object OTP : Screen("otp")
@@ -26,6 +27,7 @@ sealed class Screen(val route: String) {
     object ClaimDetail : Screen("claim-detail/{claimId}") {
         fun createRoute(claimId: String) = "claim-detail/$claimId"
     }
+    object Orders : Screen("orders")
 }
 
 @Composable
@@ -60,6 +62,9 @@ fun NavGraph() {
         ) { backStackEntry ->
             val claimId = backStackEntry.arguments?.getString("claimId") ?: ""
             ClaimDetailScreen(navController, claimId)
+        }
+        composable(Screen.Orders.route) {
+            OrdersScreen(navController)
         }
     }
 }

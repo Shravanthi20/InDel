@@ -39,6 +39,9 @@ services:
       INDEL_ENV: production
       DB_HOST: postgres
       DB_PORT: 5432
+      DB_USER: indel
+      DB_PASSWORD: password
+      DB_NAME: indel
       KAFKA_BROKERS: kafka:9092
     ports:
       - "8000:8000"
@@ -54,6 +57,11 @@ services:
       INDEL_ENV: production
       SERVICE: worker-gateway
       CORE_URL: http://core:8000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: indel
+      DB_PASSWORD: password
+      DB_NAME: indel
     ports:
       - "8001:8001"
     depends_on:

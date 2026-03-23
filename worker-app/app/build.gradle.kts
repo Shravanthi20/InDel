@@ -6,6 +6,21 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Load .env file for configuration
+val envFile = rootProject.file("../.env").takeIf { it.exists() }
+    ?: rootProject.file("worker-app/.env").takeIf { it.exists() }
+    ?: rootProject.file(".env").takeIf { it.exists() }
+
+val apiBaseUrl = if (envFile != null && envFile.exists()) {
+    envFile.readLines()
+        .find { it.startsWith("API_BASE_URL=") }
+        ?.removePrefix("API_BASE_URL=")
+        ?.trim() ?: "http://192.168.1.6:8082/"
+} else {
+    // Fallback to default
+    "http://192.168.1.6:8082/"
+}
+
 android {
     namespace = "com.imaginai.indel"
     compileSdk = 34
@@ -17,7 +32,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8082/\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     compileOptions {
@@ -57,6 +72,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.navigation:navigation-compose:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
     
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:32.3.1"))

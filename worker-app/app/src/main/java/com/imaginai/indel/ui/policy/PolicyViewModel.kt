@@ -3,9 +3,9 @@ package com.imaginai.indel.ui.policy
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.model.Policy
-import com.imaginai.indel.data.model.PremiumResponse
 import com.imaginai.indel.data.repository.PolicyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -19,6 +19,9 @@ class PolicyViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<PolicyUiState>(PolicyUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     init {
         loadPolicy()
     }
@@ -26,48 +29,61 @@ class PolicyViewModel @Inject constructor(
     fun loadPolicy() {
         viewModelScope.launch {
             _uiState.value = PolicyUiState.Loading
-            try {
-                val policyRes = policyRepository.getPolicy()
-                val premiumRes = policyRepository.getPremium()
+            fetchPolicy()
+        }
+    }
 
-                if (policyRes.isSuccessful && premiumRes.isSuccessful) {
-                    _uiState.value = PolicyUiState.Success(
-                        policy = policyRes.body()!!.policy,
-                        premium = premiumRes.body()!!
-                    )
-                } else {
-                    _uiState.value = PolicyUiState.Error("Failed to load policy")
-                }
-            } catch (e: Exception) {
-                _uiState.value = PolicyUiState.Error(e.message ?: "Unknown error")
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            fetchPolicy()
+            delay(500)
+            _isRefreshing.value = false
+        }
+    }
+
+    private suspend fun fetchPolicy() {
+        try {
+            val policyRes = policyRepository.getPolicy()
+            if (policyRes.isSuccessful) {
+                _uiState.value = PolicyUiState.Success(
+                    policy = policyRes.body()!!.policy
+                )
+            } else {
+                _uiState.value = PolicyUiState.Error("Failed to load policy")
             }
+        } catch (e: Exception) {
+            _uiState.value = PolicyUiState.Error(e.message ?: "Unknown error")
         }
     }
 
     fun enroll() {
         viewModelScope.launch {
+            _uiState.value = PolicyUiState.Loading
             policyRepository.enrollPolicy()
-            loadPolicy()
+            fetchPolicy()
         }
     }
 
     fun pause() {
         viewModelScope.launch {
+            _uiState.value = PolicyUiState.Loading
             policyRepository.pausePolicy()
-            loadPolicy()
+            fetchPolicy()
         }
     }
 
     fun cancel() {
         viewModelScope.launch {
+            _uiState.value = PolicyUiState.Loading
             policyRepository.cancelPolicy()
-            loadPolicy()
+            fetchPolicy()
         }
     }
 }
 
 sealed class PolicyUiState {
     object Loading : PolicyUiState()
-    data class Success(val policy: Policy, val premium: PremiumResponse) : PolicyUiState()
+    data class Success(val policy: Policy) : PolicyUiState()
     data class Error(val message: String) : PolicyUiState()
 }
