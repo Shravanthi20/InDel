@@ -46,6 +46,8 @@ func SetupWorkerRoutes(router *gin.Engine) {
 
 	// Demo control endpoints.
 	v1.POST("/demo/trigger-disruption", worker.DemoTriggerDisruption)
+	v1.POST("/demo/settle-earnings", worker.DemoSettleEarnings)
+	v1.POST("/demo/reset-zone", worker.DemoResetZone)
 	v1.POST("/demo/reset", worker.DemoReset)
 	v1.POST("/demo/simulate-orders", worker.DemoSimulateOrders)
 }

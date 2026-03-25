@@ -97,3 +97,65 @@ func DemoSimulateOrders(c *gin.Context) {
 
 	c.JSON(200, gin.H{"message": "orders_simulated", "count": count})
 }
+
+// DemoSettleEarnings settles demo earnings and triggers premium reminder.
+func DemoSettleEarnings(c *gin.Context) {
+	workerID, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+
+	if hasDB() {
+		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			_ = workerDB.Exec(
+				`UPDATE weekly_earnings_summary
+				 SET claim_eligible = TRUE
+				 WHERE worker_id = ?
+				   AND week_start = date_trunc('week', CURRENT_DATE)::date
+				   AND week_end = (date_trunc('week', CURRENT_DATE)::date + INTERVAL '6 day')::date`,
+				workerIDUint,
+			).Error
+			_ = workerDB.Exec(
+				"INSERT INTO notifications (worker_id, type, message) VALUES (?, 'premium_due', 'Weekly earnings settled. Pay premium to keep coverage active.')",
+				workerIDUint,
+			).Error
+		}
+	}
+
+	store.mu.Lock()
+	store.data.Notifications = append([]map[string]any{{
+		"id":         nextID("ntf", len(store.data.Notifications)),
+		"type":       "premium_due",
+		"title":      "Weekly settlement complete",
+		"body":       "Weekly earnings settled. Pay premium to keep coverage active.",
+		"created_at": nowISO(),
+		"read":       false,
+	}}, store.data.Notifications...)
+	store.mu.Unlock()
+
+	c.JSON(200, gin.H{"message": "earnings_settled", "time": nowISO()})
+}
+
+// DemoResetZone resets disruption and claim state for demo replay.
+func DemoResetZone(c *gin.Context) {
+	workerID, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+
+	if hasDB() {
+		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			_ = workerDB.Exec("DELETE FROM payouts WHERE worker_id = ?", workerIDUint).Error
+			_ = workerDB.Exec("DELETE FROM claims WHERE worker_id = ?", workerIDUint).Error
+			_ = workerDB.Exec("DELETE FROM notifications WHERE worker_id = ? AND type IN ('disruption_alert', 'payout_credited')", workerIDUint).Error
+		}
+	}
+
+	store.mu.Lock()
+	store.data.Claims = []map[string]any{}
+	store.data.Payouts = []map[string]any{}
+	store.data.Notifications = []map[string]any{}
+	store.mu.Unlock()
+
+	c.JSON(200, gin.H{"message": "zone_reset", "time": nowISO()})
+}
