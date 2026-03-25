@@ -5,6 +5,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/Shravanthi20/InDel/backend/internal/config"
+	"github.com/Shravanthi20/InDel/backend/internal/database"
+	"github.com/Shravanthi20/InDel/backend/internal/handlers/platform"
+	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -18,16 +22,23 @@ func main() {
 	// Create Gin router
 	router := gin.Default()
 
+	// Optional DB integration for platform webhooks.
+	cfg := config.Load()
+	db, err := database.InitDB(cfg)
+	if err != nil {
+		log.Printf("Platform Gateway DB unavailable, using fallback mode: %v", err)
+	} else {
+		platform.SetDB(db)
+		log.Println("Platform Gateway connected to PostgreSQL")
+	}
+
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "platform-gateway"})
 	})
 
 	// API routes
-	// GET /api/workers
-	// GET /api/zones
-	// POST /api/webhooks/orders
-	// TODO: Implement platform gateway endpoints
+	routerpkg.SetupPlatformRoutes(router)
 
 	// Start server
 	port := os.Getenv("PLATFORM_GATEWAY_PORT")
