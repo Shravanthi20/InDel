@@ -10,6 +10,8 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1 := router.Group("/api/v1")
 
 	// Public auth endpoints.
+	v1.POST("/auth/register", worker.Register)
+	v1.POST("/auth/login", worker.Login)
 	v1.POST("/auth/otp/send", worker.SendOTP)
 	v1.POST("/auth/otp/verify", worker.VerifyOTP)
 
@@ -50,4 +52,9 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1.POST("/demo/reset-zone", worker.DemoResetZone)
 	v1.POST("/demo/reset", worker.DemoReset)
 	v1.POST("/demo/simulate-orders", worker.DemoSimulateOrders)
+	v1.POST("/demo/orders/publisher/initiate", worker.InitiateOrderPublisher)
+	v1.POST("/demo/orders/publisher/ack", worker.AckOrderPublisher)
+	v1.GET("/demo/orders/publisher/status", worker.GetOrderPublisherStatus)
+	v1.POST("/demo/orders/ingest", worker.IngestDemoOrder)
+	v1.GET("/demo/orders/search", worker.SearchDemoOrders)
 }
