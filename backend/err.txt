@@ -1,0 +1,3 @@
+# github.com/Shravanthi20/InDel/backend/internal/handlers/insurer
+internal\handlers\insurer\loss_ratio.go:8:2: declared and not used: from
+internal\handlers\insurer\loss_ratio.go:9:2: declared and not used: to

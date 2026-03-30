@@ -1,0 +1,19 @@
+=== RUN   TestOverviewAggregation
+[GIN] 2026/03/30 - 23:59:52 | 200 |       561.6µs |                 | GET      "/api/v1/insurer/overview"
+--- PASS: TestOverviewAggregation (0.00s)
+=== RUN   TestLossRatioEdgeCases
+[GIN] 2026/03/30 - 23:59:52 | 200 |       541.3µs |                 | GET      "/api/v1/insurer/loss-ratio"
+--- PASS: TestLossRatioEdgeCases (0.00s)
+=== RUN   TestClaimsPaginationAndFilters
+[GIN] 2026/03/30 - 23:59:52 | 200 |       547.3µs |                 | GET      "/api/v1/insurer/claims?limit=10&page=2"
+[GIN] 2026/03/30 - 23:59:52 | 200 |            0s |                 | GET      "/api/v1/insurer/claims?fraud_verdict=flagged"
+--- PASS: TestClaimsPaginationAndFilters (0.00s)
+=== RUN   TestReviewClaimIdempotencyAndAudit
+[GIN] 2026/03/30 - 23:59:52 | 200 |       539.7µs |                 | POST     "/api/v1/insurer/claims/1/review"
+[GIN] 2026/03/30 - 23:59:52 | 200 |            0s |                 | POST     "/api/v1/insurer/claims/1/review"
+--- PASS: TestReviewClaimIdempotencyAndAudit (0.00s)
+=== RUN   TestFraudQueueSelection
+[GIN] 2026/03/30 - 23:59:52 | 200 |            0s |                 | GET      "/api/v1/insurer/claims/fraud-queue"
+--- PASS: TestFraudQueueSelection (0.00s)
+PASS
+ok  	github.com/Shravanthi20/InDel/backend/internal/handlers/insurer	2.919s
