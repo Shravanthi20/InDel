@@ -48,7 +48,7 @@ fun LoginScreen(
             Text(
                 text = "Welcome Back",
                 style = MaterialTheme.typography.headlineLarge,
-                color = BrandOrange,
+                color = BrandBlue,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -87,7 +87,7 @@ fun LoginScreen(
                     .height(56.dp),
                 enabled = uiState !is LoginUiState.Loading,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
             ) {
                 if (uiState is LoginUiState.Loading) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
@@ -100,7 +100,7 @@ fun LoginScreen(
                 onClick = { navController.navigate(Screen.Register.route) },
                 modifier = Modifier.padding(top = 16.dp)
             ) {
-                Text("Don't have an account? Register", color = BrandOrange)
+                Text("Don't have an account? Register", color = BrandBlue)
             }
 
             if (uiState is LoginUiState.Error) {

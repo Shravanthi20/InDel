@@ -57,4 +57,6 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1.GET("/demo/orders/publisher/status", worker.GetOrderPublisherStatus)
 	v1.POST("/demo/orders/ingest", worker.IngestDemoOrder)
 	v1.GET("/demo/orders/search", worker.SearchDemoOrders)
+	v1.GET("/demo/orders/available", worker.GetAvailableOrders)
+	v1.GET("/demo/deliveries", worker.GetDeliveries)
 }

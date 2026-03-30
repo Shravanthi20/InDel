@@ -26,15 +26,31 @@ class LoginViewModel @Inject constructor(
     fun onIdentifierChanged(value: String) { _identifier.value = value }
     fun onPasswordChanged(value: String) { _password.value = value }
 
+    private fun isValidIdentifier(id: String): Boolean {
+        // Check if it's an email: contains '@' and then a '.' somewhere after '@'
+        val isEmail = id.contains("@") && id.substringAfter("@").contains(".")
+        // Check if it's a 10-digit number
+        val isPhone = id.length == 10 && id.all { it.isDigit() }
+        
+        return isEmail || isPhone
+    }
+
     fun login() {
-        if (_identifier.value.isBlank() || _password.value.isBlank()) {
+        val id = _identifier.value.trim()
+        if (id.isBlank() || _password.value.isBlank()) {
             _uiState.value = LoginUiState.Error("Please enter all fields")
             return
         }
+
+        if (!isValidIdentifier(id)) {
+            _uiState.value = LoginUiState.Error("Enter a valid email or 10-digit phone number")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
             try {
-                val response = authRepository.login(_identifier.value, _password.value)
+                val response = authRepository.login(id, _password.value)
                 if (response.isSuccessful) {
                     _uiState.value = LoginUiState.Success
                 } else {

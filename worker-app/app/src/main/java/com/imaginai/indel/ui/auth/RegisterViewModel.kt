@@ -38,13 +38,36 @@ class RegisterViewModel @Inject constructor(
     fun onPasswordChanged(value: String) { _password.value = value }
     fun onConfirmPasswordChanged(value: String) { _confirmPassword.value = value }
 
+    private fun isValidEmail(email: String): Boolean {
+        return email.contains("@") && email.substringAfter("@").contains(".")
+    }
+
+    private fun isValidPhone(phone: String): Boolean {
+        return phone.length == 10 && phone.all { it.isDigit() }
+    }
+
     fun register() {
-        if (_password.value != _confirmPassword.value) {
-            _uiState.value = RegisterUiState.Error("Passwords do not match")
+        val emailVal = _email.value.trim()
+        val phoneVal = _phone.value.trim()
+        val usernameVal = _username.value.trim()
+
+        if (usernameVal.isBlank() || emailVal.isBlank() || phoneVal.isBlank() || _password.value.isBlank()) {
+            _uiState.value = RegisterUiState.Error("Please fill all fields")
             return
         }
-        if (_username.value.isBlank() || _email.value.isBlank() || _phone.value.isBlank() || _password.value.isBlank()) {
-            _uiState.value = RegisterUiState.Error("Please fill all fields")
+
+        if (!isValidEmail(emailVal)) {
+            _uiState.value = RegisterUiState.Error("Invalid email format (must contain @ and .)")
+            return
+        }
+
+        if (!isValidPhone(phoneVal)) {
+            _uiState.value = RegisterUiState.Error("Phone number must be exactly 10 digits")
+            return
+        }
+
+        if (_password.value != _confirmPassword.value) {
+            _uiState.value = RegisterUiState.Error("Passwords do not match")
             return
         }
         
@@ -52,9 +75,9 @@ class RegisterViewModel @Inject constructor(
             _uiState.value = RegisterUiState.Loading
             try {
                 val response = authRepository.register(
-                    _username.value,
-                    _phone.value,
-                    _email.value,
+                    usernameVal,
+                    phoneVal,
+                    emailVal,
                     _password.value
                 )
                 if (response.isSuccessful) {

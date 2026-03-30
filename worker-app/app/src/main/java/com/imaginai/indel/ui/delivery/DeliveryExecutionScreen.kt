@@ -49,7 +49,7 @@ fun DeliveryExecutionScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandOrange,
+                    containerColor = BrandBlue,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -68,9 +68,11 @@ fun DeliveryExecutionScreen(
                 else -> {
                     order?.let { currentOrder ->
                         if (currentOrder.status == "picked_up") {
-                            // If already picked up, go to completion screen or show navigate to customer
+                            // If already picked up, go to completion screen
                             LaunchedEffect(Unit) {
-                                navController.navigate(Screen.DeliveryCompletion.createRoute(orderId))
+                                navController.navigate(Screen.DeliveryCompletion.createRoute(orderId)) {
+                                    popUpTo(Screen.DeliveryExecution.createRoute(orderId)) { inclusive = true }
+                                }
                             }
                         } else {
                             ExecutionContent(currentOrder, viewModel)
@@ -100,11 +102,11 @@ fun ExecutionContent(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("PICKUP DETAILS", style = MaterialTheme.typography.labelSmall, color = BrandOrange, fontWeight = FontWeight.Bold)
+                Text("PICKUP DETAILS", style = MaterialTheme.typography.labelSmall, color = BrandBlue, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = BrandOrange)
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = BrandBlue)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(order.pickupArea, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 }
@@ -113,7 +115,7 @@ fun ExecutionContent(
                 HorizontalDivider(color = BackgroundWarmWhite)
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Text("CUSTOMER DETAILS", style = MaterialTheme.typography.labelSmall, color = BrandOrange, fontWeight = FontWeight.Bold)
+                Text("CUSTOMER DETAILS", style = MaterialTheme.typography.labelSmall, color = BrandBlue, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -138,7 +140,7 @@ fun ExecutionContent(
                 .fillMaxWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
+            colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
         ) {
             Text("Confirm Pickup", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }

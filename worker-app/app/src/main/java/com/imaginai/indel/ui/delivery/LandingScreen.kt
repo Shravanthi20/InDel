@@ -44,7 +44,7 @@ fun LandingScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandOrange,
+                    containerColor = BrandBlue,
                     titleContentColor = Color.White,
                     actionIconContentColor = Color.White
                 )
@@ -101,7 +101,7 @@ fun LandingContent(
                 .fillMaxWidth()
                 .height(120.dp),
             shape = RoundedCornerShape(24.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
+            colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(48.dp))
@@ -131,7 +131,7 @@ fun LandingContent(
 
         // Bottom link to full dashboard
         TextButton(onClick = { navController.navigate(Screen.Home.route) }) {
-            Text("View Full Dashboard", color = BrandOrange, fontWeight = FontWeight.Bold)
+            Text("View Full Dashboard", color = BrandBlue, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -140,7 +140,7 @@ fun LandingContent(
 fun SnapshotCard(
     title: String,
     value: String,
-    color: Color = BrandOrange,
+    color: Color = BrandBlue,
     modifier: Modifier = Modifier
 ) {
     Card(

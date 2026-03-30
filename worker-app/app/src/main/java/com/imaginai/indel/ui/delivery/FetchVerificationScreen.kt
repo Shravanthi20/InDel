@@ -47,7 +47,7 @@ fun FetchVerificationScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandOrange,
+                    containerColor = BrandBlue,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -66,7 +66,7 @@ fun FetchVerificationScreen(
             Icon(
                 Icons.Default.Security,
                 contentDescription = null,
-                tint = BrandOrange,
+                tint = BrandBlue,
                 modifier = Modifier.size(64.dp)
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -104,7 +104,7 @@ fun FetchVerificationScreen(
                     .height(56.dp),
                 enabled = uiState !is VerificationUiState.Loading && code.length >= 4,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
             ) {
                 if (uiState is VerificationUiState.Loading) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
@@ -126,7 +126,7 @@ fun FetchVerificationScreen(
                 onClick = viewModel::sendCode,
                 modifier = Modifier.padding(top = 16.dp)
             ) {
-                Text("Didn't get a code? Request again", color = BrandOrange)
+                Text("Didn't get a code? Request again", color = BrandBlue)
             }
         }
     }

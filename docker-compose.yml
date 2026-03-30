@@ -35,6 +35,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: core
     environment:
       INDEL_ENV: production
       DB_HOST: postgres
@@ -44,7 +46,7 @@ services:
       DB_NAME: indel
       KAFKA_BROKERS: kafka:9092
     ports:
-      - "8000:8000"
+      - "${HOST_IP:-192.168.1.6}:8000:8000"
     depends_on:
       - postgres
       - kafka
@@ -53,6 +55,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: worker-gateway
     environment:
       INDEL_ENV: production
       SERVICE: worker-gateway
@@ -63,7 +67,7 @@ services:
       DB_PASSWORD: password
       DB_NAME: indel
     ports:
-      - "8001:8001"
+      - "${HOST_IP:-192.168.1.6}:8001:8001"
     depends_on:
       - core
 
@@ -71,12 +75,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: insurer-gateway
     environment:
       INDEL_ENV: production
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
     ports:
-      - "8002:8002"
+      - "${HOST_IP:-192.168.1.6}:8002:8002"
     depends_on:
       - core
 
@@ -84,12 +90,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: platform-gateway
     environment:
       INDEL_ENV: production
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
     ports:
-      - "8003:8003"
+      - "${HOST_IP:-192.168.1.6}:8003:8003"
     depends_on:
       - core
 

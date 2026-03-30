@@ -12,10 +12,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = BrandOrange,
+    primary = BrandBlue,
     onPrimary = SurfaceWhite,
-    primaryContainer = OrangeSoft,
-    onPrimaryContainer = OrangeDeep,
+    primaryContainer = BlueSoft,
+    onPrimaryContainer = BlueDeep,
     secondary = TextSecondary,
     onSecondary = SurfaceWhite,
     background = BackgroundWarmWhite,
@@ -31,7 +31,7 @@ fun InDelTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = LightColorScheme // Force light theme as per guide
+    val colorScheme = LightColorScheme // Force light theme
 
     val view = LocalView.current
     if (!view.isInEditMode) {
