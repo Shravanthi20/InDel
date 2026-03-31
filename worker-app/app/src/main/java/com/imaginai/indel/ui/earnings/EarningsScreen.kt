@@ -9,9 +9,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -47,7 +47,7 @@ fun EarningsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandOrange,
+                    containerColor = BrandBlue,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -90,7 +90,7 @@ fun EarningsContent(earnings: Earnings) {
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("Weekly Earnings", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
-                    Text("₹${earnings.thisWeekActual.toInt()}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = BrandOrange)
+                    Text("₹${earnings.thisWeekActual.toInt()}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = BrandBlue)
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider(color = BackgroundWarmWhite)
@@ -113,21 +113,21 @@ fun EarningsContent(earnings: Earnings) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isGapped) OrangeSoft.copy(alpha = 0.5f) else SuccessGreen.copy(alpha = 0.1f)
+                    containerColor = if (isGapped) BlueSoft.copy(alpha = 0.5f) else SuccessGreen.copy(alpha = 0.1f)
                 )
             ) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        if (isGapped) Icons.Default.Info else Icons.Default.TrendingUp,
+                        if (isGapped) Icons.Default.Info else Icons.AutoMirrored.Filled.TrendingUp,
                         contentDescription = null,
-                        tint = if (isGapped) BrandOrange else SuccessGreen
+                        tint = if (isGapped) BrandBlue else SuccessGreen
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             "Income Insight",
                             fontWeight = FontWeight.Bold,
-                            color = if (isGapped) OrangeDeep else SuccessGreen
+                            color = if (isGapped) BlueDeep else SuccessGreen
                         )
                         Text(
                             if (isGapped) {
@@ -182,7 +182,7 @@ fun HistoryItem(date: String, amount: Double, baseline: Double) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    if (isAboveBaseline) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                    if (isAboveBaseline) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
                     contentDescription = null,
                     tint = if (isAboveBaseline) SuccessGreen else ErrorRed,
                     modifier = Modifier.size(20.dp)

@@ -2,6 +2,25 @@ package com.imaginai.indel.data.model
 
 import com.google.gson.annotations.SerializedName
 
+data class LoginRequest(
+    @SerializedName("phone") val phone: String? = null,
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("password") val password: String
+)
+
+data class RegisterRequest(
+    @SerializedName("username") val username: String,
+    @SerializedName("phone") val phone: String,
+    @SerializedName("email") val email: String,
+    @SerializedName("password") val password: String
+)
+
+data class AuthResponse(
+    @SerializedName("token") val token: String,
+    @SerializedName("token_type") val tokenType: String,
+    @SerializedName("worker_id") val workerId: String
+)
+
 data class OtpSendRequest(
     @SerializedName("phone") val phone: String
 )

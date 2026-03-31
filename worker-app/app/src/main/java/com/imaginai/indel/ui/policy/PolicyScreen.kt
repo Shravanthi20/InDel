@@ -44,7 +44,7 @@ fun PolicyScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandOrange,
+                    containerColor = BrandBlue,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -103,7 +103,7 @@ fun PolicyContent(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text("Weekly Premium", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
-                    Text("₹${policy.weeklyPremiumInr}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = BrandOrange)
+                    Text("₹${policy.weeklyPremiumInr}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = BrandBlue)
                     
                     Spacer(modifier = Modifier.height(12.dp))
                     
@@ -149,7 +149,8 @@ fun PolicyContent(
             Button(
                 onClick = { navController.navigate(Screen.PremiumPay.route) },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
             ) {
                 Text("Pay Weekly Premium", fontWeight = FontWeight.Bold)
             }
@@ -180,10 +181,10 @@ fun PolicyContent(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = OrangeSoft)
+                colors = CardDefaults.cardColors(containerColor = BlueSoft)
             ) {
                 Row(modifier = Modifier.padding(16.dp)) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = BrandOrange)
+                    Icon(Icons.Default.Info, contentDescription = null, tint = BrandBlue)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         "Protection covers income loss during heavy rain, heatwaves, and local disruptions. Maximum payout is capped at 3x your weekly baseline.",

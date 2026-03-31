@@ -3,6 +3,8 @@ package com.imaginai.indel.ui.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.repository.WorkerRepository
+import com.imaginai.indel.ui.shared.isVehicleAllowedForZone
+import com.imaginai.indel.ui.shared.isValidUpiId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,11 +32,32 @@ class OnboardingViewModel @Inject constructor(
     val upiId = _upiId.asStateFlow()
 
     fun onNameChanged(value: String) { _name.value = value }
-    fun onZoneChanged(value: String) { _zone.value = value }
+    fun onZoneChanged(value: String) {
+        _zone.value = value
+        if (!isVehicleAllowedForZone(_zone.value, _vehicleType.value)) {
+            _vehicleType.value = ""
+        }
+    }
     fun onVehicleTypeChanged(value: String) { _vehicleType.value = value }
     fun onUpiIdChanged(value: String) { _upiId.value = value }
 
     fun submitOnboarding() {
+        val upi = _upiId.value.trim()
+        if (_name.value.isBlank() || _zone.value.isBlank() || _vehicleType.value.isBlank() || upi.isBlank()) {
+            _uiState.value = OnboardingUiState.Error("Please fill all fields")
+            return
+        }
+
+        if (!isValidUpiId(upi)) {
+            _uiState.value = OnboardingUiState.Error("Invalid UPI ID format (username@bankid)")
+            return
+        }
+
+        if (!isVehicleAllowedForZone(_zone.value, _vehicleType.value)) {
+            _uiState.value = OnboardingUiState.Error("Selected vehicle is not allowed for this zone")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = OnboardingUiState.Loading
             try {
@@ -42,7 +65,7 @@ class OnboardingViewModel @Inject constructor(
                     name = _name.value,
                     zone = _zone.value,
                     vehicleType = _vehicleType.value,
-                    upiId = _upiId.value
+                    upiId = upi
                 )
                 if (response.isSuccessful) {
                     _uiState.value = OnboardingUiState.Success

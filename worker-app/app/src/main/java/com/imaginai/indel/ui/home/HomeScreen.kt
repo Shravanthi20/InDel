@@ -53,15 +53,15 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: Notifications */ }) {
+                    IconButton(onClick = { navController.navigate(Screen.Notifications.route) }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notifications")
                     }
-                    IconButton(onClick = { /* TODO: Profile */ }) {
+                    IconButton(onClick = { navController.navigate(Screen.ProfileEdit.route) }) {
                         Icon(Icons.Default.AccountCircle, contentDescription = "Profile")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandOrange,
+                    containerColor = BrandBlue,
                     titleContentColor = Color.White,
                     actionIconContentColor = Color.White
                 )
@@ -133,7 +133,7 @@ fun HomeContent(
         // 5. Quick Navigation Grid
         Text("Services", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            NavBox("Orders", Icons.Default.DeliveryDining, Modifier.weight(1f)) { /* TODO: Orders */ }
+            NavBox("Orders", Icons.Default.DeliveryDining, Modifier.weight(1f)) { navController.navigate(Screen.Orders.route) }
             NavBox("Earnings", Icons.Default.Payments, Modifier.weight(1f)) { navController.navigate(Screen.Earnings.route) }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -161,13 +161,13 @@ fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> 
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(OrangeSoft),
+                    .background(BlueSoft),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (!worker.name.isNullOrEmpty()) worker.name!!.take(1) else "?",
                     fontWeight = FontWeight.Bold,
-                    color = BrandOrange
+                    color = BrandBlue
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -202,7 +202,7 @@ fun DashboardCard(
     value: String,
     subtitle: String,
     icon: ImageVector,
-    color: Color = BrandOrange,
+    color: Color = BrandBlue,
     onClick: () -> Unit
 ) {
     Card(
@@ -231,7 +231,7 @@ fun DisruptionBanner() {
     ) {
         Box(
             modifier = Modifier
-                .background(Brush.horizontalGradient(listOf(BrandOrange, OrangeDeep)))
+                .background(Brush.horizontalGradient(listOf(BrandBlue, BlueDeep)))
                 .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -259,7 +259,7 @@ fun NavBox(title: String, icon: ImageVector, modifier: Modifier = Modifier, onCl
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(icon, contentDescription = null, tint = BrandOrange, modifier = Modifier.size(32.dp))
+            Icon(icon, contentDescription = null, tint = BrandBlue, modifier = Modifier.size(32.dp))
             Spacer(modifier = Modifier.height(8.dp))
             Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }

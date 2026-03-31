@@ -8,6 +8,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.imaginai.indel.ui.auth.OtpScreen
 import com.imaginai.indel.ui.auth.OnboardingScreen
+import com.imaginai.indel.ui.auth.LoginScreen
+import com.imaginai.indel.ui.auth.RegisterScreen
 import com.imaginai.indel.ui.home.HomeScreen
 import com.imaginai.indel.ui.policy.PolicyScreen
 import com.imaginai.indel.ui.policy.PremiumPayScreen
@@ -15,11 +17,33 @@ import com.imaginai.indel.ui.earnings.EarningsScreen
 import com.imaginai.indel.ui.claims.ClaimsScreen
 import com.imaginai.indel.ui.claims.ClaimDetailScreen
 import com.imaginai.indel.ui.orders.OrdersScreen
+import com.imaginai.indel.ui.delivery.LandingScreen
+import com.imaginai.indel.ui.delivery.FetchVerificationScreen
+import com.imaginai.indel.ui.delivery.DeliveryExecutionScreen
+import com.imaginai.indel.ui.delivery.DeliveryCompletionScreen
+import com.imaginai.indel.ui.delivery.SessionTrackingScreen
+import com.imaginai.indel.ui.notifications.NotificationsScreen
+import com.imaginai.indel.ui.profile.ProfileEditScreen
+import com.imaginai.indel.ui.payouts.PayoutHistoryScreen
+import com.imaginai.indel.ui.debug.DevToolsScreen
 
 sealed class Screen(val route: String) {
+    object SessionGate : Screen("session-gate")
+    object Register : Screen("register")
+    object Login : Screen("login")
     object OTP : Screen("otp")
     object Onboarding : Screen("onboarding")
+    object Landing : Screen("landing")
     object Home : Screen("home")
+    object Orders : Screen("orders")
+    object FetchVerification : Screen("fetch-verification")
+    object DeliveryExecution : Screen("delivery-execution/{orderId}") {
+        fun createRoute(orderId: String) = "delivery-execution/$orderId"
+    }
+    object DeliveryCompletion : Screen("delivery-completion/{orderId}") {
+        fun createRoute(orderId: String) = "delivery-completion/$orderId"
+    }
+    object SessionTracking : Screen("session-tracking")
     object Policy : Screen("policy")
     object PremiumPay : Screen("premium-pay")
     object Earnings : Screen("earnings")
@@ -27,22 +51,58 @@ sealed class Screen(val route: String) {
     object ClaimDetail : Screen("claim-detail/{claimId}") {
         fun createRoute(claimId: String) = "claim-detail/$claimId"
     }
-    object Orders : Screen("orders")
+    object Notifications : Screen("notifications")
+    object ProfileEdit : Screen("profile-edit")
+    object PayoutHistory : Screen("payouts-history")
+    object DevTools : Screen("dev-tools")
 }
 
 @Composable
 fun NavGraph() {
     val navController = rememberNavController()
 
-    NavHost(navController, startDestination = Screen.OTP.route) {
+    // Starting with Login for now as per the plan
+    NavHost(navController, startDestination = Screen.Login.route) {
+        composable(Screen.Login.route) {
+            LoginScreen(navController)
+        }
+        composable(Screen.Register.route) {
+            RegisterScreen(navController)
+        }
         composable(Screen.OTP.route) {
             OtpScreen(navController)
         }
         composable(Screen.Onboarding.route) {
             OnboardingScreen(navController)
         }
+        composable(Screen.Landing.route) {
+            LandingScreen(navController)
+        }
         composable(Screen.Home.route) {
             HomeScreen(navController)
+        }
+        composable(Screen.Orders.route) {
+            OrdersScreen(navController)
+        }
+        composable(Screen.FetchVerification.route) {
+            FetchVerificationScreen(navController)
+        }
+        composable(
+            route = Screen.DeliveryExecution.route,
+            arguments = listOf(navArgument("orderId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+            DeliveryExecutionScreen(navController, orderId)
+        }
+        composable(
+            route = Screen.DeliveryCompletion.route,
+            arguments = listOf(navArgument("orderId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+            DeliveryCompletionScreen(navController, orderId)
+        }
+        composable(Screen.SessionTracking.route) {
+            SessionTrackingScreen(navController)
         }
         composable(Screen.Policy.route) {
             PolicyScreen(navController)
@@ -63,8 +123,17 @@ fun NavGraph() {
             val claimId = backStackEntry.arguments?.getString("claimId") ?: ""
             ClaimDetailScreen(navController, claimId)
         }
-        composable(Screen.Orders.route) {
-            OrdersScreen(navController)
+        composable(Screen.Notifications.route) {
+            NotificationsScreen(navController)
+        }
+        composable(Screen.ProfileEdit.route) {
+            ProfileEditScreen(navController)
+        }
+        composable(Screen.PayoutHistory.route) {
+            PayoutHistoryScreen(navController)
+        }
+        composable(Screen.DevTools.route) {
+            DevToolsScreen(navController)
         }
     }
 }

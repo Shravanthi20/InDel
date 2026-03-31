@@ -1,0 +1,40 @@
+IN-DEL WORKER APP - DATA FETCHING OVERVIEW (FRONTEND TO BACKEND)
+
+1. UI LAYER (Jetpack Compose)
+   - Screens (e.g., OrdersScreen, EarningsScreen) observe state from the ViewModel.
+   - Uses `viewModel.uiState.collectAsState()` to react to data changes.
+   - User actions (like button clicks) trigger methods in the ViewModel.
+
+2. VIEWMODEL LAYER (State Management)
+   - Uses `viewModelScope.launch` to start Coroutines for asynchronous work.
+   - Maintains a `UiState` (Loading, Success, Error) using `MutableStateFlow`.
+   - Calls the Repository to fetch data and updates the state based on the result.
+   - Example (OrdersViewModel):
+     fun loadOrders() {
+         _uiState.value = OrdersUiState.Loading
+         val response = workerRepository.getAllOrders() // Suspend call
+         if (response.isSuccessful) {
+             _uiState.value = OrdersUiState.Success(response.body()?.orders)
+         }
+     }
+
+3. REPOSITORY LAYER (Data Abstraction)
+   - `WorkerRepository.kt` acts as the single source of truth.
+   - It abstracts the API calls from the ViewModels.
+   - Contains `suspend` functions that call the `WorkerApiService`.
+
+4. NETWORK LAYER (Retrofit & OkHttp)
+   - WorkerApiService.kt: Interface defining all REST endpoints (@GET, @POST, @PUT).
+   - NetworkModule.kt: Provides the Singleton instances for Retrofit and OkHttp.
+   - AuthInterceptor: A crucial component that:
+     - Retrieves the JWT token from `PreferencesDataStore`.
+     - Automatically adds the 'Authorization: Bearer <token>' header to every outgoing request.
+   - LoggingInterceptor: Prints all request/response data to Logcat for debugging.
+   - GSON Converter: Automatically maps JSON keys (e.g., "order_id") to Kotlin properties (e.g., "orderId") using @SerializedName.
+
+5. BACKEND INTERACTION (Go Gateway)
+   - The app targets the API_BASE_URL defined in the project's `.env` file (e.g., http://192.168.1.6:8001).
+   - Requests are handled by the Worker Gateway which interacts with the Core Backend and PostgreSQL database.
+
+DATA FLOW SUMMARY:
+[Compose UI] -> [ViewModel] -> [Repository] -> [Retrofit Service] -> [OkHttp + JWT Token] -> [Backend API]
