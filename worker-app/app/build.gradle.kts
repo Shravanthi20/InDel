@@ -15,10 +15,10 @@ val apiBaseUrl = if (envFile != null && envFile.exists()) {
     envFile.readLines()
         .find { it.startsWith("API_BASE_URL=") }
         ?.removePrefix("API_BASE_URL=")
-        ?.trim() ?: "http://192.168.1.6:8082/"
+        ?.trim() ?: "http://192.168.1.6:8001/"
 } else {
     // Fallback to default
-    "http://192.168.1.6:8082/"
+    "http://192.168.1.6:8001/"
 }
 
 android {

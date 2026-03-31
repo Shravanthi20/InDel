@@ -7,6 +7,8 @@ import (
 
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
+	"github.com/Shravanthi20/InDel/backend/internal/handlers/core"
+	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -31,6 +33,8 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
+	core.SetDB(db)
+
 	// Create Gin router
 	router := gin.Default()
 
@@ -40,7 +44,7 @@ func main() {
 	})
 
 	// API routes
-	// TODO: Initialize gateways and handlers
+	routerpkg.SetupCoreRoutes(router)
 
 	// Start server
 	port := os.Getenv("PORT")

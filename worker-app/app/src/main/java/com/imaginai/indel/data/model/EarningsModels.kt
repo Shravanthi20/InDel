@@ -15,12 +15,3 @@ data class EarningsHistoryItem(
     @SerializedName("actual") val actual: Int,
     @SerializedName("baseline") val baseline: Int
 )
-
-data class EarningsHistoryResponse(
-    @SerializedName("history") val history: List<EarningsHistoryItem>
-)
-
-data class BaselineResponse(
-    @SerializedName("baseline") val baseline: Int,
-    @SerializedName("currency") val currency: String
-)

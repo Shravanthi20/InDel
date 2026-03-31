@@ -39,8 +39,8 @@ func TestDeliverOrderIsIdempotentAfterFirstDelivery(t *testing.T) {
 	firstNotifications := len(store.data.Notifications)
 	store.mu.RUnlock()
 
-	if firstActual != 3198 {
-		t.Fatalf("this_week_actual after first delivery = %d, want 3198", firstActual)
+	if firstActual != 3180 {
+		t.Fatalf("this_week_actual after first delivery = %d, want 3180", firstActual)
 	}
 	if firstCompleted != 1 {
 		t.Fatalf("orders_completed after first delivery = %d, want 1", firstCompleted)

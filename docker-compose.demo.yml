@@ -10,8 +10,29 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./scripts/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql
       - postgres_demo_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indel -d indel_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  db-migrate:
+    image: migrate/migrate:v4.17.1
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://indel:demo_password@postgres:5432/indel_demo?sslmode=disable",
+        "up"
+      ]
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -36,6 +57,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: core
     environment:
       INDEL_ENV: demo
       DB_HOST: postgres
@@ -45,15 +68,21 @@ services:
       DB_NAME: indel_demo
       KAFKA_BROKERS: kafka:9092
     ports:
-      - "8000:8000"
+      - "${HOST_IP:-192.168.1.6}:8000:8000"
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_started
 
   worker-gateway:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: worker-gateway
     environment:
       INDEL_ENV: demo
       SERVICE: worker-gateway
@@ -64,35 +93,42 @@ services:
       DB_PASSWORD: demo_password
       DB_NAME: indel_demo
     ports:
-      - "8001:8001"
+      - "${HOST_IP:-192.168.1.6}:8001:8001"
     depends_on:
-      - core
+      core:
+        condition: service_started
 
   insurer-gateway:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: insurer-gateway
     environment:
       INDEL_ENV: demo
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
     ports:
-      - "8002:8002"
+      - "${HOST_IP:-192.168.1.6}:8002:8002"
     depends_on:
-      - core
+      core:
+        condition: service_started
 
   platform-gateway:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        SERVICE: platform-gateway
     environment:
       INDEL_ENV: demo
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
     ports:
-      - "8003:8003"
+      - "${HOST_IP:-192.168.1.6}:8003:8003"
     depends_on:
-      - core
+      core:
+        condition: service_started
 
   premium-ml:
     build:

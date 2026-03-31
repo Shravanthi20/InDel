@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +18,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.imaginai.indel.ui.navigation.Screen
+import com.imaginai.indel.ui.shared.isZoneCAndAbove
+import com.imaginai.indel.ui.shared.vehicleOptionsForZone
+import com.imaginai.indel.ui.shared.zoneOptions
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +33,10 @@ fun OnboardingScreen(
     val vehicleType by viewModel.vehicleType.collectAsState()
     val upiId by viewModel.upiId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val isRestrictedZone = isZoneCAndAbove(zone)
+    val availableVehicles = vehicleOptionsForZone(zone)
+    var zoneExpanded by remember { mutableStateOf(false) }
+    var vehicleExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
         if (uiState is OnboardingUiState.Success) {
@@ -72,22 +81,82 @@ fun OnboardingScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = zone,
-                onValueChange = viewModel::onZoneChanged,
-                label = { Text("Work Zone (e.g. Tambaram)") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
+            ExposedDropdownMenuBox(
+                expanded = zoneExpanded,
+                onExpandedChange = { zoneExpanded = !zoneExpanded }
+            ) {
+                OutlinedTextField(
+                    value = zone.ifBlank { "Select Work Zone" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Work Zone") },
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = zoneExpanded,
+                    onDismissRequest = { zoneExpanded = false }
+                ) {
+                    zoneOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.label) },
+                            onClick = {
+                                viewModel.onZoneChanged(option.value)
+                                zoneExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = vehicleType,
-                onValueChange = viewModel::onVehicleTypeChanged,
-                label = { Text("Vehicle Type (e.g. Electric Bike)") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
+            ExposedDropdownMenuBox(
+                expanded = vehicleExpanded,
+                onExpandedChange = { vehicleExpanded = !vehicleExpanded }
+            ) {
+                OutlinedTextField(
+                    value = vehicleType.ifBlank { "Select Vehicle" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Vehicle Type") },
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select vehicle")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = vehicleExpanded,
+                    onDismissRequest = { vehicleExpanded = false }
+                ) {
+                    availableVehicles.forEach { vehicle ->
+                        DropdownMenuItem(
+                            text = { Text(vehicle.replaceFirstChar { it.uppercase() }) },
+                            onClick = {
+                                viewModel.onVehicleTypeChanged(vehicle)
+                                vehicleExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+            if (isRestrictedZone) {
+                Text(
+                    text = "Zone C and above allow only four-wheelers.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
@@ -106,7 +175,7 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = uiState !is OnboardingUiState.Loading && name.isNotBlank(),
+                enabled = uiState !is OnboardingUiState.Loading && name.isNotBlank() && zone.isNotBlank() && vehicleType.isNotBlank(),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (uiState is OnboardingUiState.Loading) {
