@@ -113,10 +113,10 @@ func (s *InsurerService) GetLossRatio(zoneID string) ([]models.LossRatio, error)
 			lr = row.Claims / row.Premiums
 		}
 		results = append(results, models.LossRatio{
-			City:     row.City,
-			ZoneName: row.Zone,
-			Premiums: row.Premiums,
-			Claims:   row.Claims,
+			City:      row.City,
+			ZoneName:  row.Zone,
+			Premiums:  row.Premiums,
+			Claims:    row.Claims,
 			LossRatio: lr,
 		})
 	}
@@ -145,7 +145,7 @@ func (s *InsurerService) GetClaims(status string, fraudVerdict string, offset in
 		Select("c.id AS claim_id, c.status, z.city, z.name AS zone, c.claim_amount, COALESCE(c.fraud_verdict, 'pending') AS fraud_verdict, CAST(c.created_at as text) AS created_at").
 		Joins("JOIN disruptions d ON d.id = c.disruption_id").
 		Joins("JOIN zones z ON z.id = d.zone_id")
-	
+
 	countQuery := s.DB.Table("claims c").
 		Joins("JOIN disruptions d ON d.id = c.disruption_id").
 		Joins("JOIN zones z ON z.id = d.zone_id")
@@ -266,7 +266,9 @@ func (s *InsurerService) ReviewClaim(claimID string, req models.ClaimAction) err
 		}
 
 		cid := 0
-		fmt.Sscanf(claimID, "%d", &cid)
+		if _, err := fmt.Sscanf(claimID, "%d", &cid); err != nil {
+			return err
+		}
 
 		audit := models.ClaimAuditLog{
 			ClaimID:   uint(cid),

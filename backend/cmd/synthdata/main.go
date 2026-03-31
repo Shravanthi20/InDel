@@ -14,19 +14,19 @@ import (
 
 // Simplified DB models for generation
 type Zone struct {
-	ID   uint   `gorm:"primaryKey"`
+	ID   uint `gorm:"primaryKey"`
 	Name string
 	City string
 }
 
 type WorkerProfile struct {
-	WorkerID              uint    `gorm:"primaryKey"`
+	WorkerID              uint `gorm:"primaryKey"`
 	ZoneID                uint
 	TotalEarningsLifetime float64
 }
 
 type Policy struct {
-	WorkerID      uint   `gorm:"primaryKey"`
+	WorkerID      uint `gorm:"primaryKey"`
 	Status        string
 	PremiumAmount float64
 }
@@ -72,7 +72,7 @@ func main() {
 	log.Printf("Starting data synthesis (seed=%d, scenarios=%s)", *seed, *scenarios)
 
 	// 1. Setup deterministic seed generator
-	rand.Seed(int64(*seed)) // Fixed seed for reproducible metrics
+	rng := rand.New(rand.NewSource(int64(*seed))) // Use rng for random numbers
 
 	// 2. Setup SQLite DB (or postgres if URL provided)
 	os.Remove("synthdata.db")
@@ -82,7 +82,9 @@ func main() {
 	}
 
 	// Migrate schemas
-	db.AutoMigrate(&Zone{}, &WorkerProfile{}, &Policy{}, &PremiumPayment{}, &Disruption{}, &Claim{}, &ClaimFraudScore{})
+	if err := db.AutoMigrate(&Zone{}, &WorkerProfile{}, &Policy{}, &PremiumPayment{}, &Disruption{}, &Claim{}, &ClaimFraudScore{}); err != nil {
+		log.Fatalf("failed to migrate database: %v", err)
+	}
 
 	// 3. Generate 8-12 zones
 	zones := []Zone{
@@ -102,8 +104,8 @@ func main() {
 	// 4. Generate 500 workers across the zones
 	log.Println("Generating workers...")
 	for i := 1; i <= 500; i++ {
-		z := zones[rand.Intn(len(zones))]
-		worker := WorkerProfile{WorkerID: uint(i), ZoneID: z.ID, TotalEarningsLifetime: float64(10000 + rand.Intn(50000))}
+		z := zones[rng.Intn(len(zones))]
+		worker := WorkerProfile{WorkerID: uint(i), ZoneID: z.ID, TotalEarningsLifetime: float64(10000 + rng.Intn(50000))}
 		db.Create(&worker)
 		// Active policy
 		db.Create(&Policy{WorkerID: uint(i), Status: "active", PremiumAmount: 150.0})
@@ -129,7 +131,7 @@ func main() {
 			if rand.Float64() > 0.7 {
 				severity = "severe" // Scenario preset logic injection point
 			}
-			
+
 			db.Create(&Disruption{
 				ID:        uint(disruptionID),
 				ZoneID:    z.ID,
@@ -145,7 +147,7 @@ func main() {
 	for i := 1; i <= 2000; i++ {
 		dID := 1 + rand.Intn(disruptionID-1)
 		wID := 1 + rand.Intn(500)
-		
+
 		isFraud := rand.Float64() < 0.12 // ~12% flagged
 		verdict := "clear"
 		status := "approved"
@@ -163,7 +165,9 @@ func main() {
 			v, _ := json.Marshal(factors)
 			violations = string(v)
 		} else {
-			if rand.Float64() < 0.2 { status = "pending" }
+			if rand.Float64() < 0.2 {
+				status = "pending"
+			}
 		}
 
 		claimAmount := float64(300 + rand.Intn(700))
