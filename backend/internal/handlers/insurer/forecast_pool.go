@@ -3,8 +3,8 @@ package insurer
 import "github.com/gin-gonic/gin"
 
 // GetForecast returns 7-day disruption probability by zone.
-func GetForecast(c *gin.Context) {
-	if hasDB() {
+func (h *InsurerHandler) GetForecast(c *gin.Context) {
+	if h.Service.DB != nil {
 		type row struct {
 			City        string  `gorm:"column:city"`
 			Zone        string  `gorm:"column:zone"`
@@ -13,7 +13,7 @@ func GetForecast(c *gin.Context) {
 		}
 
 		rows := make([]row, 0)
-		_ = insurerDB.Raw(`
+		_ = h.Service.DB.Raw(`
 			SELECT z.city,
 			       z.name AS zone,
 			       f.forecast_date::text AS forecast_date,
@@ -48,13 +48,13 @@ func GetForecast(c *gin.Context) {
 }
 
 // GetPoolHealth returns premiums vs payouts for insurer reserve tracking.
-func GetPoolHealth(c *gin.Context) {
-	if hasDB() {
+func (h *InsurerHandler) GetPoolHealth(c *gin.Context) {
+	if h.Service.DB != nil {
 		var weeklyPremiums float64
 		var weeklyPayouts float64
 		var pendingPayouts int64
 
-		_ = insurerDB.Raw(`
+		_ = h.Service.DB.Raw(`
 			SELECT COALESCE(SUM(amount), 0)
 			FROM premium_payments
 			WHERE payment_date >= date_trunc('week', CURRENT_DATE)
@@ -62,7 +62,7 @@ func GetPoolHealth(c *gin.Context) {
 			  AND status IN ('completed', 'captured', 'processed')
 		`).Scan(&weeklyPremiums).Error
 
-		_ = insurerDB.Raw(`
+		_ = h.Service.DB.Raw(`
 			SELECT COALESCE(SUM(amount), 0)
 			FROM payouts
 			WHERE created_at >= date_trunc('week', CURRENT_DATE)
@@ -70,7 +70,7 @@ func GetPoolHealth(c *gin.Context) {
 			  AND status IN ('processed', 'credited', 'completed')
 		`).Scan(&weeklyPayouts).Error
 
-		_ = insurerDB.Raw("SELECT COUNT(*) FROM payouts WHERE status IN ('queued', 'pending')").Scan(&pendingPayouts).Error
+		_ = h.Service.DB.Raw("SELECT COUNT(*) FROM payouts WHERE status IN ('queued', 'pending')").Scan(&pendingPayouts).Error
 
 		c.JSON(200, gin.H{
 			"week_premiums":   int(weeklyPremiums),

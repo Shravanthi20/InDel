@@ -11,4 +11,5 @@ const (
 	TopicDisruptionConfirmed = "indel.disruption.confirmed"
 	TopicOrderDrop           = "indel.zone.order-drop"
 	TopicEarningsSettled     = "indel.earnings.settled"
+	TopicClaimReviewed       = "indel.claims.reviewed"
 )
