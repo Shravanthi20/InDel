@@ -9,34 +9,28 @@ import (
 	"gorm.io/gorm"
 )
 
-func ensureZoneIDByName(zoneName string) uint {
+// ensureZoneIDByLevelAndName finds or creates a zone by level and name
+func ensureZoneIDByLevelAndName(zoneLevel, zoneName string) uint {
 	if !hasDB() {
 		return 0
 	}
+	level := strings.TrimSpace(zoneLevel)
 	name := strings.TrimSpace(zoneName)
-	if name == "" {
-		name = "Tambaram"
+	if level == "" || name == "" {
+		return 0
 	}
-
 	var zone models.Zone
-	if err := workerDB.Where("name = ?", name).First(&zone).Error; err == nil {
+	if err := workerDB.Where("level = ? AND name = ?", level, name).First(&zone).Error; err == nil {
 		return zone.ID
 	}
-
+	// Default city/state for demo
 	city := "Chennai"
 	state := "Tamil Nadu"
-	parts := strings.Split(name, ",")
-	if len(parts) == 2 {
-		name = strings.TrimSpace(parts[0])
-		city = strings.TrimSpace(parts[1])
-	}
-
-	newZone := models.Zone{Name: name, City: city, State: state, RiskRating: 0.5}
+	newZone := models.Zone{Level: level, Name: name, City: city, State: state, RiskRating: 0.5}
 	if err := workerDB.Create(&newZone).Error; err == nil {
 		return newZone.ID
 	}
-
-	_ = workerDB.Where("name = ?", name).First(&zone).Error
+	_ = workerDB.Where("level = ? AND name = ?", level, name).First(&zone).Error
 	return zone.ID
 }
 
@@ -52,7 +46,9 @@ func Onboard(c *gin.Context) {
 	if hasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
-			zoneID := ensureZoneIDByName(bodyString(body, "zone", "Tambaram"))
+			zoneLevel := bodyString(body, "zone_level", "")
+			zoneName := bodyString(body, "zone_name", "")
+			zoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName)
 			if zoneID != 0 {
 				name := bodyString(body, "name", "New Worker")
 				vehicleType := bodyString(body, "vehicle_type", "bike")
@@ -89,7 +85,8 @@ func Onboard(c *gin.Context) {
 	}
 
 	profile["name"] = bodyString(body, "name", bodyString(profile, "name", "New Worker"))
-	profile["zone"] = bodyString(body, "zone", bodyString(profile, "zone", "Tambaram, Chennai"))
+	profile["zone_level"] = bodyString(body, "zone_level", bodyString(profile, "zone_level", ""))
+	profile["zone_name"] = bodyString(body, "zone_name", bodyString(profile, "zone_name", ""))
 	profile["vehicle_type"] = bodyString(body, "vehicle_type", bodyString(profile, "vehicle_type", "bike"))
 	profile["upi_id"] = bodyString(body, "upi_id", bodyString(profile, "upi_id", "new@upi"))
 
@@ -166,8 +163,10 @@ func UpdateProfile(c *gin.Context) {
 				if name := bodyString(body, "name", ""); name != "" {
 					profile.Name = name
 				}
-				if zone := bodyString(body, "zone", ""); zone != "" {
-					if zoneID := ensureZoneIDByName(zone); zoneID != 0 {
+				zoneLevel := bodyString(body, "zone_level", "")
+				zoneName := bodyString(body, "zone_name", "")
+				if zoneLevel != "" && zoneName != "" {
+					if zoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName); zoneID != 0 {
 						profile.ZoneID = zoneID
 					}
 				}

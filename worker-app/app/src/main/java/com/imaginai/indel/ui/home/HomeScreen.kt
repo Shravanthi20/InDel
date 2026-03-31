@@ -173,7 +173,7 @@ fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> 
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(worker.name ?: "Unknown Worker", fontWeight = FontWeight.Bold)
-                Text(worker.zone ?: "No Zone", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text("${worker.zoneLevel} - ${worker.zoneName}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             // Online Toggle
             Column(horizontalAlignment = Alignment.End) {

@@ -1,17 +1,42 @@
 package com.imaginai.indel.ui.shared
 
-data class ZoneOption(
-    val value: String,
+
+data class ZoneLevelOption(
+    val level: String, // "A", "B", etc.
     val label: String
 )
 
-val zoneOptions: List<ZoneOption> = listOf(
-    ZoneOption("Zone-A", "A local"),
-    ZoneOption("Zone-B", "B intra-state"),
-    ZoneOption("Zone-C", "C metro-to-metro"),
-    ZoneOption("Zone-D", "D rest of India"),
-    ZoneOption("Zone-E", "E special difficult lanes")
+val zoneLevelOptions: List<ZoneLevelOption> = listOf(
+    ZoneLevelOption("A", "A local"),
+    ZoneLevelOption("B", "B intra-state"),
+    ZoneLevelOption("C", "C metro-to-metro"),
+    ZoneLevelOption("D", "D rest of India"),
+    ZoneLevelOption("E", "E special difficult lanes")
 )
+
+val zoneNamesByLevel: Map<String, List<String>> = mapOf(
+    "A" to listOf("Tambaram", "Marasivaakkam"),
+    "B" to listOf(
+        "Tambaram to Chennai", "Chennai to Tambaram",
+        "Tambaram to Kanchipuram", "Kanchipuram to Tambaram",
+        "Sriperumbudur to Chennai", "Chennai to Sriperumbudur"
+    ),
+    "C" to listOf(
+        "Chennai to Pondicherry", "Pondicherry to Chennai",
+        "Chennai to Madurai", "Madurai to Chennai"
+    ),
+    "D" to listOf(
+        "Madurai to Coimbatore", "Coimbatore to Madurai",
+        "Chennai to Coimbatore", "Coimbatore to Chennai"
+    ),
+    "E" to listOf(
+        "Nilgiris to Sikkim", "Sikkim to Nilgiris",
+        "Chennai to Nilgiris", "Nilgiris to Chennai"
+    )
+)
+
+fun zoneNamesForLevel(level: String): List<String> =
+    zoneNamesByLevel[level] ?: emptyList()
 
 val allVehicleOptions: List<String> = listOf(
     "scooter",
@@ -30,26 +55,25 @@ private val fourWheelerVehicleOptions: List<String> = listOf(
     "truck"
 )
 
-fun zoneBand(zone: String): Char? {
-    val normalized = zone.trim().uppercase()
-    if (normalized.startsWith("ZONE-") && normalized.length >= 6) {
-        return normalized[5]
-    }
-    return if (normalized.length == 1 && normalized[0] in 'A'..'E') normalized[0] else null
-}
 
-fun isZoneCAndAbove(zone: String): Boolean {
-    val band = zoneBand(zone) ?: return false
+fun zoneBandFromLevel(level: String): Char? =
+    level.trim().uppercase().firstOrNull()?.takeIf { it in 'A'..'E' }
+
+
+fun isZoneCAndAboveLevel(level: String): Boolean {
+    val band = zoneBandFromLevel(level) ?: return false
     return band >= 'C'
 }
 
-fun vehicleOptionsForZone(zone: String): List<String> {
-    return if (isZoneCAndAbove(zone)) fourWheelerVehicleOptions else allVehicleOptions
+
+fun vehicleOptionsForZoneLevel(level: String): List<String> {
+    return if (isZoneCAndAboveLevel(level)) fourWheelerVehicleOptions else allVehicleOptions
 }
 
-fun isVehicleAllowedForZone(zone: String, vehicle: String): Boolean {
+
+fun isVehicleAllowedForZoneLevel(level: String, vehicle: String): Boolean {
     if (vehicle.isBlank()) return true
-    val allowed = vehicleOptionsForZone(zone)
+    val allowed = vehicleOptionsForZoneLevel(level)
     return allowed.contains(vehicle.trim().lowercase())
 }
 

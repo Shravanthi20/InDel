@@ -62,9 +62,7 @@ func VerifyOTP(c *gin.Context) {
 			if createErr := workerDB.Create(&newUser).Error; createErr == nil {
 				user = newUser
 			}
-		} else if err == nil {
-			// user loaded
-		}
+		} // else if err == nil { /* user loaded, nothing to do */ }
 
 		if user.ID != 0 {
 			workerID = fmt.Sprintf("%d", user.ID)

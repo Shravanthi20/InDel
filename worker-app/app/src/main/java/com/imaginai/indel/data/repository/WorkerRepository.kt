@@ -10,13 +10,13 @@ class WorkerRepository @Inject constructor(
     private val workerApiService: WorkerApiService
 ) {
     // Profile
-    suspend fun onboard(name: String, zone: String, vehicleType: String, upiId: String) =
-        workerApiService.onboard(OnboardRequest(name, zone, vehicleType, upiId))
+    suspend fun onboard(name: String, zoneLevel: String, zoneName: String, vehicleType: String, upiId: String) =
+        workerApiService.onboard(OnboardRequest(name, zoneLevel, zoneName, vehicleType, upiId))
 
     suspend fun getProfile() = workerApiService.getProfile()
 
-    suspend fun updateProfile(name: String, zone: String, vehicleType: String, upiId: String) =
-        workerApiService.updateProfile(OnboardRequest(name, zone, vehicleType, upiId))
+    suspend fun updateProfile(name: String, zoneLevel: String, zoneName: String, vehicleType: String, upiId: String) =
+        workerApiService.updateProfile(OnboardRequest(name, zoneLevel, zoneName, vehicleType, upiId))
 
     // Orders & Delivery
     suspend fun getAvailableOrders() = workerApiService.getAvailableOrders()
@@ -62,8 +62,8 @@ class WorkerRepository @Inject constructor(
         workerApiService.updateFcmToken(FcmTokenRequest(token))
 
     // Demo / Debug
-    suspend fun triggerDisruption(disruptionType: String, zone: String) = 
-        workerApiService.triggerDisruption(DisruptionRequest(disruptionType, zone))
+    suspend fun triggerDisruption(disruptionType: String, zoneLevel: String, zoneName: String) = 
+        workerApiService.triggerDisruption(DisruptionRequest(disruptionType, zoneLevel, zoneName))
 
     suspend fun assignOrders(count: Int) = workerApiService.assignOrders(CountRequest(count))
 

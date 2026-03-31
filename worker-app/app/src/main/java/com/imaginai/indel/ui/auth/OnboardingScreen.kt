@@ -1,6 +1,5 @@
 package com.imaginai.indel.ui.auth
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,9 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.imaginai.indel.ui.navigation.Screen
-import com.imaginai.indel.ui.shared.isZoneCAndAbove
-import com.imaginai.indel.ui.shared.vehicleOptionsForZone
-import com.imaginai.indel.ui.shared.zoneOptions
+import com.imaginai.indel.ui.shared.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,13 +26,18 @@ fun OnboardingScreen(
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
     val name by viewModel.name.collectAsState()
-    val zone by viewModel.zone.collectAsState()
+    val zoneLevel by viewModel.zoneLevel.collectAsState()
+    val zoneName by viewModel.zoneName.collectAsState()
     val vehicleType by viewModel.vehicleType.collectAsState()
     val upiId by viewModel.upiId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    val isRestrictedZone = isZoneCAndAbove(zone)
-    val availableVehicles = vehicleOptionsForZone(zone)
-    var zoneExpanded by remember { mutableStateOf(false) }
+
+    val isRestrictedZone = isZoneCAndAboveLevel(zoneLevel)
+    val availableVehicles = vehicleOptionsForZoneLevel(zoneLevel)
+    val availableZoneNames = zoneNamesForLevel(zoneLevel)
+
+    var zoneLevelExpanded by remember { mutableStateOf(false) }
+    var zoneNameExpanded by remember { mutableStateOf(false) }
     var vehicleExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
@@ -81,33 +83,70 @@ fun OnboardingScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Zone Level Dropdown
             ExposedDropdownMenuBox(
-                expanded = zoneExpanded,
-                onExpandedChange = { zoneExpanded = !zoneExpanded }
+                expanded = zoneLevelExpanded,
+                onExpandedChange = { zoneLevelExpanded = !zoneLevelExpanded }
             ) {
                 OutlinedTextField(
-                    value = zone.ifBlank { "Select Work Zone" },
+                    value = zoneLevel.ifBlank { "Select Zone Level" },
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Work Zone") },
+                    label = { Text("Zone Level") },
                     trailingIcon = {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone")
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone level")
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor(),
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                     shape = RoundedCornerShape(12.dp)
                 )
                 ExposedDropdownMenu(
-                    expanded = zoneExpanded,
-                    onDismissRequest = { zoneExpanded = false }
+                    expanded = zoneLevelExpanded,
+                    onDismissRequest = { zoneLevelExpanded = false }
                 ) {
-                    zoneOptions.forEach { option ->
+                    zoneLevelOptions.forEach { option ->
                         DropdownMenuItem(
                             text = { Text(option.label) },
                             onClick = {
-                                viewModel.onZoneChanged(option.value)
-                                zoneExpanded = false
+                                viewModel.onZoneLevelChanged(option.level)
+                                zoneLevelExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Zone Name Dropdown (depends on level)
+            ExposedDropdownMenuBox(
+                expanded = zoneNameExpanded,
+                onExpandedChange = { if (zoneLevel.isNotBlank()) zoneNameExpanded = !zoneNameExpanded }
+            ) {
+                OutlinedTextField(
+                    value = zoneName.ifBlank { "Select Zone Name" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Zone Name") },
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone name")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, zoneLevel.isNotBlank()),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = zoneLevel.isNotBlank()
+                )
+                ExposedDropdownMenu(
+                    expanded = zoneNameExpanded,
+                    onDismissRequest = { zoneNameExpanded = false }
+                ) {
+                    availableZoneNames.forEach { nameOption ->
+                        DropdownMenuItem(
+                            text = { Text(nameOption) },
+                            onClick = {
+                                viewModel.onZoneNameChanged(nameOption)
+                                zoneNameExpanded = false
                             }
                         )
                     }
@@ -129,7 +168,7 @@ fun OnboardingScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor(),
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
                     shape = RoundedCornerShape(12.dp)
                 )
                 ExposedDropdownMenu(
@@ -175,7 +214,7 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = uiState !is OnboardingUiState.Loading && name.isNotBlank() && zone.isNotBlank() && vehicleType.isNotBlank(),
+                enabled = uiState !is OnboardingUiState.Loading && name.isNotBlank() && zoneLevel.isNotBlank() && zoneName.isNotBlank() && vehicleType.isNotBlank(),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (uiState is OnboardingUiState.Loading) {
