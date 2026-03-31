@@ -16,8 +16,8 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 HOST = os.environ.get("INDEL_MOCK_HOST", "0.0.0.0")
-PUBLIC_HOST = os.environ.get("INDEL_MOCK_PUBLIC_HOST", "192.168.1.6")
-PORT = int(os.environ.get("INDEL_MOCK_PORT", "8082"))
+PUBLIC_HOST = os.environ.get("INDEL_MOCK_PUBLIC_HOST", "10.0.2.2")
+PORT = int(os.environ.get("INDEL_MOCK_PORT", "8001"))
 
 
 class MockState:
@@ -29,8 +29,9 @@ class MockState:
                 "worker_id": "worker-001",
                 "name": "Gayathri Worker",
                 "phone": "+919999999999",
-                "zone": "Tambaram, Chennai",
-                "vehicle_type": "bike",
+                "zone_level": "A",
+                "zone_name": "Tambaram",
+                "vehicle_type": "motorcycle",
                 "upi_id": "gayathri@upi",
                 "coverage_status": "active",
                 "enrolled": True,
@@ -41,7 +42,8 @@ class MockState:
             "status": "active",
             "weekly_premium_inr": 22,
             "coverage_ratio": 0.8,
-            "zone": "Tambaram, Chennai",
+            "zone_level": "A",
+            "zone_name": "Tambaram",
             "next_due_date": "2026-03-30",
             "shap_breakdown": [
                 {"feature": "rain_risk", "impact": 0.42},
@@ -65,7 +67,8 @@ class MockState:
             {
                 "claim_id": "clm-001",
                 "status": "approved",
-                "zone": "Tambaram, Chennai",
+                "zone_level": "A",
+                "zone_name": "Tambaram",
                 "disruption_type": "heavy_rain",
                 "disruption_window": {
                     "start": "2026-03-18T11:00:00Z",
@@ -240,8 +243,9 @@ class Handler(BaseHTTPRequestHandler):
                     "worker_id": worker_id,
                     "name": "New Worker",
                     "phone": phone,
-                    "zone": "Tambaram, Chennai",
-                    "vehicle_type": "bike",
+                    "zone_level": "A",
+                    "zone_name": "Tambaram",
+                    "vehicle_type": "motorcycle",
                     "upi_id": "new@upi",
                     "coverage_status": "inactive",
                     "enrolled": False,
@@ -263,8 +267,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/worker/onboard":
             profile = STATE.worker_profiles.get(worker_id, {})
             profile["name"] = body.get("name", profile.get("name", "New Worker"))
-            profile["zone"] = body.get("zone", profile.get("zone", "Tambaram, Chennai"))
-            profile["vehicle_type"] = body.get("vehicle_type", profile.get("vehicle_type", "bike"))
+            profile["zone_level"] = body.get("zone_level", profile.get("zone_level", "A"))
+            profile["zone_name"] = body.get("zone_name", profile.get("zone_name", "Tambaram"))
+            profile["vehicle_type"] = body.get("vehicle_type", profile.get("vehicle_type", "motorcycle"))
             profile["upi_id"] = body.get("upi_id", profile.get("upi_id", "new@upi"))
             STATE.worker_profiles[worker_id] = profile
             return self._ok({"message": "onboarded", "worker": profile})
@@ -294,14 +299,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/v1/demo/trigger-disruption":
             disruption_type = body.get("disruption_type", "heavy_rain")
-            zone = body.get("zone", "Tambaram, Chennai")
+            zone_name = body.get("zone_name", "Tambaram")
             STATE.notifications.insert(
                 0,
                 {
                     "id": f"ntf-{len(STATE.notifications) + 1:03d}",
                     "type": "disruption_alert",
                     "title": "Disruption detected",
-                    "body": f"{disruption_type.replace('_', ' ').title()} detected in {zone}. You are protected.",
+                    "body": f"{disruption_type.replace('_', ' ').title()} detected in {zone_name}. You are protected.",
                     "created_at": now_iso(),
                     "read": False,
                 },
@@ -310,7 +315,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "message": "disruption_triggered",
                     "disruption_type": disruption_type,
-                    "zone": zone,
+                    "zone_name": zone_name,
                     "time": now_iso(),
                 }
             )

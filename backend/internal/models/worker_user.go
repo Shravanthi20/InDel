@@ -27,6 +27,7 @@ type WorkerProfile struct {
 type Zone struct {
 	ID         uint
 	Name       string
+	Level      string // A, B, C, D, E
 	City       string
 	State      string
 	RiskRating float64
@@ -66,9 +67,13 @@ type EarningsRecord struct {
 }
 
 type Order struct {
-	ID         uint
-	WorkerID   uint
-	ZoneID     uint
-	OrderValue float64
-	CreatedAt  time.Time
+	ID              uint
+	WorkerID        uint
+	ZoneID          uint
+	OrderValue      float64
+	SourceNode      string // e.g., "Tambaram"
+	DestinationNode string // e.g., "Pondicherry"
+	CurrentNode     string // e.g., "Chennai" (updated as order moves)
+	Route           string // e.g., "Tambaram,Chennai,Pondicherry" (comma-separated path)
+	CreatedAt       time.Time
 }

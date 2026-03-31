@@ -26,7 +26,13 @@ data class Order(
     @SerializedName("customer_name") val customerName: String? = null,
     @SerializedName(value = "customer_phone", alternate = ["customer_contact_number"]) val customerPhone: String? = null,
     @SerializedName("address") val address: String? = null,
-    @SerializedName(value = "payment_type", alternate = ["payment_method"]) val paymentType: String? = null
+    @SerializedName(value = "payment_type", alternate = ["payment_method"]) val paymentType: String? = null,
+    @SerializedName("zone_level") val zoneLevel: String? = null,
+    @SerializedName("zone_name") val zoneName: String? = null,
+    @SerializedName("source_node") val sourceNode: String? = null,
+    @SerializedName("destination_node") val destinationNode: String? = null,
+    @SerializedName("current_node") val currentNode: String? = null,
+    @SerializedName("route") val route: String? = null
 )
 
 data class OrderListResponse(
@@ -103,7 +109,8 @@ data class FcmTokenRequest(
 
 data class DisruptionRequest(
     @SerializedName("disruption_type") val disruptionType: String,
-    @SerializedName("zone") val zone: String
+    @SerializedName("zone_level") val zoneLevel: String,
+    @SerializedName("zone_name") val zoneName: String
 )
 
 data class CountRequest(

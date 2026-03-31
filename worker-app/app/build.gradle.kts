@@ -15,10 +15,10 @@ val apiBaseUrl = if (envFile != null && envFile.exists()) {
     envFile.readLines()
         .find { it.startsWith("API_BASE_URL=") }
         ?.removePrefix("API_BASE_URL=")
-        ?.trim() ?: "http://192.168.1.6:8001/"
+        ?.trim() ?: "http://10.0.2.2:8001/"
 } else {
-    // Fallback to default
-    "http://192.168.1.6:8001/"
+    // Fallback to default for Android Emulator
+    "http://10.0.2.2:8001/"
 }
 
 android {
@@ -40,19 +40,21 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
     }
 
-    packagingOptions {
+    packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
     }
 }
 

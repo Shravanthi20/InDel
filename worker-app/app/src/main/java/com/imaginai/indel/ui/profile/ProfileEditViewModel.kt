@@ -3,7 +3,7 @@ package com.imaginai.indel.ui.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.repository.WorkerRepository
-import com.imaginai.indel.ui.shared.isVehicleAllowedForZone
+import com.imaginai.indel.ui.shared.isVehicleAllowedForZoneLevel
 import com.imaginai.indel.ui.shared.isValidUpiId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,8 +19,11 @@ class ProfileEditViewModel @Inject constructor(
     private val _name = MutableStateFlow("")
     val name = _name.asStateFlow()
 
-    private val _zone = MutableStateFlow("")
-    val zone = _zone.asStateFlow()
+    private val _zoneLevel = MutableStateFlow("")
+    val zoneLevel = _zoneLevel.asStateFlow()
+
+    private val _zoneName = MutableStateFlow("")
+    val zoneName = _zoneName.asStateFlow()
 
     private val _vehicleType = MutableStateFlow("")
     val vehicleType = _vehicleType.asStateFlow()
@@ -39,11 +42,16 @@ class ProfileEditViewModel @Inject constructor(
         _name.value = value
     }
 
-    fun onZoneChanged(value: String) {
-        _zone.value = value
-        if (!isVehicleAllowedForZone(_zone.value, _vehicleType.value)) {
+    fun onZoneLevelChanged(value: String) {
+        _zoneLevel.value = value
+        _zoneName.value = ""
+        if (!isVehicleAllowedForZoneLevel(_zoneLevel.value, _vehicleType.value)) {
             _vehicleType.value = ""
         }
+    }
+
+    fun onZoneNameChanged(value: String) {
+        _zoneName.value = value
     }
 
     fun onVehicleTypeChanged(value: String) {
@@ -63,7 +71,8 @@ class ProfileEditViewModel @Inject constructor(
                     val worker = response.body()?.worker
                     if (worker != null) {
                         _name.value = worker.name
-                        _zone.value = worker.zone
+                        _zoneLevel.value = worker.zoneLevel
+                        _zoneName.value = worker.zoneName
                         _vehicleType.value = worker.vehicleType
                         _upiId.value = worker.upiId
                         _uiState.value = ProfileEditUiState.Idle
@@ -81,7 +90,8 @@ class ProfileEditViewModel @Inject constructor(
 
     fun saveProfile() {
         val upi = _upiId.value.trim()
-        if (_name.value.isBlank() || _zone.value.isBlank() || _vehicleType.value.isBlank() || upi.isBlank()) {
+        if (_name.value.isBlank() || _zoneLevel.value.isBlank() || _zoneName.value.isBlank() || 
+            _vehicleType.value.isBlank() || upi.isBlank()) {
             _uiState.value = ProfileEditUiState.Error("All fields are required")
             return
         }
@@ -91,8 +101,8 @@ class ProfileEditViewModel @Inject constructor(
             return
         }
 
-        if (!isVehicleAllowedForZone(_zone.value, _vehicleType.value)) {
-            _uiState.value = ProfileEditUiState.Error("Selected vehicle is not allowed for this zone")
+        if (!isVehicleAllowedForZoneLevel(_zoneLevel.value, _vehicleType.value)) {
+            _uiState.value = ProfileEditUiState.Error("Selected vehicle is not allowed for this zone level")
             return
         }
 
@@ -101,7 +111,8 @@ class ProfileEditViewModel @Inject constructor(
             try {
                 val response = workerRepository.updateProfile(
                     name = _name.value,
-                    zone = _zone.value,
+                    zoneLevel = _zoneLevel.value,
+                    zoneName = _zoneName.value,
                     vehicleType = _vehicleType.value,
                     upiId = upi
                 )

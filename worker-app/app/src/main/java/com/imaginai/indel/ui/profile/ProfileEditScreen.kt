@@ -14,22 +14,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.imaginai.indel.ui.shared.isZoneCAndAbove
-import com.imaginai.indel.ui.shared.vehicleOptionsForZone
-import com.imaginai.indel.ui.shared.zoneOptions
+import com.imaginai.indel.ui.shared.isZoneCAndAboveLevel
+import com.imaginai.indel.ui.shared.vehicleOptionsForZoneLevel
+import com.imaginai.indel.ui.shared.zoneLevelOptions
+import com.imaginai.indel.ui.shared.zoneNamesForLevel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,15 +33,18 @@ fun ProfileEditScreen(
     viewModel: ProfileEditViewModel = hiltViewModel()
 ) {
     val name by viewModel.name.collectAsState()
-    val zone by viewModel.zone.collectAsState()
+    val zoneLevel by viewModel.zoneLevel.collectAsState()
+    val zoneName by viewModel.zoneName.collectAsState()
     val vehicleType by viewModel.vehicleType.collectAsState()
     val upiId by viewModel.upiId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
-    val isRestrictedZone = isZoneCAndAbove(zone)
-    val availableVehicles = vehicleOptionsForZone(zone)
+    val isRestrictedZone = isZoneCAndAboveLevel(zoneLevel)
+    val availableVehicles = vehicleOptionsForZoneLevel(zoneLevel)
+    val availableZoneNames = zoneNamesForLevel(zoneLevel)
 
-    var zoneExpanded by remember { mutableStateOf(false) }
+    var zoneLevelExpanded by remember { mutableStateOf(false) }
+    var zoneNameExpanded by remember { mutableStateOf(false) }
     var vehicleExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
@@ -80,6 +78,10 @@ fun ProfileEditScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (uiState is ProfileEditUiState.Loading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
             OutlinedTextField(
                 value = name,
                 onValueChange = viewModel::onNameChanged,
@@ -87,32 +89,67 @@ fun ProfileEditScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Zone Level Dropdown
             ExposedDropdownMenuBox(
-                expanded = zoneExpanded,
-                onExpandedChange = { zoneExpanded = !zoneExpanded }
+                expanded = zoneLevelExpanded,
+                onExpandedChange = { zoneLevelExpanded = !zoneLevelExpanded }
             ) {
                 OutlinedTextField(
-                    value = zone.ifBlank { "Select Work Zone" },
+                    value = zoneLevel.ifBlank { "Select Zone Level" },
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Work Zone") },
+                    label = { Text("Zone Level") },
                     trailingIcon = {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone")
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone level")
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .menuAnchor()
                 )
                 ExposedDropdownMenu(
-                    expanded = zoneExpanded,
-                    onDismissRequest = { zoneExpanded = false }
+                    expanded = zoneLevelExpanded,
+                    onDismissRequest = { zoneLevelExpanded = false }
                 ) {
-                    zoneOptions.forEach { option ->
+                    zoneLevelOptions.forEach { option ->
                         DropdownMenuItem(
                             text = { Text(option.label) },
                             onClick = {
-                                viewModel.onZoneChanged(option.value)
-                                zoneExpanded = false
+                                viewModel.onZoneLevelChanged(option.level)
+                                zoneLevelExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Zone Name Dropdown
+            ExposedDropdownMenuBox(
+                expanded = zoneNameExpanded,
+                onExpandedChange = { if (zoneLevel.isNotBlank()) zoneNameExpanded = !zoneNameExpanded }
+            ) {
+                OutlinedTextField(
+                    value = zoneName.ifBlank { "Select Zone Name" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Zone Name") },
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone name")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    enabled = zoneLevel.isNotBlank()
+                )
+                ExposedDropdownMenu(
+                    expanded = zoneNameExpanded,
+                    onDismissRequest = { zoneNameExpanded = false }
+                ) {
+                    availableZoneNames.forEach { nameOption ->
+                        DropdownMenuItem(
+                            text = { Text(nameOption) },
+                            onClick = {
+                                viewModel.onZoneNameChanged(nameOption)
+                                zoneNameExpanded = false
                             }
                         )
                     }
@@ -181,7 +218,7 @@ fun ProfileEditScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                enabled = uiState !is ProfileEditUiState.Saving
+                enabled = uiState !is ProfileEditUiState.Saving && uiState !is ProfileEditUiState.Loading
             ) {
                 if (uiState is ProfileEditUiState.Saving) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)

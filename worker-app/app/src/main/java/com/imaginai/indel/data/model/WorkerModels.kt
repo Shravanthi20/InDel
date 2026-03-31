@@ -6,7 +6,8 @@ data class WorkerProfile(
     @SerializedName("worker_id") val workerId: String,
     @SerializedName("name") val name: String,
     @SerializedName("phone") val phone: String,
-    @SerializedName("zone") val zone: String,
+    @SerializedName("zone_level") val zoneLevel: String,
+    @SerializedName("zone_name") val zoneName: String,
     @SerializedName("vehicle_type") val vehicleType: String,
     @SerializedName("upi_id") val upiId: String,
     @SerializedName("coverage_status") val coverageStatus: String,
@@ -15,7 +16,8 @@ data class WorkerProfile(
 
 data class OnboardRequest(
     @SerializedName("name") val name: String,
-    @SerializedName("zone") val zone: String,
+    @SerializedName("zone_level") val zoneLevel: String,
+    @SerializedName("zone_name") val zoneName: String,
     @SerializedName("vehicle_type") val vehicleType: String,
     @SerializedName("upi_id") val upiId: String
 )
