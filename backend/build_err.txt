@@ -1,0 +1,6 @@
+# github.com/Shravanthi20/InDel/backend/internal/handlers/insurer [github.com/Shravanthi20/InDel/backend/internal/handlers/insurer.test]
+internal\handlers\insurer\insurer_test.go:215:7: not enough arguments in call to setupRouter
+	have ()
+	want (*gorm.DB)
+FAIL	github.com/Shravanthi20/InDel/backend/internal/handlers/insurer [build failed]
+FAIL

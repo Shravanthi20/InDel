@@ -7,8 +7,9 @@ import (
 
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
-	"github.com/Shravanthi20/InDel/backend/internal/handlers/insurer"
+	"github.com/Shravanthi20/InDel/backend/internal/kafka"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
+	"github.com/Shravanthi20/InDel/backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -24,12 +25,20 @@ func main() {
 
 	// Optional DB wiring for live aggregate metrics.
 	cfg := config.Load()
+	var svc *services.InsurerService
 	db, err := database.InitDB(cfg)
 	if err != nil {
 		log.Printf("Insurer Gateway DB unavailable, using fallback responses: %v", err)
+		svc = services.NewInsurerService(nil, nil)
 	} else {
-		insurer.SetDB(db)
 		log.Println("Insurer Gateway connected to PostgreSQL")
+
+		var kp *kafka.Producer
+		kafkaBrokers := os.Getenv("KAFKA_BROKERS")
+		if kafkaBrokers != "" {
+			kp, _ = kafka.NewProducer(kafkaBrokers)
+		}
+		svc = services.NewInsurerService(db, kp)
 	}
 
 	// Health check endpoint
@@ -38,7 +47,7 @@ func main() {
 	})
 
 	// API routes
-	routerpkg.SetupInsurerRoutes(router)
+	routerpkg.SetupInsurerRoutes(router, svc)
 
 	// Start server
 	port := os.Getenv("INSURER_GATEWAY_PORT")
