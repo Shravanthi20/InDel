@@ -7,6 +7,10 @@ import Claims from './pages/Claims'
 import FraudQueue from './pages/FraudQueue'
 import Forecast from './pages/Forecast'
 import MaintenanceChecks from './pages/MaintenanceChecks'
+import SyntheticData from './pages/SyntheticData'
+import WeeklyCycleOps from './pages/WeeklyCycleOps'
+import PayoutOps from './pages/PayoutOps'
+import ReconciliationOps from './pages/ReconciliationOps'
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -24,7 +28,10 @@ export default function App() {
           <h1 className="text-3xl font-bold mb-4">InDel Insurer Portal</h1>
           <button 
             className="bg-blue-500 text-white px-6 py-2 rounded"
-            onClick={() => setIsAuthenticated(true)}
+            onClick={() => {
+              localStorage.setItem('token', 'demo-insurer-token')
+              setIsAuthenticated(true)
+            }}
           >
             Login
           </button>
@@ -43,6 +50,10 @@ export default function App() {
           <Route path="/fraud-queue" element={<FraudQueue />} />
           <Route path="/forecast" element={<Forecast />} />
           <Route path="/maintenance-checks" element={<MaintenanceChecks />} />
+          <Route path="/operations/synthetic" element={<SyntheticData />} />
+          <Route path="/operations/weekly-cycle" element={<WeeklyCycleOps />} />
+          <Route path="/operations/payouts" element={<PayoutOps />} />
+          <Route path="/operations/reconciliation" element={<ReconciliationOps />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Layout>
