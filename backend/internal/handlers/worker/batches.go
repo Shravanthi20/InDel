@@ -24,6 +24,10 @@ type batchOrderRow struct {
 	CreatedAt       string  `gorm:"column:created_at"`
 }
 
+type acceptBatchRequest struct {
+	OrderIDs []string `json:"orderIds"`
+}
+
 func inferBatchZoneLevel(fromCity, toCity, fromState, toState string) string {
 	fCity := strings.TrimSpace(strings.ToLower(fromCity))
 	tCity := strings.TrimSpace(strings.ToLower(toCity))
@@ -83,6 +87,39 @@ func normalizedWeight(weight float64) float64 {
 		return weight
 	}
 	return 1.2
+}
+
+func batchStatusFromRows(rows []batchOrderRow, fallback string) string {
+	status := strings.ToLower(strings.TrimSpace(fallback))
+	for _, row := range rows {
+		switch strings.ToLower(strings.TrimSpace(row.Status)) {
+		case "picked_up":
+			return "Picked Up"
+		case "accepted":
+			status = "accepted"
+		case "assigned":
+			if status == "" {
+				status = "pending"
+			}
+		}
+	}
+
+	switch status {
+	case "accepted":
+		return "Accepted"
+	case "pending":
+		return "Pending"
+	case "out for delivery":
+		return "Out for Delivery"
+	default:
+		if status == "" {
+			return "Pending"
+		}
+		if len(status) == 0 {
+			return "Pending"
+		}
+		return strings.ToUpper(status[:1]) + status[1:]
+	}
 }
 
 func rowsToBatches(rows []batchOrderRow, status string) []gin.H {
@@ -148,18 +185,103 @@ func rowsToBatches(rows []batchOrderRow, status string) []gin.H {
 		}
 
 		batches = append(batches, gin.H{
-			"batchId":      batchID,
-			"zoneLevel":    g.ZoneLevel,
-			"fromCity":     fromCity,
-			"toCity":       toCity,
-			"totalWeight":  totalWeight,
-			"orderCount":   len(orders),
-			"status":       status,
-			"orders":       orders,
+			"batchId":     batchID,
+			"zoneLevel":   g.ZoneLevel,
+			"fromCity":    fromCity,
+			"toCity":      toCity,
+			"totalWeight": totalWeight,
+			"orderCount":  len(orders),
+			"status":      batchStatusFromRows(g.Rows, status),
+			"orders":      orders,
 		})
 	}
 
 	return batches
+}
+
+func AcceptBatch(c *gin.Context) {
+	workerID, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+
+	var req acceptBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.OrderIDs) == 0 {
+		c.JSON(400, gin.H{"error": "invalid_batch_accept_request"})
+		return
+	}
+
+	if !hasDB() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+
+		now := time.Now().UTC().Format(time.RFC3339)
+		accepted := make([]string, 0, len(req.OrderIDs))
+		orderSet := make(map[string]struct{}, len(req.OrderIDs))
+		for _, orderID := range req.OrderIDs {
+			orderSet[orderID] = struct{}{}
+		}
+
+		for idx, order := range store.data.Orders {
+			orderID := fmt.Sprintf("%v", order["order_id"])
+			if _, ok := orderSet[orderID]; !ok {
+				continue
+			}
+			order["worker_id"] = workerID
+			order["status"] = "accepted"
+			order["accepted_at"] = now
+			order["updated_at"] = now
+			store.data.Orders[idx] = order
+			accepted = append(accepted, orderID)
+		}
+
+		if len(accepted) == 0 {
+			c.JSON(404, gin.H{"error": "batch_not_found_or_not_assignable"})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"message":          "batch_accepted",
+			"batchId":          c.Param("batch_id"),
+			"acceptedOrderIds": accepted,
+		})
+		return
+	}
+
+	workerIDUint, parseErr := parseWorkerID(workerID)
+	if parseErr != nil {
+		c.JSON(400, gin.H{"error": "invalid_worker_id"})
+		return
+	}
+
+	accepted := make([]string, 0, len(req.OrderIDs))
+	for _, orderID := range req.OrderIDs {
+		orderNumID, parseOrderErr := parseOrderID(orderID)
+		if parseOrderErr != nil {
+			continue
+		}
+
+		result := workerDB.Exec(`
+			UPDATE orders
+			SET worker_id = ?, status = 'accepted', accepted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ? AND (worker_id = ? OR status = 'assigned')
+		`, workerIDUint, orderNumID, workerIDUint)
+		if result.Error != nil || result.RowsAffected == 0 {
+			continue
+		}
+		accepted = append(accepted, orderID)
+	}
+
+	if len(accepted) == 0 {
+		c.JSON(404, gin.H{"error": "batch_not_found_or_not_assignable"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message":          "batch_accepted",
+		"batchId":          c.Param("batch_id"),
+		"acceptedOrderIds": accepted,
+	})
 }
 
 func GetAssignedBatches(c *gin.Context) {
@@ -201,7 +323,7 @@ func GetAssignedBatches(c *gin.Context) {
 		return
 	}
 
-	batches := rowsToBatches(rows, "Out for Delivery")
+	batches := rowsToBatches(rows, "Accepted")
 	c.JSON(200, gin.H{"batches": batches})
 }
 
