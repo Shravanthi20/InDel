@@ -39,6 +39,8 @@ func newDefaultAppData() *appData {
 				"worker_id":        "worker-001",
 				"name":             "Gayathri Worker",
 				"phone":            "+919999999999",
+				"zone_level":       "a",
+				"zone_name":        "Tambaram",
 				"zone":             "Tambaram, Chennai",
 				"vehicle_type":     "bike",
 				"upi_id":           "gayathri@upi",

@@ -7,6 +7,7 @@ import Claims from './pages/Claims'
 import FraudQueue from './pages/FraudQueue'
 import Forecast from './pages/Forecast'
 import MaintenanceChecks from './pages/MaintenanceChecks'
+import Register from './pages/Register'
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/fraud-queue" element={<FraudQueue />} />
           <Route path="/forecast" element={<Forecast />} />
           <Route path="/maintenance-checks" element={<MaintenanceChecks />} />
+          <Route path="/register" element={<Register />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Layout>

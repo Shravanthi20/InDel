@@ -11,3 +11,5 @@ export const getWorkers = () => client.get('/api/workers')
 export const getMaintenanceChecks = () => client.get('/api/maintenance-checks')
 export const respondToCheck = (checkId: string, response: any) => 
   client.post(`/api/maintenance-checks/${checkId}/respond`, response)
+export const getZones = () => client.get('/api/v1/platform/zones')
+export const getZonePaths = (type: 'a' | 'b' | 'c') => client.get(`/api/v1/platform/zone-paths?type=${type}`)

@@ -26,23 +26,30 @@ fun OnboardingScreen(
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
     val name by viewModel.name.collectAsState()
-    val zoneLevel by viewModel.zoneLevel.collectAsState()
-    val zoneName by viewModel.zoneName.collectAsState()
     val vehicleType by viewModel.vehicleType.collectAsState()
+    val vehicleName by viewModel.vehicleName.collectAsState()
     val upiId by viewModel.upiId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
-    val isRestrictedZone = isZoneCAndAboveLevel(zoneLevel)
-    val availableVehicles = vehicleOptionsForZoneLevel(zoneLevel)
-    val availableZoneNames = zoneNamesForLevel(zoneLevel)
-
-    var zoneLevelExpanded by remember { mutableStateOf(false) }
-    var zoneNameExpanded by remember { mutableStateOf(false) }
     var vehicleExpanded by remember { mutableStateOf(false) }
+    var vehicleNameExpanded by remember { mutableStateOf(false) }
+    var vehicleNameOption by remember { mutableStateOf("") }
+
+    val commonTransportMeans = listOf(
+        "scooter",
+        "motorcycle",
+        "auto-rickshaw",
+        "hatchback",
+        "sedan",
+        "suv",
+        "pickup-van",
+        "mini-truck",
+        "other"
+    )
 
     LaunchedEffect(uiState) {
         if (uiState is OnboardingUiState.Success) {
-            navController.navigate(Screen.Home.route) {
+            navController.navigate(Screen.PlanSelection.route) {
                 popUpTo(Screen.Onboarding.route) { inclusive = true }
             }
         }
@@ -83,77 +90,6 @@ fun OnboardingScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Zone Level Dropdown
-            ExposedDropdownMenuBox(
-                expanded = zoneLevelExpanded,
-                onExpandedChange = { zoneLevelExpanded = !zoneLevelExpanded }
-            ) {
-                OutlinedTextField(
-                    value = zoneLevel.ifBlank { "Select Zone Level" },
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Zone Level") },
-                    trailingIcon = {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone level")
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                ExposedDropdownMenu(
-                    expanded = zoneLevelExpanded,
-                    onDismissRequest = { zoneLevelExpanded = false }
-                ) {
-                    zoneLevelOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.label) },
-                            onClick = {
-                                viewModel.onZoneLevelChanged(option.level)
-                                zoneLevelExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Zone Name Dropdown (depends on level)
-            ExposedDropdownMenuBox(
-                expanded = zoneNameExpanded,
-                onExpandedChange = { if (zoneLevel.isNotBlank()) zoneNameExpanded = !zoneNameExpanded }
-            ) {
-                OutlinedTextField(
-                    value = zoneName.ifBlank { "Select Zone Name" },
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Zone Name") },
-                    trailingIcon = {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone name")
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, zoneLevel.isNotBlank()),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = zoneLevel.isNotBlank()
-                )
-                ExposedDropdownMenu(
-                    expanded = zoneNameExpanded,
-                    onDismissRequest = { zoneNameExpanded = false }
-                ) {
-                    availableZoneNames.forEach { nameOption ->
-                        DropdownMenuItem(
-                            text = { Text(nameOption) },
-                            onClick = {
-                                viewModel.onZoneNameChanged(nameOption)
-                                zoneNameExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
             ExposedDropdownMenuBox(
                 expanded = vehicleExpanded,
                 onExpandedChange = { vehicleExpanded = !vehicleExpanded }
@@ -175,9 +111,9 @@ fun OnboardingScreen(
                     expanded = vehicleExpanded,
                     onDismissRequest = { vehicleExpanded = false }
                 ) {
-                    availableVehicles.forEach { vehicle ->
+                    listOf("two-wheeler", "four-wheeler-small", "four-wheeler-large").forEach { vehicle ->
                         DropdownMenuItem(
-                            text = { Text(vehicle.replaceFirstChar { it.uppercase() }) },
+                            text = { Text(vehicle) },
                             onClick = {
                                 viewModel.onVehicleTypeChanged(vehicle)
                                 vehicleExpanded = false
@@ -186,14 +122,62 @@ fun OnboardingScreen(
                     }
                 }
             }
-            if (isRestrictedZone) {
-                Text(
-                    text = "Zone C and above allow only four-wheelers.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary,
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = vehicleNameExpanded,
+                onExpandedChange = {
+                    if (vehicleType.isNotBlank()) {
+                        vehicleNameExpanded = !vehicleNameExpanded
+                    }
+                }
+            ) {
+                OutlinedTextField(
+                    value = when {
+                        vehicleNameOption == "other" && vehicleName.isNotBlank() -> "other"
+                        vehicleNameOption.isNotBlank() -> vehicleNameOption
+                        else -> "Select Transport Means"
+                    },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Vehicle Name") },
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select vehicle name")
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 6.dp)
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, vehicleType.isNotBlank()),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = vehicleType.isNotBlank()
+                )
+                ExposedDropdownMenu(
+                    expanded = vehicleNameExpanded,
+                    onDismissRequest = { vehicleNameExpanded = false }
+                ) {
+                    commonTransportMeans.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                vehicleNameOption = option
+                                if (option == "other") {
+                                    viewModel.onVehicleNameChanged("")
+                                } else {
+                                    viewModel.onVehicleNameChanged(option)
+                                }
+                                vehicleNameExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+            if (vehicleNameOption == "other") {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = vehicleName,
+                    onValueChange = viewModel::onVehicleNameChanged,
+                    label = { Text("Type Vehicle Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -214,7 +198,10 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = uiState !is OnboardingUiState.Loading && name.isNotBlank() && zoneLevel.isNotBlank() && zoneName.isNotBlank() && vehicleType.isNotBlank(),
+                enabled = uiState !is OnboardingUiState.Loading && 
+                        name.isNotBlank() && 
+                    vehicleType.isNotBlank() &&
+                    vehicleName.isNotBlank(),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (uiState is OnboardingUiState.Loading) {

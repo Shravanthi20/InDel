@@ -68,7 +68,11 @@ services:
       DB_NAME: indel_demo
       KAFKA_BROKERS: kafka:9092
     ports:
-      - "${HOST_IP:-192.168.1.6}:8000:8000"
+      - "${HOST_IP}:8000:8000"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,8 +97,16 @@ services:
       DB_PASSWORD: demo_password
       DB_NAME: indel_demo
     ports:
-      - "${HOST_IP:-192.168.1.6}:8001:8001"
+      - "${HOST_IP}:8001:8001"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
     depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       core:
         condition: service_started
 
@@ -109,8 +121,16 @@ services:
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
     ports:
-      - "${HOST_IP:-192.168.1.6}:8002:8002"
+      - "${HOST_IP}:8002:8002"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
     depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       core:
         condition: service_started
 
@@ -125,8 +145,16 @@ services:
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
     ports:
-      - "${HOST_IP:-192.168.1.6}:8003:8003"
+      - "${HOST_IP}:8003:8003"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
     depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       core:
         condition: service_started
 

@@ -28,15 +28,25 @@ interface WorkerApiService {
     @PUT("api/v1/worker/profile")
     suspend fun updateProfile(@Body request: OnboardRequest): Response<WorkerProfileResponse>
 
+    // Zones
+    @GET("api/v1/platform/zones")
+    suspend fun getZones(): Response<ZoneListResponse>
+
     // Orders & Delivery
     @GET("api/v1/demo/orders/available")
-    suspend fun getAvailableOrders(): Response<OrderListResponse>
+    suspend fun getAvailableOrders(@Query("path") path: String? = null): Response<OrderListResponse>
 
     @GET("api/v1/worker/orders/assigned")
-    suspend fun getAssignedOrders(): Response<OrderListResponse>
+    suspend fun getAssignedOrders(@Query("path") path: String? = null): Response<OrderListResponse>
 
     @GET("api/v1/worker/orders")
-    suspend fun getAllOrders(): Response<OrderListResponse>
+    suspend fun getAllOrders(@Query("path") path: String? = null): Response<OrderListResponse>
+
+    @GET("api/v1/worker/batches")
+    suspend fun getAvailableBatches(@Query("limit") limit: Int = 100): Response<BatchListResponse>
+
+    @GET("api/v1/worker/batches/assigned")
+    suspend fun getAssignedBatches(): Response<BatchListResponse>
 
     @GET("api/v1/worker/orders/{order_id}")
     suspend fun getOrderDetail(@Path("order_id") orderId: String): Response<Order>
@@ -107,6 +117,16 @@ interface WorkerApiService {
 
     @PUT("api/v1/worker/policy/cancel")
     suspend fun cancelPolicy(): Response<SimpleMessageResponse>
+
+    // Plans
+    @GET("api/v1/worker/plans")
+    suspend fun getPlans(): Response<PlanListResponse>
+
+    @POST("api/v1/worker/plans/select")
+    suspend fun selectPlan(@Body request: PlanSelectionRequest): Response<PlanSelectionResponse>
+
+    @POST("api/v1/worker/plans/skip")
+    suspend fun skipPlan(): Response<SimpleMessageResponse>
 
     // Claims & Wallet
     @GET("api/v1/worker/claims")

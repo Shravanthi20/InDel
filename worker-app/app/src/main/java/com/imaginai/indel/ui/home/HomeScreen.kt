@@ -43,6 +43,11 @@ fun HomeScreen(
     val isOnline by viewModel.isOnline.collectAsState()
     val lastUpdated = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date()) }
 
+    // Refresh profile data when screen is displayed (enables fresh data after profile edit)
+    LaunchedEffect(Unit) {
+        viewModel.loadDashboard()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -110,7 +115,7 @@ fun HomeContent(
         DashboardCard(
             title = "Earnings Today",
             value = "₹${earnings.thisWeekActual.toInt()}",
-            subtitle = "Completed: 8 Orders",
+            subtitle = "View earnings history",
             icon = Icons.Default.CurrencyRupee,
             onClick = { navController.navigate(Screen.Earnings.route) }
         )
@@ -147,6 +152,13 @@ fun HomeContent(
 
 @Composable
 fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> Unit) {
+    val displayName = worker.name?.trim().orEmpty().ifBlank { "Unknown Worker" }
+    val displayZone = when {
+        worker.zoneLevel.isNotBlank() && worker.zoneName.isNotBlank() -> "Zone ${worker.zoneLevel.uppercase()} - ${worker.zoneName}"
+        !worker.zone.isNullOrBlank() -> worker.zone
+        else -> "Zone unavailable"
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -165,15 +177,15 @@ fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> 
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (!worker.name.isNullOrEmpty()) worker.name!!.take(1) else "?",
+                    text = displayName.take(1),
                     fontWeight = FontWeight.Bold,
                     color = BrandBlue
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(worker.name ?: "Unknown Worker", fontWeight = FontWeight.Bold)
-                Text("${worker.zoneLevel} - ${worker.zoneName}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(displayName, fontWeight = FontWeight.Bold)
+                Text(displayZone, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             // Online Toggle
             Column(horizontalAlignment = Alignment.End) {

@@ -15,12 +15,23 @@ data class EarningRecord(
 )
 
 data class Order(
-    @SerializedName("order_id") val orderId: String,
+    @SerializedName(value = "order_id", alternate = ["id"]) val orderId: String,
+    @SerializedName("worker_id") val workerId: Int? = null,
+    @SerializedName("zone_id") val zoneId: Int? = null,
+    @SerializedName("from_city") val fromCity: String? = null,
+    @SerializedName("to_city") val toCity: String? = null,
+    @SerializedName("from_state") val fromState: String? = null,
+    @SerializedName("to_state") val toState: String? = null,
     @SerializedName("pickup_area") val pickupArea: String,
     @SerializedName("drop_area") val dropArea: String,
     @SerializedName("distance_km") val distanceKm: Double,
     @SerializedName(value = "earning_inr", alternate = ["order_value"]) val earningInr: Double,
+    @SerializedName("package_weight_kg") val packageWeightKg: Double = 0.0,
+    @SerializedName("package_size") val packageSize: String? = null,
     @SerializedName("tip_inr") val tipInr: Double = 0.0,
+    @SerializedName("vehicle_type") val vehicleType: String? = null,
+    @SerializedName("vehicle_capacity") val vehicleCapacity: Int? = null,
+    @SerializedName("allowed_zones") val allowedZones: String? = null,
     val status: String,
     @SerializedName(value = "assigned_at", alternate = ["created_at"]) val assignedAt: String,
     @SerializedName("customer_name") val customerName: String? = null,
@@ -60,6 +71,47 @@ data class ZoneConfigResponse(
     @SerializedName("zone_id") val zoneId: String,
     @SerializedName("name") val name: String,
     @SerializedName("require_ip_validation") val requireIpValidation: Boolean
+)
+
+data class Zone(
+    @SerializedName("zone_id") val zoneId: Int,
+    @SerializedName("name") val name: String,
+    @SerializedName("city") val city: String,
+    @SerializedName("state") val state: String,
+    @SerializedName("risk_rating") val riskRating: Double,
+    @SerializedName("active_workers") val activeWorkers: Int,
+    @SerializedName("areas") val areas: List<String> = emptyList()
+)
+
+data class ZoneListResponse(
+    @SerializedName("zones") val zones: List<Zone>
+)
+
+data class CityPair(
+    @SerializedName("from") val from: String,
+    @SerializedName("to") val to: String,
+    @SerializedName("state") val state: String? = null,
+    @SerializedName("from_state") val fromState: String? = null,
+    @SerializedName("to_state") val toState: String? = null,
+    @SerializedName("distance_km") val distanceKm: Double = 0.0,
+    @SerializedName("from_lat") val fromLat: Double? = null,
+    @SerializedName("from_lon") val fromLon: Double? = null,
+    @SerializedName("to_lat") val toLat: Double? = null,
+    @SerializedName("to_lon") val toLon: Double? = null
+)
+
+data class ZonePath(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("display_name") val displayName: String? = null,
+    @SerializedName("city") val city: String? = null,
+    @SerializedName("from_city") val fromCity: String? = null,
+    @SerializedName("to_city") val toCity: String? = null
+)
+
+data class ZonePathResponse(
+    @SerializedName("cities") val cities: List<String>? = null,
+    @SerializedName("city_pairs") val cityPairs: List<CityPair>? = null,
+    @SerializedName("paths") val paths: List<ZonePath>? = null
 )
 
 data class SessionResponse(

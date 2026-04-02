@@ -37,6 +37,25 @@ class MockState:
                 "enrolled": True,
             }
         }
+        self.zones = [
+            {"zone_id": 1, "name": "Tambaram", "city": "Chennai", "state": "Tamil Nadu", "risk_rating": 0.4, "active_workers": 120},
+            {"zone_id": 2, "name": "Chromepet", "city": "Chennai", "state": "Tamil Nadu", "risk_rating": 0.35, "active_workers": 85},
+            {"zone_id": 3, "name": "Velachery", "city": "Chennai", "state": "Tamil Nadu", "risk_rating": 0.5, "active_workers": 200},
+            {"zone_id": 4, "name": "Madurai Main", "city": "Madurai", "state": "Tamil Nadu", "risk_rating": 0.25, "active_workers": 60},
+            {"zone_id": 5, "name": "Koramangala", "city": "Bangalore", "state": "Karnataka", "risk_rating": 0.45, "active_workers": 300},
+        ]
+        self.zone_paths_a = ["Bangalore", "Mumbai", "Chennai", "Delhi", "Hyderabad", "Pune", "Ahmedabad", "Kolkata"]
+        self.zone_paths_b = [
+            {"from": "Chennai", "to": "Coimbatore", "state": "Tamil Nadu", "distance_km": 510},
+            {"from": "Chennai", "to": "Madurai", "state": "Tamil Nadu", "distance_km": 460},
+            {"from": "Bangalore", "to": "Mysore", "state": "Karnataka", "distance_km": 145},
+            {"from": "Mumbai", "to": "Pune", "state": "Maharashtra", "distance_km": 150},
+        ]
+        self.zone_paths_c = [
+            {"from": "Chennai", "to": "Bangalore", "from_state": "Tamil Nadu", "to_state": "Karnataka", "distance_km": 350},
+            {"from": "Mumbai", "to": "Delhi", "from_state": "Maharashtra", "to_state": "Delhi", "distance_km": 1400},
+            {"from": "Hyderabad", "to": "Bangalore", "from_state": "Telangana", "to_state": "Karnataka", "distance_km": 570},
+        ]
         self.policy = {
             "policy_id": "pol-001",
             "status": "active",
@@ -164,6 +183,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._ok({"ok": True, "service": "worker-mock", "time": now_iso()})
         if path == "/api/v1/status":
             return self._ok({"status": "up", "environment": "mock", "time": now_iso()})
+        if path == "/api/v1/platform/zones":
+            return self._ok({"zones": STATE.zones})
+        if path == "/api/v1/platform/zone-paths":
+            level = query.get("type", ["a"])[0].lower()
+            if level == "a":
+                return self._ok({"cities": STATE.zone_paths_a})
+            elif level == "b":
+                return self._ok({"city_pairs": STATE.zone_paths_b})
+            elif level == "c":
+                return self._ok({"city_pairs": STATE.zone_paths_c})
+            else:
+                return self._ok({"cities": [], "city_pairs": []})
 
         worker_id = self._auth_worker_id()
         if worker_id is None:
@@ -214,6 +245,34 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         body = self._read_json_body()
 
+        if path == "/api/v1/auth/register":
+            # Simplified mock register
+            username = body.get("username")
+            phone = body.get("phone")
+            if not phone:
+                return self._bad_request("phone_required")
+
+            token = f"mock-jwt-token-{phone}"
+            worker_id = str(len(STATE.worker_profiles) + 1)
+            STATE.token_to_worker_id[token] = worker_id
+            STATE.worker_profiles[worker_id] = {
+                "worker_id": worker_id,
+                "name": username or "New Worker",
+                "phone": phone,
+                "email": body.get("email"),
+                "zone_level": body.get("zone_level", "A"),
+                "zone_name": body.get("zone_name", ""),
+                "vehicle_type": "motorcycle",
+                "upi_id": "",
+                "coverage_status": "inactive",
+                "enrolled": False,
+            }
+            return self._send_json(201, {
+                "token": token,
+                "token_type": "Bearer",
+                "worker_id": worker_id
+            })
+
         if path == "/api/v1/auth/otp/send":
             phone = body.get("phone")
             if not phone:
@@ -235,7 +294,7 @@ class Handler(BaseHTTPRequestHandler):
             if not expected_otp or expected_otp != otp:
                 return self._unauthorized("invalid_otp")
 
-            token = "mock-jwt-token"
+            token = f"mock-jwt-token-{phone}"
             worker_id = "worker-001"
             STATE.token_to_worker_id[token] = worker_id
             if worker_id not in STATE.worker_profiles:
@@ -345,6 +404,17 @@ class Handler(BaseHTTPRequestHandler):
         worker_id = self._auth_worker_id()
         if worker_id is None:
             return
+
+        if path == "/api/v1/worker/profile":
+            body = self._read_json_body()
+            profile = STATE.worker_profiles.get(worker_id, {})
+            profile["name"] = body.get("name", profile.get("name"))
+            profile["zone_level"] = body.get("zone_level", profile.get("zone_level"))
+            profile["zone_name"] = body.get("zone_name", profile.get("zone_name"))
+            profile["vehicle_type"] = body.get("vehicle_type", profile.get("vehicle_type"))
+            profile["upi_id"] = body.get("upi_id", profile.get("upi_id"))
+            STATE.worker_profiles[worker_id] = profile
+            return self._ok({"worker": profile})
 
         if path == "/api/v1/worker/policy/pause":
             STATE.policy["status"] = "paused"

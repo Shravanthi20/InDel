@@ -92,15 +92,27 @@ func IngestDemoOrder(c *gin.Context) {
 	customerContact := bodyString(body, "customer_contact_number", "")
 	address := bodyString(body, "address", "Unknown Address")
 	paymentMethod := bodyString(body, "payment_method", "cod")
-	paymentAmount := bodyFloat(body, "payment_amount", 0)
+	orderValue := bodyFloat(body, "order_value", bodyFloat(body, "payment_amount", 0))
+	paymentAmount := bodyFloat(body, "payment_amount", orderValue)
 	packageSize := bodyString(body, "package_size", "medium")
 	packageWeightKg := bodyFloat(body, "package_weight_kg", 1.0)
 	zoneID := bodyUint(body, "zone_id", 1)
+	fromCity := bodyString(body, "from_city", bodyString(body, "pickup_area", "Tambaram"))
+	toCity := bodyString(body, "to_city", bodyString(body, "drop_area", "Velachery"))
+	fromState := bodyString(body, "from_state", "")
+	toState := bodyString(body, "to_state", "")
+	fromLat := bodyFloat(body, "from_lat", 0)
+	fromLon := bodyFloat(body, "from_lon", 0)
+	toLat := bodyFloat(body, "to_lat", 0)
+	toLon := bodyFloat(body, "to_lon", 0)
 	pickupArea := bodyString(body, "pickup_area", "Tambaram")
 	dropArea := bodyString(body, "drop_area", "Velachery")
 	distanceKm := bodyFloat(body, "distance_km", 3.1)
 	tipInr := bodyFloat(body, "tip_inr", 0)
 	zoneRoutePath := bodyStringSlice(body, "zone_route_path", []string{"A"})
+	vehicleType := bodyString(body, "vehicle_type", "")
+	vehicleCapacity := bodyInt(body, "vehicle_capacity", 0)
+	allowedZones := bodyString(body, "allowed_zones", "")
 	deliveryFeeInr := bodyFloat(body, "delivery_fee_inr", float64(computeZoneRouteDeliveryFee(zoneRoutePath)))
 	status := bodyString(body, "status", "assigned")
 
@@ -123,9 +135,23 @@ func IngestDemoOrder(c *gin.Context) {
 		}
 		if workerID != 0 {
 			_ = workerDB.Exec(
-				`INSERT INTO orders (worker_id, zone_id, order_value, tip_inr, delivery_fee_inr, zone_route_path, status, pickup_area, drop_area, distance_km, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-				workerID, zoneID, paymentAmount, tipInr, deliveryFeeInr, encodeZonePath(zoneRoutePath), status, pickupArea, dropArea, distanceKm,
+				`INSERT INTO orders (
+					worker_id, zone_id, order_value,
+					package_size, package_weight_kg,
+					from_city, to_city, from_state, to_state,
+					from_lat, from_lon, to_lat, to_lon,
+					status, pickup_area, drop_area, distance_km,
+					tip_inr, delivery_fee_inr, zone_route_path,
+					vehicle_type, vehicle_capacity, allowed_zones,
+					updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+				workerID, zoneID, orderValue,
+				strings.ToLower(packageSize), packageWeightKg,
+				fromCity, toCity, fromState, toState,
+				fromLat, fromLon, toLat, toLon,
+				status, pickupArea, dropArea, distanceKm,
+				tipInr, deliveryFeeInr, encodeZonePath(zoneRoutePath),
+				vehicleType, vehicleCapacity, allowedZones,
 			).Error
 		}
 	}
@@ -137,11 +163,20 @@ func IngestDemoOrder(c *gin.Context) {
 		"customer_contact_number": customerContact,
 		"address":                 address,
 		"payment_method":          strings.ToLower(paymentMethod),
+		"order_value":             orderValue,
 		"payment_amount":          paymentAmount,
 		"package_size":            strings.ToLower(packageSize),
 		"package_weight_kg":       packageWeightKg,
 		"status":                  status,
 		"zone_id":                 zoneID,
+		"from_city":               fromCity,
+		"to_city":                 toCity,
+		"from_state":              fromState,
+		"to_state":                toState,
+		"from_lat":                fromLat,
+		"from_lon":                fromLon,
+		"to_lat":                  toLat,
+		"to_lon":                  toLon,
 		"pickup_area":             pickupArea,
 		"drop_area":               dropArea,
 		"distance_km":             distanceKm,
@@ -149,6 +184,9 @@ func IngestDemoOrder(c *gin.Context) {
 		"delivery_fee_inr":        deliveryFeeInr,
 		"zone_route_path":         zoneRoutePath,
 		"zone_route_display":      zonePathDisplay(zoneRoutePath),
+		"vehicle_type":            vehicleType,
+		"vehicle_capacity":        vehicleCapacity,
+		"allowed_zones":           allowedZones,
 		"earning_inr":             totalDeliveryEarningINR(tipInr),
 		"assigned_at":             bodyString(body, "assigned_at", nowISO()),
 		"source":                  bodyString(body, "source", "fake-publisher"),

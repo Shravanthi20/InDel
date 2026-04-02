@@ -9,34 +9,8 @@ data class ZoneLevelOption(
 val zoneLevelOptions: List<ZoneLevelOption> = listOf(
     ZoneLevelOption("A", "A local"),
     ZoneLevelOption("B", "B intra-state"),
-    ZoneLevelOption("C", "C metro-to-metro"),
-    ZoneLevelOption("D", "D rest of India"),
-    ZoneLevelOption("E", "E special difficult lanes")
+    ZoneLevelOption("C", "C metro-to-metro")
 )
-
-val zoneNamesByLevel: Map<String, List<String>> = mapOf(
-    "A" to listOf("Tambaram", "Marasivaakkam"),
-    "B" to listOf(
-        "Tambaram to Chennai", "Chennai to Tambaram",
-        "Tambaram to Kanchipuram", "Kanchipuram to Tambaram",
-        "Sriperumbudur to Chennai", "Chennai to Sriperumbudur"
-    ),
-    "C" to listOf(
-        "Chennai to Pondicherry", "Pondicherry to Chennai",
-        "Chennai to Madurai", "Madurai to Chennai"
-    ),
-    "D" to listOf(
-        "Madurai to Coimbatore", "Coimbatore to Madurai",
-        "Chennai to Coimbatore", "Coimbatore to Chennai"
-    ),
-    "E" to listOf(
-        "Nilgiris to Sikkim", "Sikkim to Nilgiris",
-        "Chennai to Nilgiris", "Nilgiris to Chennai"
-    )
-)
-
-fun zoneNamesForLevel(level: String): List<String> =
-    zoneNamesByLevel[level] ?: emptyList()
 
 val allVehicleOptions: List<String> = listOf(
     "scooter",
@@ -55,9 +29,22 @@ private val fourWheelerVehicleOptions: List<String> = listOf(
     "truck"
 )
 
+private val zoneNamesLevelA = listOf("Tambaram", "Chromepet", "Pallavaram", "Selaiyur", "Velachery", "Adyar")
+private val zoneNamesLevelB = listOf("Chennai Central", "Madurai", "Coimbatore", "Trichy", "Salem")
+private val zoneNamesLevelC = listOf("Chennai-Bangalore", "Chennai-Hyderabad", "Chennai-Mumbai", "Chennai-Delhi")
+
+fun zoneNamesForLevel(level: String): List<String> {
+    return when (level.trim().uppercase()) {
+        "A" -> zoneNamesLevelA
+        "B" -> zoneNamesLevelB
+        "C" -> zoneNamesLevelC
+        else -> emptyList()
+    }
+}
+
 
 fun zoneBandFromLevel(level: String): Char? =
-    level.trim().uppercase().firstOrNull()?.takeIf { it in 'A'..'E' }
+    level.trim().uppercase().firstOrNull()?.takeIf { it in 'A'..'C' }
 
 
 fun isZoneCAndAboveLevel(level: String): Boolean {

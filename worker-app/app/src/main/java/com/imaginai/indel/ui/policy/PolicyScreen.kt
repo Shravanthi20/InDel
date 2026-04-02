@@ -1,6 +1,7 @@
 package com.imaginai.indel.ui.policy
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +14,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -76,6 +80,8 @@ fun PolicyContent(
     navController: NavController,
     viewModel: PolicyViewModel
 ) {
+    var showPlanInfo by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -84,7 +90,9 @@ fun PolicyContent(
         // 1. Current Plan Card
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPlanInfo = true },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -117,6 +125,17 @@ fun PolicyContent(
                             Text(policy.nextDueDate, fontWeight = FontWeight.Bold)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = when {
+                            policy.planStatus == "skipped" -> "Plan skipped"
+                            !policy.planName.isNullOrBlank() -> policy.planName
+                            else -> "Plan not selected"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
             }
         }
@@ -146,6 +165,17 @@ fun PolicyContent(
         // 3. Actions
         item {
             Spacer(modifier = Modifier.height(16.dp))
+            if (policy.planStatus == "skipped" || policy.planName.isNullOrBlank()) {
+                Button(
+                    onClick = { navController.navigate(Screen.PlanSelection.route) },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                ) {
+                    Text("Start a plan", fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             Button(
                 onClick = { navController.navigate(Screen.PremiumPay.route) },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -194,6 +224,38 @@ fun PolicyContent(
                 }
             }
         }
+    }
+
+    if (showPlanInfo) {
+        val chosenPlanText = when {
+            policy.planStatus == "skipped" -> "Skipped"
+            !policy.planName.isNullOrBlank() -> policy.planName
+            else -> "Not selected"
+        }
+        val rangeText = if (policy.rangeStart != null && policy.rangeEnd != null) {
+            "${policy.rangeStart}-${policy.rangeEnd} deliveries/week"
+        } else {
+            "No delivery range selected"
+        }
+        val selectedDeliveryText = policy.selectedDeliveries?.toString() ?: "Not selected"
+
+        AlertDialog(
+            onDismissRequest = { showPlanInfo = false },
+            confirmButton = {
+                TextButton(onClick = { showPlanInfo = false }) {
+                    Text("OK")
+                }
+            },
+            title = { Text("Chosen Option") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Plan: $chosenPlanText")
+                    Text("Range: $rangeText")
+                    Text("Selected deliveries: $selectedDeliveryText")
+                    Text("Weekly premium: ₹${policy.weeklyPremiumInr}")
+                }
+            }
+        )
     }
 }
 

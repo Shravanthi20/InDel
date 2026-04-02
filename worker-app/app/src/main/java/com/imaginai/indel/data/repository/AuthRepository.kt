@@ -11,15 +11,23 @@ class AuthRepository @Inject constructor(
     private val authApiService: AuthApiService,
     private val preferencesDataStore: PreferencesDataStore
 ) {
-    suspend fun register(username: String, phone: String, email: String, password: String) =
-        authApiService.register(RegisterRequest(username, phone, email, password)).also { response ->
-            if (response.isSuccessful) {
-                response.body()?.let {
-                    preferencesDataStore.saveAuthToken(it.token)
-                    preferencesDataStore.saveWorkerId(it.workerId)
-                }
+    suspend fun register(
+        username: String,
+        phone: String,
+        email: String,
+        password: String,
+        zoneLevel: String? = null,
+        zoneName: String? = null
+    ) = authApiService.register(
+        RegisterRequest(username, phone, email, password, zoneLevel, zoneName)
+    ).also { response ->
+        if (response.isSuccessful) {
+            response.body()?.let {
+                preferencesDataStore.saveAuthToken(it.token)
+                preferencesDataStore.saveWorkerId(it.workerId)
             }
         }
+    }
 
     suspend fun login(identifier: String, password: String) =
         authApiService.login(LoginRequest(phone = identifier, password = password)).also { response ->

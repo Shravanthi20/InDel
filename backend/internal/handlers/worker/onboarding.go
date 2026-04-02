@@ -109,6 +109,7 @@ func GetProfile(c *gin.Context) {
 				WorkerID    uint
 				Phone       string
 				Name        string
+				ZoneLevel   string
 				ZoneName    string
 				City        string
 				VehicleType string
@@ -117,17 +118,22 @@ func GetProfile(c *gin.Context) {
 
 			var row profileResp
 			err := workerDB.Table("users u").
-				Select("u.id as worker_id, u.phone, wp.name, z.name as zone_name, z.city, wp.vehicle_type, wp.upi_id").
+				Select("u.id as worker_id, u.phone, wp.name, z.level as zone_level, z.name as zone_name, z.city, wp.vehicle_type, wp.upi_id").
 				Joins("LEFT JOIN worker_profiles wp ON wp.worker_id = u.id").
 				Joins("LEFT JOIN zones z ON z.id = wp.zone_id").
 				Where("u.id = ?", workerIDUint).
 				Scan(&row).Error
 			if err == nil && row.WorkerID != 0 {
 				zone := strings.TrimSpace(fmt.Sprintf("%s, %s", row.ZoneName, row.City))
+				if zone == "," || zone == "" {
+					zone = strings.TrimSpace(row.ZoneName)
+				}
 				c.JSON(200, gin.H{"worker": gin.H{
 					"worker_id":       fmt.Sprintf("%d", row.WorkerID),
 					"name":            row.Name,
 					"phone":           row.Phone,
+					"zone_level":      row.ZoneLevel,
+					"zone_name":       row.ZoneName,
 					"zone":            zone,
 					"vehicle_type":    row.VehicleType,
 					"upi_id":          row.UPIId,
@@ -142,6 +148,14 @@ func GetProfile(c *gin.Context) {
 	store.mu.RLock()
 	profile := store.data.WorkerProfiles[workerID]
 	store.mu.RUnlock()
+	if profile != nil {
+		if _, ok := profile["zone_level"]; !ok {
+			profile["zone_level"] = ""
+		}
+		if _, ok := profile["zone_name"]; !ok {
+			profile["zone_name"] = ""
+		}
+	}
 
 	c.JSON(200, gin.H{"worker": profile})
 }
@@ -192,7 +206,20 @@ func UpdateProfile(c *gin.Context) {
 	if name := bodyString(body, "name", ""); name != "" {
 		profile["name"] = name
 	}
-	if zone := bodyString(body, "zone", ""); zone != "" {
+	zoneLevel := bodyString(body, "zone_level", "")
+	zoneName := bodyString(body, "zone_name", "")
+	if zoneLevel != "" {
+		profile["zone_level"] = zoneLevel
+	}
+	if zoneName != "" {
+		profile["zone_name"] = zoneName
+	}
+	// Reconstruct combined zone string from level and name
+	if (zoneLevel != "" || zoneName != "") && zoneName != "" {
+		// For in-memory store, we can construct a reasonable zone string
+		zone := strings.TrimSpace(zoneName)
+		profile["zone"] = zone
+	} else if zone := bodyString(body, "zone", ""); zone != "" {
 		profile["zone"] = zone
 	}
 	if vehicle := bodyString(body, "vehicle_type", ""); vehicle != "" {

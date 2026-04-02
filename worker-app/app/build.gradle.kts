@@ -6,19 +6,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Load .env file for configuration
-val envFile = rootProject.file("../.env").takeIf { it.exists() }
-    ?: rootProject.file("worker-app/.env").takeIf { it.exists() }
-    ?: rootProject.file(".env").takeIf { it.exists() }
+// Load .env file for configuration.
+// Prefer worker-app/.env so mobile settings are not overridden by repository root .env.
+val envFile = rootProject.file(".env").takeIf { it.exists() }
+    ?: rootProject.file("../.env").takeIf { it.exists() }
 
 val apiBaseUrl = if (envFile != null && envFile.exists()) {
     envFile.readLines()
         .find { it.startsWith("API_BASE_URL=") }
         ?.removePrefix("API_BASE_URL=")
-        ?.trim() ?: "http://10.0.2.2:8001/"
+        ?.trim() ?: "http://10.0.2.2:8003/"
 } else {
     // Fallback to default for Android Emulator
-    "http://10.0.2.2:8001/"
+    "http://10.0.2.2:8003/"
 }
 
 android {
@@ -89,7 +89,7 @@ dependencies {
     
     // Hilt DI
     implementation("com.google.dagger:hilt-android:2.52")
-    kapt("com.google.dagger:hilt-compiler:2.52")
+    kapt("com.google.dagger:hilt-android-compiler:2.52")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     
     // DataStore

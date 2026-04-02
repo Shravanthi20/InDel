@@ -3,7 +3,6 @@ package com.imaginai.indel.ui.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.repository.WorkerRepository
-import com.imaginai.indel.ui.shared.isVehicleAllowedForZoneLevel
 import com.imaginai.indel.ui.shared.isValidUpiId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,39 +21,27 @@ class OnboardingViewModel @Inject constructor(
     private val _name = MutableStateFlow("")
     val name = _name.asStateFlow()
 
-    private val _zoneLevel = MutableStateFlow("")
-    val zoneLevel = _zoneLevel.asStateFlow()
-
-    private val _zoneName = MutableStateFlow("")
-    val zoneName = _zoneName.asStateFlow()
-
     private val _vehicleType = MutableStateFlow("")
     val vehicleType = _vehicleType.asStateFlow()
+
+    private val _vehicleName = MutableStateFlow("")
+    val vehicleName = _vehicleName.asStateFlow()
 
     private val _upiId = MutableStateFlow("")
     val upiId = _upiId.asStateFlow()
 
     fun onNameChanged(value: String) { _name.value = value }
-    
-    fun onZoneLevelChanged(value: String) {
-        _zoneLevel.value = value
-        _zoneName.value = "" // Reset zone name when level changes
-        if (!isVehicleAllowedForZoneLevel(_zoneLevel.value, _vehicleType.value)) {
-            _vehicleType.value = ""
-        }
-    }
-
-    fun onZoneNameChanged(value: String) {
-        _zoneName.value = value
-    }
 
     fun onVehicleTypeChanged(value: String) { _vehicleType.value = value }
+    fun onVehicleNameChanged(value: String) { _vehicleName.value = value }
     fun onUpiIdChanged(value: String) { _upiId.value = value }
 
     fun submitOnboarding() {
         val upi = _upiId.value.trim()
-        if (_name.value.isBlank() || _zoneLevel.value.isBlank() || _zoneName.value.isBlank() || 
-            _vehicleType.value.isBlank() || upi.isBlank()) {
+        
+        val vehicleName = _vehicleName.value.trim()
+
+        if (_name.value.isBlank() || _vehicleType.value.isBlank() || vehicleName.isBlank() || upi.isBlank()) {
             _uiState.value = OnboardingUiState.Error("Please fill all fields")
             return
         }
@@ -64,19 +51,13 @@ class OnboardingViewModel @Inject constructor(
             return
         }
 
-        if (!isVehicleAllowedForZoneLevel(_zoneLevel.value, _vehicleType.value)) {
-            _uiState.value = OnboardingUiState.Error("Selected vehicle is not allowed for this zone level")
-            return
-        }
-
         viewModelScope.launch {
             _uiState.value = OnboardingUiState.Loading
             try {
                 val response = workerRepository.onboard(
                     name = _name.value,
-                    zoneLevel = _zoneLevel.value,
-                    zoneName = _zoneName.value,
                     vehicleType = _vehicleType.value,
+                    vehicleName = vehicleName,
                     upiId = upi
                 )
                 if (response.isSuccessful) {

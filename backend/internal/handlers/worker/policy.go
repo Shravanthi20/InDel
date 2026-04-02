@@ -7,6 +7,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func inferPlanFromPremium(premium int) (string, string, int, int) {
+	switch {
+	case premium >= 12 && premium <= 18:
+		return "plan-starter", "Range-01: Starter", 10, 15
+	case premium >= 19 && premium <= 26:
+		return "plan-growth", "Range-02: Growth", 15, 20
+	case premium >= 27 && premium <= 35:
+		return "plan-premium", "Range-03: Premium", 20, 25
+	default:
+		return "", "", 0, 0
+	}
+}
+
 // GetPolicy returns active policy
 func GetPolicy(c *gin.Context) {
 	workerID, ok := requireAuth(c)
@@ -20,13 +33,27 @@ func GetPolicy(c *gin.Context) {
 			var p models.Policy
 			err := workerDB.Where("worker_id = ?", workerIDUint).Order("id DESC").First(&p).Error
 			if err == nil {
+				planID, planName, rangeStart, rangeEnd := inferPlanFromPremium(int(p.PremiumAmount))
+				planStatus := "selected"
+				if p.Status == "skipped" {
+					planStatus = "skipped"
+					planID = ""
+					planName = ""
+					rangeStart = 0
+					rangeEnd = 0
+				}
 				policy := gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", p.ID),
 					"status":             p.Status,
+					"plan_status":        planStatus,
 					"weekly_premium_inr": int(p.PremiumAmount),
 					"coverage_ratio":     0.8,
 					"zone":               "Tambaram, Chennai",
 					"next_due_date":      "2026-03-30",
+					"plan_id":            planID,
+					"plan_name":          planName,
+					"range_start":        rangeStart,
+					"range_end":          rangeEnd,
 					"shap_breakdown": []gin.H{
 						{"feature": "rain_risk", "impact": 0.42},
 						{"feature": "order_drop_volatility", "impact": 0.31},

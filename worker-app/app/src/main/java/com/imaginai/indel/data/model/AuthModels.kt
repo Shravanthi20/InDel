@@ -12,7 +12,9 @@ data class RegisterRequest(
     @SerializedName("username") val username: String,
     @SerializedName("phone") val phone: String,
     @SerializedName("email") val email: String,
-    @SerializedName("password") val password: String
+    @SerializedName("password") val password: String,
+    @SerializedName("zone_level") val zoneLevel: String? = null,
+    @SerializedName("zone_name") val zoneName: String? = null
 )
 
 data class AuthResponse(

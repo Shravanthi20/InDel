@@ -27,11 +27,11 @@ func GetZonePaths(c *gin.Context) {
 	var fileName string
 	switch typeParam {
 	case "a":
-		fileName = "zone_a.json"
+		fileName = "/root/zone_a.json"
 	case "b":
-		fileName = "zone_b.json"
+		fileName = "/root/zone_b.json"
 	case "c":
-		fileName = "zone_c.json"
+		fileName = "/root/zone_c.json"
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_type"})
 		return
