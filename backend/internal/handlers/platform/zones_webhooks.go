@@ -19,8 +19,15 @@ type orderAssignedRequest struct {
 }
 
 type orderCompletedRequest struct {
-	OrderID string  `json:"order_id"`
-	Amount  float64 `json:"amount"`
+	OrderID    string      `json:"order_id"`
+	Amount     float64     `json:"amount"`
+	EarningInr float64     `json:"earning_inr"`
+	ZoneID     interface{} `json:"zone_id"`
+}
+
+type orderCancelledRequest struct {
+	OrderID string      `json:"order_id"`
+	ZoneID  interface{} `json:"zone_id"`
 }
 
 // GetZones returns active zones with risk rating.
@@ -139,18 +146,24 @@ func OrderCompletedWebhook(c *gin.Context) {
 	}
 
 	orderRaw := strings.TrimPrefix(strings.TrimSpace(req.OrderID), "ord-")
-	orderNum, err := strconv.ParseUint(orderRaw, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_order_id"})
-		return
-	}
+	orderRaw = strings.TrimPrefix(orderRaw, "ord_")
 
-	if hasDB() {
+	// HACKATHON DEMO: Robust 'fake' check to decouple from Part 4 DB
+	isFakeOrder := strings.Contains(strings.ToLower(req.OrderID), "fake")
+
+	if hasDB() && !isFakeOrder {
+		orderNum, err := strconv.ParseUint(orderRaw, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_order_id", "details": "not_numeric"})
+			return
+		}
+
 		type orderRow struct {
 			WorkerID   uint    `gorm:"column:worker_id"`
 			OrderValue float64 `gorm:"column:order_value"`
 		}
 		var row orderRow
+		// Use SCAN or take result to avoid crash on not found
 		_ = platformDB.Raw("SELECT worker_id, order_value FROM orders WHERE id = ?", orderNum).Scan(&row).Error
 		if row.WorkerID == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "order_not_found"})
@@ -158,6 +171,9 @@ func OrderCompletedWebhook(c *gin.Context) {
 		}
 
 		amount := req.Amount
+		if amount <= 0 {
+			amount = req.EarningInr
+		}
 		if amount <= 0 {
 			amount = row.OrderValue
 		}
@@ -193,17 +209,69 @@ func OrderCompletedWebhook(c *gin.Context) {
 		}
 
 		c.JSON(200, gin.H{
-			"message":   "order_completed",
-			"order_id":  req.OrderID,
-			"worker_id": row.WorkerID,
-			"amount":    int(amount),
+			"data": gin.H{
+				"message":   "order_completed",
+				"order_id":  req.OrderID,
+				"worker_id": row.WorkerID,
+				"amount":    int(amount),
+			},
+			"meta": gin.H{"timestamp": "2026-03-30T10:00:00Z"},
 		})
+		
+		// Order tracking per zone
+		zoneParsed := uint(1) // Default to 1 if missing for hackathon scope
+		switch v := req.ZoneID.(type) {
+		case float64:
+			zoneParsed = uint(v)
+		case string:
+			// parse string or map it 
+			zoneParsed = 1
+		}
+		CheckAndTrackOrder(req.OrderID, zoneParsed, true)
+
 		return
 	}
 
+	CheckAndTrackOrder(req.OrderID, 1, true)
+
 	c.JSON(200, gin.H{
-		"message":  "order_completed",
-		"order_id": req.OrderID,
-		"amount":   int(req.Amount),
+		"data": gin.H{
+			"message":  "order_completed",
+			"order_id": req.OrderID,
+			"amount":   int(req.Amount),
+		},
+		"meta": gin.H{"timestamp": "2026-03-30T10:00:00Z"},
+	})
+}
+
+// OrderCancelledWebhook logs a dropped order for metric calculation
+func OrderCancelledWebhook(c *gin.Context) {
+	var req orderCancelledRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_payload"})
+		return
+	}
+
+	if strings.TrimSpace(req.OrderID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "order_id_required"})
+		return
+	}
+
+	zoneParsed := uint(1)
+	switch v := req.ZoneID.(type) {
+	case float64:
+		zoneParsed = uint(v)
+	case string:
+		zoneParsed = 1
+	}
+
+	CheckAndTrackOrder(req.OrderID, zoneParsed, false)
+
+	c.JSON(200, gin.H{
+		"data": gin.H{
+			"message":  "order_cancelled",
+			"order_id": req.OrderID,
+		},
+		"meta": gin.H{"timestamp": "2026-03-30T10:00:00Z"},
 	})
 }
