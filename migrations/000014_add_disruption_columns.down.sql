@@ -1,0 +1,5 @@
+ALTER TABLE disruptions DROP COLUMN IF NOT EXISTS confidence;
+ALTER TABLE disruptions DROP COLUMN IF NOT EXISTS status;
+ALTER TABLE disruptions DROP COLUMN IF NOT EXISTS start_time;
+ALTER TABLE disruptions DROP COLUMN IF NOT EXISTS end_time;
+ALTER TABLE disruptions DROP COLUMN IF NOT EXISTS updated_at;
