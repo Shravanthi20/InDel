@@ -5,7 +5,7 @@ services:
     image: postgres:15
     environment:
       POSTGRES_USER: indel
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: indel
     ports:
       - "5432:5432"
@@ -64,7 +64,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
-      DB_PASSWORD: password
+      DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_NAME: indel
       KAFKA_BROKERS: kafka:9092
     ports:
@@ -90,7 +90,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
-      DB_PASSWORD: password
+      DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_NAME: indel
     ports:
       - "${HOST_IP}:8001:8001"
