@@ -24,13 +24,22 @@ app = FastAPI(title="InDel Premium Prediction Service - V1")
 class PremiumRequest(BaseModel):
     worker_id: str
     zone_id: str
+    city: str
+    state: str
+    zone_type: str
     vehicle_type: str
     season: str
-    recent_disruption_rate: float
-    order_volatility: float
+    experience_days: int
+    avg_daily_orders: float
+    avg_daily_earnings: float
+    active_hours_per_day: float
     rainfall_mm: float
-    temp_c: float
     aqi: float
+    temperature: float
+    humidity: float
+    order_volatility: float
+    earnings_volatility: float
+    recent_disruption_rate: float
 
 class ExplainabilityFactor(BaseModel):
     feature: str

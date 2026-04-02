@@ -20,11 +20,12 @@ class PremiumModel:
             random_state=42
         )
         self.label_encoders = {}
-        self.categorical_cols = ['zone_id', 'vehicle_type', 'season']
+        self.categorical_cols = ['zone_id', 'city', 'state', 'zone_type', 'vehicle_type', 'season']
         self.feature_cols = [
-            'zone_id', 'vehicle_type', 'season', 
-            'recent_disruption_rate', 'order_volatility', 
-            'rainfall_mm', 'temp_c', 'aqi'
+            'zone_id', 'city', 'state', 'zone_type', 'vehicle_type', 'season',
+            'experience_days', 'avg_daily_orders', 'avg_daily_earnings', 'active_hours_per_day',
+            'rainfall_mm', 'aqi', 'temperature', 'humidity',
+            'order_volatility', 'earnings_volatility', 'recent_disruption_rate'
         ]
 
     def _preprocess(self, df, training=False):

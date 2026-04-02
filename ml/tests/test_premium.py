@@ -19,14 +19,23 @@ def test_model_loading_and_inference():
     # Create a test sample
     test_df = pd.DataFrame([{
         'worker_id': 'wkr_test',
-        'zone_id': 'Chennai_Urban',
+        'zone_id': 'zone_chennai_coastal',
+        'city': 'Chennai',
+        'state': 'Tamil Nadu',
+        'zone_type': 'coastal',
         'vehicle_type': 'two_wheeler',
         'season': 'Monsoon',
-        'recent_disruption_rate': 0.5,
-        'order_volatility': 0.3,
-        'rainfall_mm': 60.0,
-        'temp_c': 28.0,
-        'aqi': 80.0
+        'experience_days': 500,
+        'avg_daily_orders': 20.0,
+        'avg_daily_earnings': 1200.0,
+        'active_hours_per_day': 8.5,
+        'rainfall_mm': 50.0,
+        'aqi': 60.0,
+        'temperature': 28.0,
+        'humidity': 85.0,
+        'order_volatility': 0.15,
+        'earnings_volatility': 0.18,
+        'recent_disruption_rate': 0.05
     }])
     
     premium, risk = model.predict(test_df)
@@ -42,14 +51,23 @@ def test_shap_explanation():
     
     test_df = pd.DataFrame([{
         'worker_id': 'wkr_test',
-        'zone_id': 'Chennai_Urban',
+        'zone_id': 'zone_chennai_coastal',
+        'city': 'Chennai',
+        'state': 'Tamil Nadu',
+        'zone_type': 'coastal',
         'vehicle_type': 'two_wheeler',
         'season': 'Monsoon',
-        'recent_disruption_rate': 0.5,
-        'order_volatility': 0.3,
-        'rainfall_mm': 60.0,
-        'temp_c': 28.0,
-        'aqi': 80.0
+        'experience_days': 500,
+        'avg_daily_orders': 20.0,
+        'avg_daily_earnings': 1200.0,
+        'active_hours_per_day': 8.5,
+        'rainfall_mm': 50.0,
+        'aqi': 60.0,
+        'temperature': 28.0,
+        'humidity': 85.0,
+        'order_volatility': 0.15,
+        'earnings_volatility': 0.18,
+        'recent_disruption_rate': 0.05
     }])
     
     explanation = explainer.explain(test_df)[0]

@@ -6,7 +6,7 @@ import os
 
 def train_model():
     """Train premium pricing and risk models"""
-    data_path = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/data/premium_training_data.csv'
+    data_path = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/data/premium_training_data_india.csv'
     if not os.path.exists(data_path):
         print(f"Error: Data file not found at {data_path}")
         return
@@ -15,6 +15,7 @@ def train_model():
     df = pd.read_csv(data_path)
     
     # Prepare features and targets
+    # Drop non-feature columns
     X = df.drop(columns=['worker_id', 'premium_inr', 'risk_score'])
     y_premium = df['premium_inr']
     y_risk = df['risk_score']
