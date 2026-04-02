@@ -251,7 +251,8 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 		ZoneID:          zoneID,
 		Type:            triggerStr,
 		Severity:        severity,
-		Confidence:      orderDrop, // Map orderDrop here so we can return it cleanly
+		Confidence:      confidence, // Use calculated confidence here
+
 		Status:          "confirmed",
 		StartTime:       &now,
 		SignalTimestamp: &now, // THIS was missing, crashing the Postgres INSERT!
