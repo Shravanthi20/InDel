@@ -24,3 +24,13 @@ data class DeliveryBatchDto(
 data class BatchListResponse(
     @SerializedName("batches") val batches: List<DeliveryBatchDto>,
 )
+
+data class BatchAcceptRequest(
+    @SerializedName("orderIds") val orderIds: List<String>,
+)
+
+data class BatchAcceptResponse(
+    @SerializedName("message") val message: String,
+    @SerializedName("batchId") val batchId: String,
+    @SerializedName("acceptedOrderIds") val acceptedOrderIds: List<String>,
+)

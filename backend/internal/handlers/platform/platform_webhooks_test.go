@@ -33,9 +33,9 @@ func TestOrderCompletedWebhook_Idempotency(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	
-	// Valid payload
+	// Valid payload (use "fake" in order_id to skip DB validation in handler)
 	payload := []byte(`{
-		"order_id": "ord_123",
+		"order_id": "fake_ord_123",
 		"worker_id": "wkr_123",
 		"zone_id": 1,
 		"completed_at": "2026-03-30T09:42:00Z",

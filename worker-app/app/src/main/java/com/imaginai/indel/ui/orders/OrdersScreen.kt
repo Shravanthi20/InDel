@@ -65,7 +65,6 @@ fun OrdersScreen(
                         assignedBatches = state.assignedBatches,
                         availableBatches = state.availableBatches,
                         diagnostics = state.diagnostics,
-                        viewModel = viewModel,
                         navController = navController,
                     )
                     is OrdersUiState.Error -> ErrorState(state.message) { viewModel.loadOrders() }
@@ -80,7 +79,6 @@ fun OrdersContent(
     assignedBatches: List<DeliveryBatch>,
     availableBatches: List<DeliveryBatch>,
     diagnostics: String,
-    viewModel: OrdersViewModel,
     navController: NavController,
 ) {
     LazyColumn(
@@ -100,8 +98,6 @@ fun OrdersContent(
                 BatchCard(
                     batch = batch,
                     onOpenDetails = { navController.navigate(Screen.BatchDetail.createRoute(batch.batchId)) },
-                    onAcceptBatch = {},
-                    showAcceptButton = false,
                 )
             }
         }
@@ -114,8 +110,6 @@ fun OrdersContent(
                 BatchCard(
                     batch = batch,
                     onOpenDetails = { navController.navigate(Screen.BatchDetail.createRoute(batch.batchId)) },
-                    onAcceptBatch = { viewModel.acceptBatch(batch.batchId) },
-                    showAcceptButton = true,
                 )
             }
         }
@@ -159,8 +153,6 @@ fun OrdersDiagnosticsCard(diagnostics: String) {
 fun BatchCard(
     batch: DeliveryBatch,
     onOpenDetails: () -> Unit,
-    onAcceptBatch: () -> Unit,
-    showAcceptButton: Boolean,
 ) {
     val (statusBgColor, statusTextColor, statusLabel) = statusBadgeStyle(batch.status)
 
@@ -219,17 +211,6 @@ fun BatchCard(
                 }
             }
 
-            if (showAcceptButton) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onAcceptBatch,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
-                ) {
-                    Text("Accept Batch")
-                }
-            }
         }
     }
 }
