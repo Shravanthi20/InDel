@@ -127,15 +127,19 @@ class OrdersViewModel @Inject constructor(
         }
     }
 
-    fun acceptBatch(batchId: String) {
-        acceptedBatchIds.add(batchId)
-        val current = _uiState.value
-        if (current is OrdersUiState.Success) {
-            _uiState.value = current.copy(
-                availableBatches = current.availableBatches.map { batch ->
-                    if (batch.batchId == batchId) batch.copy(status = "Assigned") else batch
-                }
-            )
+    suspend fun acceptBatch(batch: DeliveryBatch): Boolean {
+        return try {
+            val response = workerRepository.acceptBatch(batch.batchId, batch.orders.map { it.orderId })
+            if (response.isSuccessful) {
+                fetchOrders()
+                true
+            } else {
+                Log.w(TAG, "acceptBatch failed code=${response.code()} batchId=${batch.batchId}")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "acceptBatch exception", e)
+            false
         }
     }
 

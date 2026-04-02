@@ -85,6 +85,9 @@ class WorkerRepository @Inject constructor(
 
     suspend fun getAssignedBatches() = workerApiService.getAssignedBatches()
 
+    suspend fun acceptBatch(batchId: String, orderIds: List<String>) =
+        workerApiService.acceptBatch(batchId, BatchAcceptRequest(orderIds))
+
     suspend fun getOrderDetail(orderId: String) = workerApiService.getOrderDetail(orderId)
 
     suspend fun acceptOrder(orderId: String) = workerApiService.acceptOrder(orderId)

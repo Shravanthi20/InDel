@@ -44,6 +44,7 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1.GET("/worker/orders/assigned", worker.GetAssignedOrders)
 	v1.GET("/worker/batches", worker.GetAvailableBatches)
 	v1.GET("/worker/batches/assigned", worker.GetAssignedBatches)
+	v1.POST("/worker/batches/:batch_id/accept", worker.AcceptBatch)
 	v1.PUT("/worker/orders/:order_id/accept", worker.AcceptOrder)
 	v1.PUT("/worker/orders/:order_id/picked-up", worker.PickedUpOrder)
 	v1.PUT("/worker/orders/:order_id/delivered", worker.DeliverOrder)
