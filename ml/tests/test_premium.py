@@ -10,7 +10,8 @@ from model import PremiumModel
 from shap_explainer import SHAPExplainer
 
 def test_model_loading_and_inference():
-    model_path = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/artifacts/premium_model.joblib'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(script_dir, '../premium/artifacts/premium_model.joblib')
     assert os.path.exists(model_path), "Model artifact must exist. Run train.py first."
     
     model = PremiumModel.load(model_path)
@@ -45,7 +46,8 @@ def test_model_loading_and_inference():
     assert 0 <= risk[0] <= 1
 
 def test_shap_explanation():
-    model_path = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/artifacts/premium_model.joblib'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(script_dir, '../premium/artifacts/premium_model.joblib')
     model = PremiumModel.load(model_path)
     explainer = SHAPExplainer(model)
     

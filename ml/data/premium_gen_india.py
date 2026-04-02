@@ -168,7 +168,8 @@ def generate_india_premium_data(n_samples=30000, seed=42):
     df = pd.DataFrame(data)
     
     # Save to CSV
-    output_path = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/data/premium_training_data_india.csv'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(script_dir, '../premium/data/premium_training_data_india.csv')
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_csv(output_path, index=False)
     

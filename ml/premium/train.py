@@ -6,7 +6,8 @@ import os
 
 def train_model():
     """Train premium pricing and risk models"""
-    data_path = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/data/premium_training_data_india.csv'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(script_dir, 'data/premium_training_data_india.csv')
     if not os.path.exists(data_path):
         print(f"Error: Data file not found at {data_path}")
         return
@@ -37,7 +38,7 @@ def train_model():
     print(f"Risk Multiplier MAE: {mae_risk:.4f}")
     
     # Save artifacts
-    artifacts_path = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/artifacts/premium_model.joblib'
+    artifacts_path = os.path.join(script_dir, 'artifacts/premium_model.joblib')
     model.save(artifacts_path)
     print(f"Training complete. Artifacts saved to {artifacts_path}")
 

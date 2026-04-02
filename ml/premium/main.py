@@ -68,7 +68,8 @@ class BatchPremiumResponse(BaseModel):
 
 model = None
 explainer = None
-MODEL_PATH = 'c:/Users/ritha/OneDrive/Documents/Amrita/Devtrails/InDel/ml/premium/artifacts/premium_model.joblib'
+script_dir = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(script_dir, 'artifacts/premium_model.joblib')
 MODEL_VERSION = "premium_xgb_v1"
 
 def load_model_instance():
