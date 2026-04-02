@@ -1,9 +1,18 @@
 -- migrations/000005_create_orders_earnings.up.sql
+
 CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
     worker_id INTEGER NOT NULL REFERENCES users(id),
     zone_id INTEGER NOT NULL REFERENCES zones(id),
     order_value DECIMAL(8, 2) NOT NULL,
+    from_city VARCHAR(100),
+    to_city VARCHAR(100),
+    from_state VARCHAR(100),
+    to_state VARCHAR(100),
+    from_lat DECIMAL(10, 6),
+    from_lon DECIMAL(10, 6),
+    to_lat DECIMAL(10, 6),
+    to_lon DECIMAL(10, 6),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
