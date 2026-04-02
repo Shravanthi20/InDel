@@ -10,6 +10,7 @@ func SetupPlatformRoutes(router *gin.Engine) {
 	v1 := router.Group("/api/v1/platform")
 	v1.GET("/workers", platform.GetWorkers)
 	v1.GET("/zones", platform.GetZones)
+	v1.GET("/zone-paths", platform.GetZonePaths)
 	v1.POST("/webhooks/order/assigned", platform.OrderAssignedWebhook)
 	v1.POST("/webhooks/order/completed", platform.OrderCompletedWebhook)
 }

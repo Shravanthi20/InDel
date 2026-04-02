@@ -75,5 +75,8 @@ type Order struct {
 	DestinationNode string // e.g., "Pondicherry"
 	CurrentNode     string // e.g., "Chennai" (updated as order moves)
 	Route           string // e.g., "Tambaram,Chennai,Pondicherry" (comma-separated path)
+	VehicleType     string // e.g., "bike", "van", "truck"
+	VehicleCapacity int    // e.g., 15 (kg)
+	AllowedZones    string // comma-separated zone IDs or names
 	CreatedAt       time.Time
 }

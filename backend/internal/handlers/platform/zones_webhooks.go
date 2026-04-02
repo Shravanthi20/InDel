@@ -9,13 +9,16 @@ import (
 )
 
 type orderAssignedRequest struct {
-	OrderID    string  `json:"order_id"`
-	WorkerID   uint    `json:"worker_id"`
-	ZoneID     uint    `json:"zone_id"`
-	OrderValue float64 `json:"order_value"`
-	PickupArea string  `json:"pickup_area"`
-	DropArea   string  `json:"drop_area"`
-	DistanceKM float64 `json:"distance_km"`
+	OrderID         string  `json:"order_id"`
+	WorkerID        uint    `json:"worker_id"`
+	ZoneID          uint    `json:"zone_id"`
+	OrderValue      float64 `json:"order_value"`
+	PickupArea      string  `json:"pickup_area"`
+	DropArea        string  `json:"drop_area"`
+	DistanceKM      float64 `json:"distance_km"`
+	VehicleType     string  `json:"vehicle_type"`
+	VehicleCapacity int     `json:"vehicle_capacity"`
+	AllowedZones    string  `json:"allowed_zones"`
 }
 
 type orderCompletedRequest struct {
@@ -25,6 +28,20 @@ type orderCompletedRequest struct {
 
 // GetZones returns active zones with risk rating.
 func GetZones(c *gin.Context) {
+	// Static mapping for demo; replace with DB query if areas are in DB
+	var zoneAreas = map[string][]string{
+		"Tambaram":     {"Tambaram", "Velachery", "Pallikaranai"},
+		"Selaiyur":     {"Selaiyur", "Chromepet", "Pallikaranai"},
+		"Pallikaranai": {"Pallikaranai", "Velachery", "Tambaram"},
+		"Chromepet":    {"Chromepet", "Selaiyur", "Tambaram"},
+		"Velachery":    {"Velachery", "Tambaram", "Pallikaranai"},
+		"Medavakkam":   {"Medavakkam", "Velachery", "Pallikaranai"},
+		"Zone-A":       {"Whitefield", "Koramangala", "Indiranagar", "Bangalore City"},
+		"Zone-B":       {"Koramangala", "Indiranagar", "Whitefield", "JP Nagar"},
+		"Zone-C":       {"Bandra", "Andheri", "Dadar", "Marine Drive"},
+		"Zone-D":       {"Connaught Place", "Nehru Place", "Noida", "Gurgaon"},
+	}
+
 	if hasDB() {
 		type row struct {
 			ZoneID      uint    `gorm:"column:zone_id"`
@@ -34,23 +51,22 @@ func GetZones(c *gin.Context) {
 			RiskRating  float64 `gorm:"column:risk_rating"`
 			WorkerCount int64   `gorm:"column:worker_count"`
 		}
-
 		rows := make([]row, 0)
 		_ = platformDB.Raw(`
 			SELECT z.id AS zone_id,
-			       z.name,
-			       z.city,
-			       z.state,
-			       z.risk_rating,
-			       COUNT(wp.worker_id) AS worker_count
+				   z.name,
+				   z.city,
+				   z.state,
+				   z.risk_rating,
+				   COUNT(wp.worker_id) AS worker_count
 			FROM zones z
 			LEFT JOIN worker_profiles wp ON wp.zone_id = z.id
 			GROUP BY z.id, z.name, z.city, z.state, z.risk_rating
 			ORDER BY z.city, z.name
 		`).Scan(&rows).Error
-
 		zones := make([]gin.H, 0, len(rows))
 		for _, r := range rows {
+			areas := zoneAreas[r.Name]
 			zones = append(zones, gin.H{
 				"zone_id":        r.ZoneID,
 				"name":           r.Name,
@@ -58,13 +74,12 @@ func GetZones(c *gin.Context) {
 				"state":          r.State,
 				"risk_rating":    r.RiskRating,
 				"active_workers": r.WorkerCount,
+				"areas":          areas,
 			})
 		}
-
 		c.JSON(200, gin.H{"zones": zones})
 		return
 	}
-
 	c.JSON(200, gin.H{"zones": []gin.H{{
 		"zone_id":        1,
 		"name":           "Tambaram",
@@ -72,6 +87,7 @@ func GetZones(c *gin.Context) {
 		"state":          "Tamil Nadu",
 		"risk_rating":    0.62,
 		"active_workers": 1,
+		"areas":          []string{"Tambaram", "Velachery", "Pallikaranai"},
 	}}})
 }
 
@@ -98,10 +114,10 @@ func OrderAssignedWebhook(c *gin.Context) {
 	if hasDB() {
 		var createdOrderID uint
 		err := platformDB.Raw(
-			`INSERT INTO orders (worker_id, zone_id, order_value, status, pickup_area, drop_area, distance_km, updated_at)
-			 VALUES (?, ?, ?, 'assigned', ?, ?, ?, CURRENT_TIMESTAMP)
+			`INSERT INTO orders (worker_id, zone_id, order_value, status, pickup_area, drop_area, distance_km, vehicle_type, vehicle_capacity, allowed_zones, updated_at)
+			 VALUES (?, ?, ?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 			 RETURNING id`,
-			req.WorkerID, req.ZoneID, req.OrderValue, req.PickupArea, req.DropArea, req.DistanceKM,
+			req.WorkerID, req.ZoneID, req.OrderValue, req.PickupArea, req.DropArea, req.DistanceKM, req.VehicleType, req.VehicleCapacity, req.AllowedZones,
 		).Scan(&createdOrderID).Error
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "order_create_failed"})
