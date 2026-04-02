@@ -1,74 +1,160 @@
 package core
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/Shravanthi20/InDel/backend/internal/apiutil"
+	"github.com/Shravanthi20/InDel/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
-type payoutRequest struct {
-	Amount float64 `json:"amount"`
+type syntheticRequest struct {
+	Seed      int    `json:"seed"`
+	Scenario  string `json:"scenario"`
+	OutputDir string `json:"output_dir"`
 }
 
-// QueueClaimPayout queues payout for a claim via internal API.
-// POST /internal/v1/claims/:claim_id/payout
 func QueueClaimPayout(c *gin.Context) {
 	if !hasDB() {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "db_unavailable"})
+		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")
 		return
 	}
 
-	claimIDParam := strings.TrimSpace(c.Param("claim_id"))
-	claimIDParam = strings.TrimPrefix(claimIDParam, "clm-")
-	claimID, err := strconv.ParseUint(claimIDParam, 10, 64)
+	claimID, err := parseUintParam(c.Param("claim_id"), "clm_")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_claim_id"})
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", "invalid claim id", "claim_id")
 		return
 	}
 
-	var req payoutRequest
-	_ = c.ShouldBindJSON(&req)
-
-	type claimRow struct {
-		WorkerID    uint    `gorm:"column:worker_id"`
-		ClaimAmount float64 `gorm:"column:claim_amount"`
-	}
-	var claim claimRow
-	_ = coreDB.Raw("SELECT worker_id, claim_amount FROM claims WHERE id = ?", claimID).Scan(&claim).Error
-	if claim.WorkerID == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "claim_not_found"})
+	result, err := coreOps.QueueClaimPayout(uint(claimID))
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		field := ""
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+			field = "claim_id"
+		}
+		apiutil.SendError(c, status, code, err.Error(), field)
 		return
 	}
 
-	amount := req.Amount
-	if amount <= 0 {
-		amount = claim.ClaimAmount
+	apiutil.SendSuccess(c, http.StatusAccepted, result)
+}
+
+func RunWeeklyCycle(c *gin.Context) {
+	if !hasDB() {
+		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")
+		return
 	}
 
-	// Queue payout row (idempotent by unique claim_id).
-	_ = coreDB.Exec(`
-		INSERT INTO payouts (claim_id, worker_id, amount, status, razorpay_status)
-		VALUES (?, ?, ?, 'queued', 'queued')
-		ON CONFLICT (claim_id)
-		DO UPDATE SET amount = EXCLUDED.amount, status = 'queued', razorpay_status = 'queued', updated_at = CURRENT_TIMESTAMP
-	`, claimID, claim.WorkerID, amount).Error
+	result, err := coreOps.RunWeeklyCycle(time.Now().UTC())
+	if err != nil {
+		apiutil.SendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), "")
+		return
+	}
+	apiutil.SendSuccess(c, http.StatusOK, result)
+}
 
-	_ = coreDB.Exec("UPDATE claims SET status = 'queued_for_payout', updated_at = CURRENT_TIMESTAMP WHERE id = ?", claimID).Error
+func GenerateClaimsForDisruption(c *gin.Context) {
+	if !hasDB() {
+		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")
+		return
+	}
 
-	// Simulate enqueue audit event for payout worker.
-	_ = coreDB.Exec(`
-		INSERT INTO kafka_event_logs (topic, event_type, payload_json)
-		VALUES ('indel.payouts.queued', 'claim_payout_queued', jsonb_build_object('claim_id', ?, 'worker_id', ?, 'amount', ?))
-	`, claimID, claim.WorkerID, amount).Error
+	disruptionID, err := parseUintParam(c.Param("disruption_id"), "dis_")
+	if err != nil {
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", "invalid disruption id", "disruption_id")
+		return
+	}
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"message":   "payout_queued",
-		"claim_id":  fmt.Sprintf("clm-%03d", claimID),
-		"worker_id": claim.WorkerID,
-		"amount":    int(amount),
-		"topic":     "indel.payouts.queued",
-	})
+	result, err := coreOps.GenerateClaimsForDisruption(uint(disruptionID), time.Now().UTC())
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		field := ""
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+			field = "disruption_id"
+		}
+		apiutil.SendError(c, status, code, err.Error(), field)
+		return
+	}
+
+	apiutil.SendSuccess(c, http.StatusOK, result)
+}
+
+func ProcessPayouts(c *gin.Context) {
+	if !hasDB() {
+		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")
+		return
+	}
+
+	result, err := coreOps.ProcessQueuedPayouts(time.Now().UTC())
+	if err != nil {
+		apiutil.SendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), "")
+		return
+	}
+	apiutil.SendSuccess(c, http.StatusOK, result)
+}
+
+func GetPayoutReconciliation(c *gin.Context) {
+	if !hasDB() {
+		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")
+		return
+	}
+
+	from, err := parseDateQuery(c.DefaultQuery("from", time.Now().UTC().AddDate(0, 0, -7).Format("2006-01-02")))
+	if err != nil {
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", "invalid from date", "from")
+		return
+	}
+	to, err := parseDateQuery(c.DefaultQuery("to", time.Now().UTC().Format("2006-01-02")))
+	if err != nil {
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", "invalid to date", "to")
+		return
+	}
+
+	result, err := coreOps.GetPayoutReconciliation(from, to.Add(23*time.Hour+59*time.Minute+59*time.Second))
+	if err != nil {
+		apiutil.SendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), "")
+		return
+	}
+	apiutil.SendSuccess(c, http.StatusOK, result)
+}
+
+func GenerateSyntheticData(c *gin.Context) {
+	if !hasDB() {
+		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")
+		return
+	}
+
+	var req syntheticRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !strings.Contains(err.Error(), "EOF") {
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), "body")
+		return
+	}
+
+	result, err := coreOps.GenerateSyntheticData(services.SyntheticGenerateRequest{Seed: req.Seed, Scenario: req.Scenario, OutputDir: req.OutputDir}, time.Now().UTC())
+	if err != nil {
+		apiutil.SendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), "")
+		return
+	}
+	apiutil.SendSuccess(c, http.StatusOK, result)
+}
+
+func parseUintParam(raw string, prefix string) (uint64, error) {
+	trimmed := strings.TrimSpace(raw)
+	trimmed = strings.TrimPrefix(trimmed, prefix)
+	trimmed = strings.TrimPrefix(trimmed, strings.ReplaceAll(prefix, "_", "-"))
+	return strconv.ParseUint(trimmed, 10, 64)
+}
+
+func parseDateQuery(raw string) (time.Time, error) {
+	return time.Parse("2006-01-02", strings.TrimSpace(raw))
 }

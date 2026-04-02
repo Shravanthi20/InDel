@@ -25,7 +25,10 @@ export default function App() {
           <h1 className="text-3xl font-bold mb-4">InDel Insurer Portal</h1>
           <button 
             className="bg-blue-500 text-white px-6 py-2 rounded"
-            onClick={() => setIsAuthenticated(true)}
+            onClick={() => {
+              localStorage.setItem('token', 'demo-insurer-token')
+              setIsAuthenticated(true)
+            }}
           >
             Login
           </button>
