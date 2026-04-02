@@ -22,6 +22,7 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
+	// AutoMigrate is necessary for tests using in-memory SQLite
 	return db.AutoMigrate(
 		&models.User{},
 		&models.WorkerProfile{},

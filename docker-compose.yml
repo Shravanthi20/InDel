@@ -5,7 +5,7 @@ services:
     image: postgres:15
     environment:
       POSTGRES_USER: indel
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: indel
     ports:
       - "5432:5432"
@@ -42,11 +42,11 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
-      DB_PASSWORD: password
+      DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_NAME: indel
       KAFKA_BROKERS: kafka:9092
     ports:
-      - "${HOST_IP:-192.168.1.6}:8000:8000"
+      - "${HOST_IP}:8000:8000"
     depends_on:
       - postgres
       - kafka
@@ -64,10 +64,10 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
-      DB_PASSWORD: password
+      DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_NAME: indel
     ports:
-      - "${HOST_IP:-192.168.1.6}:8001:8001"
+      - "${HOST_IP}:8001:8001"
     depends_on:
       - core
 
@@ -82,7 +82,7 @@ services:
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
     ports:
-      - "${HOST_IP:-192.168.1.6}:8002:8002"
+      - "${HOST_IP}:8002:8002"
     depends_on:
       - core
 
@@ -97,7 +97,7 @@ services:
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
     ports:
-      - "${HOST_IP:-192.168.1.6}:8003:8003"
+      - "${HOST_IP}:8003:8003"
     depends_on:
       - core
 

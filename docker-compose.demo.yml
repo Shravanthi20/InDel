@@ -5,7 +5,7 @@ services:
     image: postgres:15
     environment:
       POSTGRES_USER: indel
-      POSTGRES_PASSWORD: demo_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-demo_password}
       POSTGRES_DB: indel_demo
     ports:
       - "5432:5432"
@@ -24,7 +24,7 @@ services:
         "-path",
         "/migrations",
         "-database",
-        "postgres://indel:demo_password@postgres:5432/indel_demo?sslmode=disable",
+        "postgres://indel:${POSTGRES_PASSWORD:-demo_password}@postgres:5432/indel_demo?sslmode=disable",
         "up"
       ]
     volumes:
@@ -64,11 +64,11 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
-      DB_PASSWORD: demo_password
+      DB_PASSWORD: ${DB_PASSWORD:-demo_password}
       DB_NAME: indel_demo
       KAFKA_BROKERS: kafka:9092
     ports:
-      - "${HOST_IP:-192.168.1.6}:8000:8000"
+      - "${HOST_IP}:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,10 +90,10 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
-      DB_PASSWORD: demo_password
+      DB_PASSWORD: ${DB_PASSWORD:-demo_password}
       DB_NAME: indel_demo
     ports:
-      - "${HOST_IP:-192.168.1.6}:8001:8001"
+      - "${HOST_IP}:8001:8001"
     depends_on:
       core:
         condition: service_started
@@ -108,8 +108,13 @@ services:
       INDEL_ENV: demo
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: indel
+      DB_PASSWORD: ${DB_PASSWORD:-demo_password}
+      DB_NAME: indel_demo
     ports:
-      - "${HOST_IP:-192.168.1.6}:8002:8002"
+      - "${HOST_IP}:8002:8002"
     depends_on:
       core:
         condition: service_started
@@ -124,8 +129,13 @@ services:
       INDEL_ENV: demo
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: indel
+      DB_PASSWORD: ${DB_PASSWORD:-demo_password}
+      DB_NAME: indel_demo
     ports:
-      - "${HOST_IP:-192.168.1.6}:8003:8003"
+      - "${HOST_IP}:8003:8003"
     depends_on:
       core:
         condition: service_started

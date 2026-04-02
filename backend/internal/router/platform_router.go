@@ -12,4 +12,11 @@ func SetupPlatformRoutes(router *gin.Engine) {
 	v1.GET("/zones", platform.GetZones)
 	v1.POST("/webhooks/order/assigned", platform.OrderAssignedWebhook)
 	v1.POST("/webhooks/order/completed", platform.OrderCompletedWebhook)
+	v1.POST("/webhooks/order/cancelled", platform.OrderCancelledWebhook)
+	v1.POST("/webhooks/external-signal", platform.ExternalSignalWebhook)
+	v1.GET("/zones/health", platform.GetZoneHealth)
+	v1.GET("/disruptions", platform.GetDisruptions)
+
+	// Demo endpoint mapped under /demo as per spec, though sometimes requested under /platform
+	router.POST("/api/v1/demo/trigger-disruption", platform.TriggerDemoDisruption)
 }
