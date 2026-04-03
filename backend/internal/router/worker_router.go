@@ -37,10 +37,22 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1.GET("/worker/payouts", worker.GetPayouts)
 
 	v1.GET("/worker/orders", worker.GetOrders)
+	v1.GET("/worker/orders/available", worker.GetAvailableOrders)
 	v1.GET("/worker/orders/assigned", worker.GetAssignedOrders)
+	v1.GET("/worker/orders/:order_id", worker.GetOrderDetail)
 	v1.PUT("/worker/orders/:order_id/accept", worker.AcceptOrder)
 	v1.PUT("/worker/orders/:order_id/picked-up", worker.PickedUpOrder)
 	v1.PUT("/worker/orders/:order_id/delivered", worker.DeliverOrder)
+	v1.POST("/worker/orders/:order_id/code/send", worker.SendCustomerCode)
+
+	v1.POST("/worker/fetch-verification/send-code", worker.SendFetchVerificationCode)
+	v1.POST("/worker/fetch-verification/verify", worker.VerifyFetchVerificationCode)
+	v1.GET("/worker/zone-config", worker.GetZoneConfig)
+
+	v1.GET("/worker/session/:session_id", worker.GetSession)
+	v1.GET("/worker/session/:session_id/deliveries", worker.GetSessionDeliveries)
+	v1.GET("/worker/session/:session_id/fraud-signals", worker.GetSessionFraudSignals)
+	v1.PUT("/worker/session/:session_id/end", worker.EndSession)
 
 	v1.GET("/worker/notifications", worker.GetNotifications)
 	v1.PUT("/worker/notifications/preferences", worker.SetNotificationPreferences)
@@ -51,7 +63,9 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1.POST("/demo/settle-earnings", worker.DemoSettleEarnings)
 	v1.POST("/demo/reset-zone", worker.DemoResetZone)
 	v1.POST("/demo/reset", worker.DemoReset)
+	v1.POST("/demo/assign-orders", worker.DemoAssignOrders)
 	v1.POST("/demo/simulate-orders", worker.DemoSimulateOrders)
+	v1.POST("/demo/simulate-deliveries", worker.DemoSimulateDeliveries)
 	v1.POST("/demo/orders/publisher/initiate", worker.InitiateOrderPublisher)
 	v1.POST("/demo/orders/publisher/ack", worker.AckOrderPublisher)
 	v1.GET("/demo/orders/publisher/status", worker.GetOrderPublisherStatus)

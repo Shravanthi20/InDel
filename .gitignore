@@ -4,6 +4,9 @@
 .env
 .env.local
 .env.*.local
+insurer-dashboard/.env
+platform-dashboard/.env
+worker-app/.env
 
 # Go
 /bin
@@ -110,3 +113,12 @@ temp.txt
 zones.txt
 *.tmp
 *.bak
+
+# Frontend / package managers
+node_modules/
+insurer-dashboard/node_modules/
+platform-dashboard/node_modules/
+
+# Local mobile secrets / generated app config
+worker-app/app/google-services.json
+worker-app/ios/Runner/GoogleService-Info.plist

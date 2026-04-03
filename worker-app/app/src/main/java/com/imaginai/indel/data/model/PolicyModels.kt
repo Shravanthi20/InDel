@@ -49,5 +49,7 @@ data class PayPremiumResponse(
 
 data class SimpleMessageResponse(
     @SerializedName("message") val message: String,
-    @SerializedName("policy") val policy: PolicyStatus
+    @SerializedName("policy") val policy: PolicyStatus? = null,
+    @SerializedName("registered") val registered: Boolean? = null,
+    @SerializedName("status") val status: String? = null
 )
