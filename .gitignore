@@ -19,6 +19,7 @@
 *~
 vendor/
 .gocache/
+.gocache/
 
 # Python
 __pycache__/
@@ -103,3 +104,9 @@ postgres_data/
 # Misc
 .cache/
 .tmp/
+
+# Additional unnecessary files
+temp.txt
+zones.txt
+*.tmp
+*.bak
