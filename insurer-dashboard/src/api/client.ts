@@ -1,33 +1,57 @@
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_INSURER_API_URL || 'http://localhost:8002'
+const INSURER_API_URL = import.meta.env.VITE_INSURER_API_URL || 'http://localhost:8002'
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8000'
 
-const client = axios.create({
-  baseURL: API_URL,
+const insurerClient = axios.create({
+  baseURL: INSURER_API_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+const coreClient = axios.create({
+  baseURL: CORE_API_URL,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
 // Add JWT token to requests
-client.interceptors.request.use((config) => {
+const attachAuthToken = (config: any) => {
   const token = localStorage.getItem('token')
-  if (token) {
+  if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
-})
+}
+
+insurerClient.interceptors.request.use(attachAuthToken)
+coreClient.interceptors.request.use(attachAuthToken)
 
 // Handle token expiration
-client.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/'
-    }
-    return Promise.reject(error)
+const handleUnauthorized = (
+  response: any
+) => response
+
+const rejectUnauthorized = (error: any) => {
+  if (error.response?.status === 401) {
+    localStorage.removeItem('token')
+    window.location.href = '/'
   }
+  return Promise.reject(error)
+}
+
+insurerClient.interceptors.response.use(
+  handleUnauthorized,
+  rejectUnauthorized
 )
 
-export default client
+coreClient.interceptors.response.use(
+  handleUnauthorized,
+  rejectUnauthorized
+)
+
+export { coreClient }
+
+export default insurerClient
