@@ -81,6 +81,12 @@ services:
       INDEL_ENV: production
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: indel
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: indel
+      KAFKA_BROKERS: kafka:9092
     ports:
       - "${HOST_IP}:8002:8002"
     depends_on:
