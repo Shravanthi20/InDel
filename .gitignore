@@ -18,6 +18,7 @@
 *.swo
 *~
 vendor/
+.gocache/
 
 # Python
 __pycache__/
@@ -44,9 +45,21 @@ wheels/
 venv/
 ENV/
 
-# Node
-node_modules/
-npm-debug.log*
+# Logs
+*.log
+logs/
+
+# Temp files
+temp.txt
+zones.txt
+
+# Gradle
+.gradle/
+build/
+
+# Additional
+*.tmp
+*.bak
 yarn-debug.log*
 yarn-error.log*
 .next/
