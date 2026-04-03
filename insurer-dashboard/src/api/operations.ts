@@ -13,6 +13,9 @@ export const runWeeklyCycle = () => client.post('/api/v1/internal/policy/weekly-
 export const generateClaimsForDisruption = (disruptionId: string) =>
   client.post(`/api/v1/internal/claims/generate-for-disruption/${disruptionId}`)
 
+export const autoProcessDisruption = (disruptionId: string) =>
+  client.post(`/api/v1/internal/claims/auto-process/${disruptionId}`)
+
 export const queuePayoutForClaim = (claimId: string) =>
   client.post(`/api/v1/internal/payouts/queue/${claimId}`)
 
