@@ -24,6 +24,7 @@ class NotificationsViewModel @Inject constructor(
 
     init {
         loadNotifications()
+        startAutoRefresh()
     }
 
     fun loadNotifications() {
@@ -52,6 +53,15 @@ class NotificationsViewModel @Inject constructor(
             }
         } catch (e: Exception) {
             _uiState.value = NotificationsUiState.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    private fun startAutoRefresh() {
+        viewModelScope.launch {
+            while (true) {
+                delay(10000)
+                fetchNotifications()
+            }
         }
     }
 }

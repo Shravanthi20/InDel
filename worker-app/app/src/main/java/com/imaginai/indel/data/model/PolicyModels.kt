@@ -44,7 +44,10 @@ data class PayPremiumResponse(
     @SerializedName("message") val message: String,
     @SerializedName("amount") val amount: Int,
     @SerializedName("currency") val currency: String,
-    @SerializedName("payment_id") val paymentId: String
+    @SerializedName("payment_id") val paymentId: String,
+    @SerializedName("checkout_id") val checkoutId: String? = null,
+    @SerializedName("payment_status") val paymentStatus: String? = null,
+    @SerializedName("checkout_mode") val checkoutMode: String? = null
 )
 
 data class SimpleMessageResponse(

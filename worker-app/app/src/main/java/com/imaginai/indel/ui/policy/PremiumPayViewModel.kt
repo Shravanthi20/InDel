@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.repository.PolicyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -28,13 +29,32 @@ class PremiumPayViewModel @Inject constructor(
             try {
                 val response = policyRepository.payPremium(_amount.value.toIntOrNull())
                 if (response.isSuccessful) {
-                    _uiState.value = PayUiState.Success(response.body()?.message ?: "Payment Successful")
+                    val body = response.body()
+                    val summary = buildString {
+                        append(body?.message ?: "Payment Successful")
+                        if (body?.paymentId != null) {
+                            append(" | ")
+                            append(body.paymentId)
+                        }
+                        if (body?.paymentStatus != null) {
+                            append(" | ")
+                            append(body.paymentStatus)
+                        }
+                    }
+                    _uiState.value = PayUiState.Success(summary)
                 } else {
                     _uiState.value = PayUiState.Error("Payment failed")
                 }
             } catch (e: Exception) {
                 _uiState.value = PayUiState.Error(e.message ?: "Unknown error")
             }
+        }
+    }
+
+    fun reset() {
+        viewModelScope.launch {
+            delay(50)
+            _uiState.value = PayUiState.Idle
         }
     }
 }

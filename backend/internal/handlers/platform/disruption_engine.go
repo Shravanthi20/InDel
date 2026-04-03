@@ -431,11 +431,11 @@ func TriggerDemoDisruption(c *gin.Context) {
 	state.LastResetAt = time.Now()
 	
 	if req.ForceOrderDrop {
-		// Mock a 50% order drop
+		// Force the engine into a post-warm-up demand crash so the UI can
+		// move from healthy -> anomalous -> disrupted when external signals land.
 		state.BaselineOrders = 100.0
-		state.BaselineOrders = 20.0
 		state.RecentOrders = []time.Time{}
-		state.TotalOrdersEver = 0
+		state.TotalOrdersEver = 32
 		state.LastResetAt = time.Now()
 	} else {
 		// Normal volume reset
@@ -457,8 +457,10 @@ func TriggerDemoDisruption(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"message": "Demo disruption triggered evaluated",
-			"zone_id": req.ZoneID,
+			"message":          "demo_disruption_evaluated",
+			"zone_id":          req.ZoneID,
+			"force_order_drop": req.ForceOrderDrop,
+			"external_signal":  req.ExternalSignal,
 		},
 		"meta": gin.H{"timestamp": time.Now().UTC().Format(time.RFC3339)},
 	})

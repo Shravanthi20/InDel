@@ -24,6 +24,7 @@ class PolicyViewModel @Inject constructor(
 
     init {
         loadPolicy()
+        startAutoRefresh()
     }
 
     fun loadPolicy() {
@@ -78,6 +79,15 @@ class PolicyViewModel @Inject constructor(
             _uiState.value = PolicyUiState.Loading
             policyRepository.cancelPolicy()
             fetchPolicy()
+        }
+    }
+
+    private fun startAutoRefresh() {
+        viewModelScope.launch {
+            while (true) {
+                delay(15000)
+                fetchPolicy()
+            }
         }
     }
 }

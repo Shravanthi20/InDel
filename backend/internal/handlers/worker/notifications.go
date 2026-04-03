@@ -14,6 +14,8 @@ func notificationTitle(kind string) string {
 		return "Payout credited"
 	case "order_delivered":
 		return "Order delivered"
+	case "premium_due":
+		return "Premium updated"
 	default:
 		return "Notification"
 	}

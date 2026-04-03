@@ -100,7 +100,7 @@ interface WorkerApiService {
     suspend fun enrollPolicy(): Response<EnrollResponse>
 
     @POST("api/v1/worker/policy/premium/pay")
-    suspend fun payPremium(@Body request: PayPremiumRequest): Response<SimpleMessageResponse>
+    suspend fun payPremium(@Body request: PayPremiumRequest): Response<PayPremiumResponse>
 
     @PUT("api/v1/worker/policy/pause")
     suspend fun pausePolicy(): Response<SimpleMessageResponse>

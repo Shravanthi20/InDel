@@ -128,6 +128,20 @@ export default function Disruptions() {
     }
   }
 
+  const handleOrderDrop = async (zone_id: number) => {
+    if (loadingAction) return
+    setLoadingAction(true)
+    setActionStatus('Simulating zone-wide demand collapse...')
+    try {
+      await postTriggerDemo({ zone_id, force_order_drop: true, external_signal: '' })
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      await fetchData()
+    } finally {
+      setActionStatus('')
+      setLoadingAction(false)
+    }
+  }
+
   const handleReset = async (zone_id: number) => {
     setLoadingAction(true)
     setActionStatus("Resetting engine & syncing simulator...")
@@ -443,6 +457,14 @@ export default function Disruptions() {
                       It is currently listening directly to the platform's live Webhook stream.
                    </p>
                 </div>
+                <button
+                  disabled={loadingAction}
+                  onClick={() => handleOrderDrop(1)}
+                  className="w-full rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-left transition hover:bg-amber-500/20 disabled:opacity-60"
+                >
+                  <div className="text-[10px] font-black uppercase tracking-widest text-amber-300">Simulate Order Drop</div>
+                  <div className="mt-1 text-xs text-slate-300">Collapse demand in Zone 1 so the engine can progress into anomalous or disrupted state.</div>
+                </button>
               </div>
 
               <div className="space-y-4 pt-4 border-t border-white/5">

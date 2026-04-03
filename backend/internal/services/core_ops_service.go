@@ -175,7 +175,11 @@ func (s *CoreOpsService) RunWeeklyCycle(now time.Time) (*WeeklyCycleResult, erro
 			return nil, err
 		}
 
+		quote, quoteErr := QuotePremium(s.DB, worker.WorkerID, now.UTC())
 		premium := s.computePremium(worker.BaselineAmount, worker.RiskRating, worker.VehicleType)
+		if quoteErr == nil && quote != nil && quote.WeeklyPremiumINR > 0 {
+			premium = quote.WeeklyPremiumINR
+		}
 		payment := models.PremiumPayment{WorkerID: worker.WorkerID, PolicyCycleID: cycle.ID, Amount: premium, Status: "computed", IdempotencyKey: idempotencyKey, Date: weekStart}
 		if err := s.DB.Create(&payment).Error; err != nil {
 			failures++

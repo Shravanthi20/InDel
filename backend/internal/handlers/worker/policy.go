@@ -2,8 +2,10 @@ package worker
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
+	"github.com/Shravanthi20/InDel/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,18 +22,37 @@ func GetPolicy(c *gin.Context) {
 			var p models.Policy
 			err := workerDB.Where("worker_id = ?", workerIDUint).Order("id DESC").First(&p).Error
 			if err == nil {
+				quote, _ := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC())
+				premiumAmount := int(p.PremiumAmount)
+				breakdown := []gin.H{
+					{"feature": "rain_risk", "impact": 0.42},
+					{"feature": "order_drop_volatility", "impact": 0.31},
+					{"feature": "historical_disruptions", "impact": 0.27},
+				}
+				source := "stored_policy"
+				riskScore := 0.0
+				modelVersion := "fallback_rule_v2"
+				if quote != nil {
+					premiumAmount = int(quote.WeeklyPremiumINR)
+					source = quote.Source
+					riskScore = quote.RiskScore
+					modelVersion = quote.ModelVersion
+					breakdown = make([]gin.H, 0, len(quote.Explainability))
+					for _, item := range quote.Explainability {
+						breakdown = append(breakdown, gin.H{"feature": item.Feature, "impact": item.Impact})
+					}
+				}
 				policy := gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", p.ID),
 					"status":             p.Status,
-					"weekly_premium_inr": int(p.PremiumAmount),
+					"weekly_premium_inr": premiumAmount,
 					"coverage_ratio":     0.8,
 					"zone":               "Tambaram, Chennai",
 					"next_due_date":      "2026-03-30",
-					"shap_breakdown": []gin.H{
-						{"feature": "rain_risk", "impact": 0.42},
-						{"feature": "order_drop_volatility", "impact": 0.31},
-						{"feature": "historical_disruptions", "impact": 0.27},
-					},
+					"risk_score":         riskScore,
+					"pricing_source":     source,
+					"model_version":      modelVersion,
+					"shap_breakdown":     breakdown,
 				}
 				c.JSON(200, gin.H{"policy": policy})
 				return
@@ -55,7 +76,11 @@ func EnrollPolicy(c *gin.Context) {
 
 	if hasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
-			policy := models.Policy{WorkerID: workerIDUint, Status: "active", PremiumAmount: 22}
+			premiumAmount := 22.0
+			if quote, err := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC()); err == nil && quote != nil && quote.WeeklyPremiumINR > 0 {
+				premiumAmount = quote.WeeklyPremiumINR
+			}
+			policy := models.Policy{WorkerID: workerIDUint, Status: "active", PremiumAmount: premiumAmount}
 			if err := workerDB.Create(&policy).Error; err == nil {
 				c.JSON(200, gin.H{"message": "policy_enrolled", "policy": gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", policy.ID),

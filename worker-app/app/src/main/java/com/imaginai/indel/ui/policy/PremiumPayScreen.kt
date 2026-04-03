@@ -67,8 +67,9 @@ fun PremiumPayScreen(
 
             if (uiState is PayUiState.Success) {
                 Text((uiState as PayUiState.Success).message, color = Color(0xFF2E7D32), modifier = Modifier.padding(16.dp))
-                LaunchedEffect(Unit) {
+                LaunchedEffect(uiState) {
                     kotlinx.coroutines.delay(1500)
+                    viewModel.reset()
                     navController.navigateUp()
                 }
             }

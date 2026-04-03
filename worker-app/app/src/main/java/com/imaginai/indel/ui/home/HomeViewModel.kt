@@ -31,6 +31,7 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadDashboard()
+        startAutoRefresh()
     }
 
     fun loadDashboard() {
@@ -80,6 +81,15 @@ class HomeViewModel @Inject constructor(
     fun toggleOnlineStatus(online: Boolean) {
         _isOnline.value = online
         // In a real app, you'd call an API here: workerRepository.updateStatus(online)
+    }
+
+    private fun startAutoRefresh() {
+        viewModelScope.launch {
+            while (true) {
+                delay(12000)
+                fetchData()
+            }
+        }
     }
 }
 
