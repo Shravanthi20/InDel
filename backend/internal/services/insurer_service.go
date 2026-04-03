@@ -15,6 +15,20 @@ type InsurerService struct {
 	KafkaProducer *kafka.Producer
 }
 
+type MaintenanceCheckItem struct {
+	ID           uint      `json:"id"`
+	ClaimID      uint      `json:"claim_id"`
+	WorkerID     uint      `json:"worker_id"`
+	ZoneName     string    `json:"zone_name"`
+	City         string    `json:"city"`
+	Status       string    `json:"status"`
+	FraudVerdict string    `json:"fraud_verdict"`
+	ClaimAmount  float64   `json:"claim_amount"`
+	InitiatedAt  time.Time `json:"initiated_at"`
+	ResponseAt   *string   `json:"response_at,omitempty"`
+	Findings     string    `json:"findings"`
+}
+
 func NewInsurerService(db *gorm.DB, kp *kafka.Producer) *InsurerService {
 	return &InsurerService{DB: db, KafkaProducer: kp}
 }
@@ -347,4 +361,116 @@ func (s *InsurerService) GetFraudQueue(offset, limit int) ([]models.FraudQueueIt
 	}
 
 	return results, total, nil
+}
+
+func (s *InsurerService) GetMaintenanceChecks(offset, limit int) ([]MaintenanceCheckItem, int64, error) {
+	if s.DB == nil {
+		now := time.Now().UTC()
+		return []MaintenanceCheckItem{{
+			ID:           1,
+			ClaimID:      1,
+			WorkerID:     1,
+			ZoneName:     "Tambaram",
+			City:         "Chennai",
+			Status:       "manual_review",
+			FraudVerdict: "pending",
+			ClaimAmount:  696,
+			InitiatedAt:  now.Add(-2 * time.Hour),
+			Findings:     "Awaiting reviewer response.",
+		}}, 1, nil
+	}
+
+	type row struct {
+		ID           uint    `gorm:"column:id"`
+		ClaimID      uint    `gorm:"column:claim_id"`
+		WorkerID     uint    `gorm:"column:worker_id"`
+		ZoneName     string  `gorm:"column:zone_name"`
+		City         string  `gorm:"column:city"`
+		Status       string  `gorm:"column:status"`
+		FraudVerdict string  `gorm:"column:fraud_verdict"`
+		ClaimAmount  float64 `gorm:"column:claim_amount"`
+		InitiatedAt  string  `gorm:"column:initiated_at"`
+		ResponseAt   string  `gorm:"column:response_at"`
+		Findings     string  `gorm:"column:findings"`
+	}
+
+	var rows []row
+	var total int64
+	_ = s.DB.Table("maintenance_check mc").
+		Joins("JOIN claims c ON c.id = mc.claim_id").
+		Count(&total).Error
+
+	err := s.DB.Table("maintenance_check mc").
+		Select(`
+			mc.id,
+			mc.claim_id,
+			c.worker_id,
+			COALESCE(z.name, '') AS zone_name,
+			COALESCE(z.city, '') AS city,
+			COALESCE(c.status, 'pending') AS status,
+			COALESCE(c.fraud_verdict, 'pending') AS fraud_verdict,
+			COALESCE(c.claim_amount, 0) AS claim_amount,
+			CAST(mc.initiated_date AS text) AS initiated_at,
+			COALESCE(CAST(mc.response_date AS text), '') AS response_at,
+			COALESCE(mc.findings, '') AS findings
+		`).
+		Joins("JOIN claims c ON c.id = mc.claim_id").
+		Joins("LEFT JOIN disruptions d ON d.id = c.disruption_id").
+		Joins("LEFT JOIN zones z ON z.id = d.zone_id").
+		Order("mc.initiated_date DESC, mc.id DESC").
+		Offset(offset).
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	items := make([]MaintenanceCheckItem, 0, len(rows))
+	for _, row := range rows {
+		initiatedAt, _ := time.Parse(time.RFC3339Nano, row.InitiatedAt)
+		if initiatedAt.IsZero() {
+			initiatedAt, _ = time.Parse("2006-01-02 15:04:05.999999999-07:00", row.InitiatedAt)
+		}
+		var responseAt *string
+		if row.ResponseAt != "" {
+			resp := row.ResponseAt
+			responseAt = &resp
+		}
+		items = append(items, MaintenanceCheckItem{
+			ID:           row.ID,
+			ClaimID:      row.ClaimID,
+			WorkerID:     row.WorkerID,
+			ZoneName:     row.ZoneName,
+			City:         row.City,
+			Status:       row.Status,
+			FraudVerdict: row.FraudVerdict,
+			ClaimAmount:  row.ClaimAmount,
+			InitiatedAt:  initiatedAt,
+			ResponseAt:   responseAt,
+			Findings:     row.Findings,
+		})
+	}
+
+	return items, total, nil
+}
+
+func (s *InsurerService) RespondToMaintenanceCheck(checkID string, findings string) error {
+	if s.DB == nil {
+		return nil
+	}
+
+	return s.DB.Transaction(func(tx *gorm.DB) error {
+		now := time.Now().UTC()
+		res := tx.Exec(
+			"UPDATE maintenance_check SET findings = ?, response_date = ? WHERE id = ?",
+			findings, now, checkID,
+		)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return fmt.Errorf("maintenance check not found")
+		}
+		return nil
+	})
 }

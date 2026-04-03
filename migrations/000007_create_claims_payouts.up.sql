@@ -18,11 +18,13 @@ CREATE INDEX idx_claims_fraud_verdict ON claims(fraud_verdict);
 CREATE TABLE claim_fraud_scores (
     id SERIAL PRIMARY KEY,
     claim_id INTEGER NOT NULL UNIQUE REFERENCES claims(id),
+    score DECIMAL(5, 3),
     isolation_forest_score DECIMAL(5, 3),
     dbscan_score DECIMAL(5, 3),
     rule_violations JSONB,
     final_verdict VARCHAR(50) NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE maintenance_check (

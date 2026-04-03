@@ -1,12 +1,29 @@
 {
-  "type": "service_account",
-  "project_id": "indel-demo",
-  "private_key_id": "key123",
-  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase@indel-demo.iam.gserviceaccount.com",
-  "client_id": "123456789",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase%40indel-demo.iam.gserviceaccount.com"
+  "project_info": {
+    "project_number": "688489046232",
+    "project_id": "indel-1801e",
+    "storage_bucket": "indel-1801e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:688489046232:android:ac0daa72d82676f79ab7ad",
+        "android_client_info": {
+          "package_name": "com.imaginai.indel"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYKhxbA7dvwiFtB2aLCphqOxTVHLTAKXg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
 }
