@@ -261,6 +261,24 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 
 	if err := platformDB.Create(&disruption).Error; err != nil {
 		log.Printf("Failed to create disruption: %v", err)
+		return
+	}
+
+	if platformCoreOps != nil {
+		if result, err := platformCoreOps.AutoProcessDisruption(disruption.ID, now.UTC()); err != nil {
+			log.Printf("Failed to auto-process disruption %d: %v", disruption.ID, err)
+		} else {
+			log.Printf("[AUTOMATION] disruption=%s notified=%d claims=%d queued=%d processed=%d succeeded=%d failed=%d status=%s",
+				result.DisruptionID,
+				result.WorkersNotified,
+				result.ClaimsGenerated,
+				result.PayoutsQueued,
+				result.PayoutsProcessed,
+				result.PayoutsSucceeded,
+				result.PayoutsFailed,
+				result.Status,
+			)
+		}
 	}
 }
 
@@ -309,9 +327,31 @@ func GetDisruptions(c *gin.Context) {
 		return
 	}
 
-	var records []models.Disruption
+	type disruptionRow struct {
+		models.Disruption
+		ClaimsGenerated   int64   `gorm:"column:claims_generated"`
+		ClaimsInReview    int64   `gorm:"column:claims_in_review"`
+		PayoutsProcessed  int64   `gorm:"column:payouts_processed"`
+		PayoutAmountTotal float64 `gorm:"column:payout_amount_total"`
+	}
+
+	var records []disruptionRow
 	oneHourAgo := time.Now().Add(-1 * time.Hour)
-	_ = platformDB.Where("created_at > ?", oneHourAgo).Order("created_at desc").Limit(20).Find(&records).Error
+	_ = platformDB.Table("disruptions d").
+		Select(`
+			d.*,
+			COUNT(DISTINCT c.id) AS claims_generated,
+			COUNT(DISTINCT CASE WHEN c.status = 'manual_review' THEN c.id END) AS claims_in_review,
+			COUNT(DISTINCT CASE WHEN p.status IN ('processed', 'credited', 'completed') THEN p.id END) AS payouts_processed,
+			COALESCE(SUM(CASE WHEN p.status IN ('processed', 'credited', 'completed') THEN p.amount ELSE 0 END), 0) AS payout_amount_total
+		`).
+		Joins("LEFT JOIN claims c ON c.disruption_id = d.id").
+		Joins("LEFT JOIN payouts p ON p.claim_id = c.id").
+		Where("d.created_at > ?", oneHourAgo).
+		Group("d.id").
+		Order("d.created_at desc").
+		Limit(20).
+		Scan(&records).Error
 
 	results := make([]map[string]interface{}, 0, len(records))
 	for _, r := range records {
@@ -345,6 +385,22 @@ func GetDisruptions(c *gin.Context) {
 			"severity":      strings.ToLower(r.Severity),
 			"confidence":    officialConfidence,
 			"status":        "confirmed",
+			"claims_generated": r.ClaimsGenerated,
+			"claims_in_review": r.ClaimsInReview,
+			"payouts_processed": r.PayoutsProcessed,
+			"payout_amount_total": r.PayoutAmountTotal,
+			"automation_status": func() string {
+				switch {
+				case r.ClaimsInReview > 0:
+					return "manual_review"
+				case r.PayoutsProcessed > 0:
+					return "paid"
+				case r.ClaimsGenerated > 0:
+					return "queued"
+				default:
+					return "detected"
+				}
+			}(),
 			"signals":       signalsArr,
 			"started_at":    r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		})

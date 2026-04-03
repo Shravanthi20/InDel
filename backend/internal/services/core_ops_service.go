@@ -39,6 +39,21 @@ type GeneratedClaimsResult struct {
 	ClaimsGenerated int    `json:"claims_generated"`
 	ClaimsSkipped   int    `json:"claims_skipped"`
 	Status          string `json:"status"`
+	GeneratedClaimIDs []uint `json:"-"`
+}
+
+type AutoProcessDisruptionResult struct {
+	DisruptionID        string `json:"disruption_id"`
+	WorkersNotified     int    `json:"workers_notified"`
+	WorkersChecked      int    `json:"workers_checked"`
+	ClaimsGenerated     int    `json:"claims_generated"`
+	ClaimsSkipped       int    `json:"claims_skipped"`
+	PayoutsQueued       int    `json:"payouts_queued"`
+	PayoutsProcessed    int    `json:"payouts_processed"`
+	PayoutsSucceeded    int    `json:"payouts_succeeded"`
+	PayoutsFailed       int    `json:"payouts_failed"`
+	ManualReviewClaims  int    `json:"manual_review_claims"`
+	Status              string `json:"status"`
 }
 
 type PayoutResult struct {
@@ -193,6 +208,10 @@ func (s *CoreOpsService) RunWeeklyCycle(now time.Time) (*WeeklyCycleResult, erro
 }
 
 func (s *CoreOpsService) GenerateClaimsForDisruption(disruptionID uint, now time.Time) (*GeneratedClaimsResult, error) {
+	return s.generateClaimsForDisruption(disruptionID, now)
+}
+
+func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time.Time) (*GeneratedClaimsResult, error) {
 	if s.DB == nil {
 		return nil, fmt.Errorf("db unavailable")
 	}
@@ -225,6 +244,7 @@ func (s *CoreOpsService) GenerateClaimsForDisruption(disruptionID uint, now time
 
 	generated := 0
 	skipped := 0
+	generatedClaimIDs := make([]uint, 0)
 
 	for _, worker := range workers {
 		if worker.BaselineAmount <= 0 {
@@ -247,12 +267,14 @@ func (s *CoreOpsService) GenerateClaimsForDisruption(disruptionID uint, now time
 			continue
 		}
 
-		status := "pending"
+		status := "approved"
+		fraudVerdict := "clear"
 		if loss > 1200 {
 			status = "manual_review"
+			fraudVerdict = "review"
 		}
 
-		claim := models.Claim{DisruptionID: disruptionID, WorkerID: worker.WorkerID, ClaimAmount: round2(loss * 0.85), Status: status, FraudVerdict: "pending", CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
+		claim := models.Claim{DisruptionID: disruptionID, WorkerID: worker.WorkerID, ClaimAmount: round2(loss * 0.85), Status: status, FraudVerdict: fraudVerdict, CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
 		if err := s.DB.Create(&claim).Error; err != nil {
 			return nil, err
 		}
@@ -266,13 +288,88 @@ func (s *CoreOpsService) GenerateClaimsForDisruption(disruptionID uint, now time
 			return nil, err
 		}
 
-		payload, _ := json.Marshal(map[string]interface{}{"event_id": fmt.Sprintf("evt_claim_%d", claim.ID), "event_type": "claim.generated", "occurred_at": now.UTC().Format(time.RFC3339), "producer": "core-backend", "payload": map[string]interface{}{"claim_id": claim.ID, "disruption_id": disruptionID, "worker_id": worker.WorkerID, "amount": claim.ClaimAmount}})
+		payload, _ := json.Marshal(map[string]interface{}{"event_id": fmt.Sprintf("evt_claim_%d", claim.ID), "event_type": "claim.generated", "occurred_at": now.UTC().Format(time.RFC3339), "producer": "core-backend", "payload": map[string]interface{}{"claim_id": claim.ID, "disruption_id": disruptionID, "worker_id": worker.WorkerID, "amount": claim.ClaimAmount, "status": claim.Status}})
 		_ = s.DB.Create(&models.KafkaEventLog{Topic: "indel.claims.generated", EventType: "claim.generated", PayloadJSON: string(payload)}).Error
 
 		generated++
+		generatedClaimIDs = append(generatedClaimIDs, claim.ID)
 	}
 
-	return &GeneratedClaimsResult{DisruptionID: fmt.Sprintf("dis_%d", disruptionID), WorkersChecked: len(workers), ClaimsGenerated: generated, ClaimsSkipped: skipped, Status: "completed"}, nil
+	return &GeneratedClaimsResult{DisruptionID: fmt.Sprintf("dis_%d", disruptionID), WorkersChecked: len(workers), ClaimsGenerated: generated, ClaimsSkipped: skipped, Status: "completed", GeneratedClaimIDs: generatedClaimIDs}, nil
+}
+
+func (s *CoreOpsService) AutoProcessDisruption(disruptionID uint, now time.Time) (*AutoProcessDisruptionResult, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("db unavailable")
+	}
+
+	var disruption models.Disruption
+	if err := s.DB.First(&disruption, disruptionID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("disruption not found")
+		}
+		return nil, err
+	}
+
+	notified, err := s.notifyWorkersForDisruption(disruption, now)
+	if err != nil {
+		return nil, err
+	}
+
+	claimsResult, err := s.generateClaimsForDisruption(disruptionID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	targetClaims, err := s.loadApprovedClaimsNeedingPayout(disruptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	queued := 0
+	for _, claim := range targetClaims {
+		result, err := s.QueueClaimPayout(claim.ID)
+		if err != nil {
+			return nil, err
+		}
+		if result.Status == "queued" {
+			queued++
+		}
+	}
+
+	targetPayoutIDs, err := s.loadProcessablePayoutIDsForDisruption(disruptionID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	processResult, err := s.processPayoutsByID(targetPayoutIDs, now)
+	if err != nil {
+		return nil, err
+	}
+
+	var manualReviewClaims int64
+	if err := s.DB.Model(&models.Claim{}).Where("disruption_id = ? AND status = ?", disruptionID, "manual_review").Count(&manualReviewClaims).Error; err != nil {
+		return nil, err
+	}
+
+	status := "completed"
+	if processResult.Failed > 0 {
+		status = "partial_failure"
+	}
+
+	return &AutoProcessDisruptionResult{
+		DisruptionID:       fmt.Sprintf("dis_%d", disruptionID),
+		WorkersNotified:    notified,
+		WorkersChecked:     claimsResult.WorkersChecked,
+		ClaimsGenerated:    claimsResult.ClaimsGenerated,
+		ClaimsSkipped:      claimsResult.ClaimsSkipped,
+		PayoutsQueued:      queued,
+		PayoutsProcessed:   processResult.Processed,
+		PayoutsSucceeded:   processResult.Succeeded,
+		PayoutsFailed:      processResult.Failed,
+		ManualReviewClaims: int(manualReviewClaims),
+		Status:             status,
+	}, nil
 }
 
 func (s *CoreOpsService) QueueClaimPayout(claimID uint) (*PayoutResult, error) {
@@ -288,15 +385,25 @@ func (s *CoreOpsService) QueueClaimPayout(claimID uint) (*PayoutResult, error) {
 		return nil, err
 	}
 
-	idempotencyKey := fmt.Sprintf("pay_clm_%d", claim.ID)
-	payout := models.Payout{ClaimID: claim.ID, WorkerID: claim.WorkerID, Amount: round2(claim.ClaimAmount), Status: "queued", IdempotencyKey: idempotencyKey, RazorpayStatus: "queued"}
-
-	if err := s.DB.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "claim_id"}}, DoUpdates: clause.Assignments(map[string]interface{}{"amount": payout.Amount, "status": "queued", "idempotency_key": idempotencyKey, "updated_at": time.Now().UTC()})}).Create(&payout).Error; err != nil {
+	var existing models.Payout
+	if err := s.DB.Where("claim_id = ?", claim.ID).First(&existing).Error; err == nil {
+		return &PayoutResult{
+			PayoutID:       fmt.Sprintf("pay_%d", existing.ID),
+			ClaimID:        fmt.Sprintf("clm_%d", existing.ClaimID),
+			WorkerID:       fmt.Sprintf("wkr_%d", existing.WorkerID),
+			AmountINR:      existing.Amount,
+			Status:         existing.Status,
+			IdempotencyKey: existing.IdempotencyKey,
+			RetryCount:     existing.RetryCount,
+		}, nil
+	} else if err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
 
-	var persisted models.Payout
-	if err := s.DB.Where("claim_id = ?", claim.ID).First(&persisted).Error; err != nil {
+	idempotencyKey := fmt.Sprintf("pay_clm_%d", claim.ID)
+	payout := models.Payout{ClaimID: claim.ID, WorkerID: claim.WorkerID, Amount: round2(claim.ClaimAmount), Status: "queued", IdempotencyKey: idempotencyKey, RazorpayStatus: "queued"}
+
+	if err := s.DB.Create(&payout).Error; err != nil {
 		return nil, err
 	}
 
@@ -304,10 +411,10 @@ func (s *CoreOpsService) QueueClaimPayout(claimID uint) (*PayoutResult, error) {
 		return nil, err
 	}
 
-	payload, _ := json.Marshal(map[string]interface{}{"event_id": fmt.Sprintf("evt_payout_%d", persisted.ID), "event_type": "payout.queued", "occurred_at": time.Now().UTC().Format(time.RFC3339), "producer": "core-backend", "payload": map[string]interface{}{"claim_id": persisted.ClaimID, "worker_id": persisted.WorkerID, "amount": persisted.Amount}})
+	payload, _ := json.Marshal(map[string]interface{}{"event_id": fmt.Sprintf("evt_payout_%d", payout.ID), "event_type": "payout.queued", "occurred_at": time.Now().UTC().Format(time.RFC3339), "producer": "core-backend", "payload": map[string]interface{}{"claim_id": payout.ClaimID, "worker_id": payout.WorkerID, "amount": payout.Amount}})
 	_ = s.DB.Create(&models.KafkaEventLog{Topic: "indel.payouts.queued", EventType: "payout.queued", PayloadJSON: string(payload)}).Error
 
-	return &PayoutResult{PayoutID: fmt.Sprintf("pay_%d", persisted.ID), ClaimID: fmt.Sprintf("clm_%d", persisted.ClaimID), WorkerID: fmt.Sprintf("wkr_%d", persisted.WorkerID), AmountINR: persisted.Amount, Status: persisted.Status, IdempotencyKey: persisted.IdempotencyKey, RetryCount: persisted.RetryCount}, nil
+	return &PayoutResult{PayoutID: fmt.Sprintf("pay_%d", payout.ID), ClaimID: fmt.Sprintf("clm_%d", payout.ClaimID), WorkerID: fmt.Sprintf("wkr_%d", payout.WorkerID), AmountINR: payout.Amount, Status: payout.Status, IdempotencyKey: payout.IdempotencyKey, RetryCount: payout.RetryCount}, nil
 }
 
 func (s *CoreOpsService) ProcessQueuedPayouts(now time.Time) (*ProcessPayoutsResult, error) {
@@ -315,8 +422,29 @@ func (s *CoreOpsService) ProcessQueuedPayouts(now time.Time) (*ProcessPayoutsRes
 		return nil, fmt.Errorf("db unavailable")
 	}
 
+	var payoutIDs []uint
+	if err := s.DB.Model(&models.Payout{}).
+		Where("status IN ?", []string{"queued", "retry_pending"}).
+		Where("next_retry_at IS NULL OR next_retry_at <= ?", now.UTC()).
+		Order("id ASC").
+		Pluck("id", &payoutIDs).Error; err != nil {
+		return nil, err
+	}
+
+	return s.processPayoutsByID(payoutIDs, now)
+}
+
+func (s *CoreOpsService) processPayoutsByID(payoutIDs []uint, now time.Time) (*ProcessPayoutsResult, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("db unavailable")
+	}
+
+	if len(payoutIDs) == 0 {
+		return &ProcessPayoutsResult{}, nil
+	}
+
 	var payouts []models.Payout
-	if err := s.DB.Where("status IN ?", []string{"queued", "retry_pending"}).Where("next_retry_at IS NULL OR next_retry_at <= ?", now.UTC()).Order("id ASC").Find(&payouts).Error; err != nil {
+	if err := s.DB.Where("id IN ?", payoutIDs).Where("status IN ?", []string{"queued", "retry_pending"}).Where("next_retry_at IS NULL OR next_retry_at <= ?", now.UTC()).Order("id ASC").Find(&payouts).Error; err != nil {
 		return nil, err
 	}
 
@@ -347,6 +475,7 @@ func (s *CoreOpsService) ProcessQueuedPayouts(now time.Time) (*ProcessPayoutsRes
 			payout.RazorpayStatus = "processed"
 			payout.RazorpayID = fmt.Sprintf("rzp_mock_%d", payout.ID)
 			_ = s.DB.Model(&models.Claim{}).Where("id = ?", payout.ClaimID).Updates(map[string]interface{}{"status": "paid", "updated_at": processedAt}).Error
+			_ = s.notifyPayoutProcessed(payout.WorkerID, payout.ClaimID, payout.Amount, processedAt)
 		}
 
 		if err := s.DB.Create(&attempt).Error; err != nil {
@@ -358,6 +487,107 @@ func (s *CoreOpsService) ProcessQueuedPayouts(now time.Time) (*ProcessPayoutsRes
 	}
 
 	return result, nil
+}
+
+func (s *CoreOpsService) loadApprovedClaimsNeedingPayout(disruptionID uint) ([]models.Claim, error) {
+	type claimRow struct {
+		models.Claim
+		PayoutStatus string `gorm:"column:payout_status"`
+	}
+
+	rows := make([]claimRow, 0)
+	if err := s.DB.Table("claims c").
+		Select("c.*, COALESCE(p.status, '') AS payout_status").
+		Joins("LEFT JOIN payouts p ON p.claim_id = c.id").
+		Where("c.disruption_id = ? AND c.status = ?", disruptionID, "approved").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	claims := make([]models.Claim, 0, len(rows))
+	for _, row := range rows {
+		if row.PayoutStatus == "" || row.PayoutStatus == "queued" || row.PayoutStatus == "retry_pending" {
+			claims = append(claims, row.Claim)
+		}
+	}
+
+	return claims, nil
+}
+
+func (s *CoreOpsService) loadProcessablePayoutIDsForDisruption(disruptionID uint, now time.Time) ([]uint, error) {
+	payoutIDs := make([]uint, 0)
+	err := s.DB.Table("payouts p").
+		Select("p.id").
+		Joins("JOIN claims c ON c.id = p.claim_id").
+		Where("c.disruption_id = ?", disruptionID).
+		Where("p.status IN ?", []string{"queued", "retry_pending"}).
+		Where("p.next_retry_at IS NULL OR p.next_retry_at <= ?", now.UTC()).
+		Order("p.id ASC").
+		Pluck("p.id", &payoutIDs).Error
+	return payoutIDs, err
+}
+
+func (s *CoreOpsService) notifyWorkersForDisruption(disruption models.Disruption, now time.Time) (int, error) {
+	type workerRow struct {
+		WorkerID uint
+		ZoneName string
+	}
+
+	workers := make([]workerRow, 0)
+	if err := s.DB.Table("worker_profiles wp").
+		Select("wp.worker_id, z.name AS zone_name").
+		Joins("JOIN policies p ON p.worker_id = wp.worker_id AND p.status = ?", "active").
+		Joins("JOIN zones z ON z.id = wp.zone_id").
+		Where("wp.zone_id = ?", disruption.ZoneID).
+		Scan(&workers).Error; err != nil {
+		return 0, err
+	}
+
+	inserted := 0
+	for _, worker := range workers {
+		message := fmt.Sprintf("%s detected in %s. Automatic payout review has started for %s.", humanizeDisruptionType(disruption.Type), worker.ZoneName, fmt.Sprintf("dis_%d", disruption.ID))
+		if err := s.DB.Exec(
+			`INSERT INTO notifications (worker_id, type, message, created_at)
+			 SELECT ?, ?, ?, ?
+			 WHERE NOT EXISTS (
+			   SELECT 1 FROM notifications
+			   WHERE worker_id = ? AND type = ? AND message = ?
+			 )`,
+			worker.WorkerID, "disruption_alert", message, now.UTC(),
+			worker.WorkerID, "disruption_alert", message,
+		).Error; err != nil {
+			return inserted, err
+		}
+		inserted++
+	}
+
+	return inserted, nil
+}
+
+func (s *CoreOpsService) notifyPayoutProcessed(workerID uint, claimID uint, amount float64, now time.Time) error {
+	message := fmt.Sprintf("Automatic payout of Rs %.0f for claim clm_%d has been credited.", amount, claimID)
+	return s.DB.Exec(
+		`INSERT INTO notifications (worker_id, type, message, created_at)
+		 SELECT ?, ?, ?, ?
+		 WHERE NOT EXISTS (
+		   SELECT 1 FROM notifications
+		   WHERE worker_id = ? AND type = ? AND message = ?
+		 )`,
+		workerID, "payout_credited", message, now.UTC(),
+		workerID, "payout_credited", message,
+	).Error
+}
+
+func humanizeDisruptionType(raw string) string {
+	parts := strings.Split(strings.TrimSpace(raw), " + ")
+	for _, part := range parts {
+		candidate := strings.TrimSpace(part)
+		if candidate == "" || candidate == "demand_drop" {
+			continue
+		}
+		return strings.Title(strings.ReplaceAll(candidate, "_", " "))
+	}
+	return "Disruption"
 }
 
 func (s *CoreOpsService) GetPayoutReconciliation(from, to time.Time) (*ReconciliationResult, error) {

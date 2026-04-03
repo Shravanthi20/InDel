@@ -18,6 +18,11 @@ interface Disruption {
   severity: string
   confidence: number
   status: string
+  claims_generated: number
+  claims_in_review: number
+  payouts_processed: number
+  payout_amount_total: number
+  automation_status: string
   signals: { source: string; value: number }[]
   started_at: string
 }
@@ -41,8 +46,9 @@ export default function Disruptions() {
 
   const fetchData = async () => {
     try {
-      const [hRes] = await Promise.all([getZoneHealth()])
+      const [hRes, dRes] = await Promise.all([getZoneHealth(), getDisruptions()])
       setHealths(hRes.data.data)
+      setDisruptions(dRes.data.data)
     } catch (e) {
       console.error('Failed to fetch platform status', e)
     }
@@ -161,6 +167,25 @@ export default function Disruptions() {
         
         {/* TELEMETRY CARDS */}
         <div className="col-span-12 lg:col-span-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="rounded-2xl border border-white/5 bg-slate-900/70 p-5">
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Confirmed Events</div>
+              <div className="mt-3 text-3xl font-black text-white">{disruptions.length}</div>
+            </div>
+            <div className="rounded-2xl border border-white/5 bg-slate-900/70 p-5">
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Claims Generated</div>
+              <div className="mt-3 text-3xl font-black text-amber-300">{disruptions.reduce((sum, item) => sum + item.claims_generated, 0)}</div>
+            </div>
+            <div className="rounded-2xl border border-white/5 bg-slate-900/70 p-5">
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Workers Paid</div>
+              <div className="mt-3 text-3xl font-black text-emerald-300">{disruptions.reduce((sum, item) => sum + item.payouts_processed, 0)}</div>
+            </div>
+            <div className="rounded-2xl border border-white/5 bg-slate-900/70 p-5">
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Paid Out</div>
+              <div className="mt-3 text-3xl font-black text-cyan-300">Rs {Math.round(disruptions.reduce((sum, item) => sum + item.payout_amount_total, 0))}</div>
+            </div>
+          </div>
+
           <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <Radio className="w-5 h-5 text-emerald-400 animate-pulse" />
@@ -292,6 +317,53 @@ export default function Disruptions() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 shadow-2xl overflow-hidden">
+            <h2 className="text-xl font-black text-white mb-6 uppercase tracking-tight">Automatic Claim and Payout Outcomes</h2>
+            <div className="space-y-4 max-h-[420px] overflow-y-auto pr-2 custom-scrollbar">
+              {disruptions.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed border-white/5 bg-slate-800/10 rounded-xl">
+                  <p className="text-slate-600 italic font-medium">No disruption records yet.</p>
+                </div>
+              ) : disruptions.map((item) => (
+                <div key={item.disruption_id} className="rounded-2xl border border-white/5 bg-slate-950/50 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black uppercase tracking-widest text-cyan-400">{item.disruption_id} • {item.zone_id}</div>
+                      <div className="mt-1 text-xs text-slate-400">{item.type.replace(/_/g, ' ')} • {new Date(item.started_at).toLocaleString()}</div>
+                    </div>
+                    <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
+                      item.automation_status === 'paid'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : item.automation_status === 'manual_review'
+                        ? 'bg-amber-500/15 text-amber-300'
+                        : 'bg-cyan-500/15 text-cyan-300'
+                    }`}>
+                      {item.automation_status}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+                    <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Claims</div>
+                      <div className="mt-2 text-2xl font-black text-white">{item.claims_generated}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Manual Review</div>
+                      <div className="mt-2 text-2xl font-black text-amber-300">{item.claims_in_review}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Paid Workers</div>
+                      <div className="mt-2 text-2xl font-black text-emerald-300">{item.payouts_processed}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Paid Out</div>
+                      <div className="mt-2 text-2xl font-black text-cyan-300">Rs {Math.round(item.payout_amount_total)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -38,8 +39,8 @@ func GetPayouts(c *gin.Context) {
 			resp := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
 				resp = append(resp, gin.H{
-					"payout_id":    row.PayoutID,
-					"claim_id":     row.ClaimID,
+					"payout_id":    fmt.Sprintf("pay_%d", row.PayoutID),
+					"claim_id":     fmt.Sprintf("clm_%d", row.ClaimID),
 					"amount":       int(row.Amount),
 					"method":       "upi",
 					"status":       row.Status,
