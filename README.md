@@ -28,7 +28,8 @@
 13. [Dashboards](#dashboards)
 14. [Compliance and Regulatory Considerations](#compliance-and-regulatory-considerations)
 15. [Tech Stack](#tech-stack)
-16. [Team ImaginAI](#team-imaginai)
+16. [Local Development Setup](#local-development-setup)
+17. [Team ImaginAI](#team-imaginai)
 
 ---
 
