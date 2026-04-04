@@ -17,7 +17,18 @@ except ImportError:
     from ml.premium.model import PremiumModel
     from ml.premium.shap_explainer import SHAPExplainer
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="InDel Premium Prediction Service - V1")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Schemas ---
 

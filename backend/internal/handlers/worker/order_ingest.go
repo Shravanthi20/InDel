@@ -149,7 +149,7 @@ func IngestDemoOrder(c *gin.Context) {
 		"delivery_fee_inr":        deliveryFeeInr,
 		"zone_route_path":         zoneRoutePath,
 		"zone_route_display":      zonePathDisplay(zoneRoutePath),
-		"earning_inr":             totalDeliveryEarningINR(tipInr),
+		"earning_inr":             totalDeliveryEarningINR(deliveryFeeInr, tipInr),
 		"assigned_at":             bodyString(body, "assigned_at", nowISO()),
 		"source":                  bodyString(body, "source", "fake-publisher"),
 	}

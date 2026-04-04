@@ -5,10 +5,19 @@ import "time"
 type User struct {
 	ID        uint   `gorm:"primaryKey"`
 	Phone     string `gorm:"uniqueIndex"`
-	Email     string
-	Role      string
+	Email        string
+	PasswordHash string `gorm:"column:password_hash"`
+	Role         string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type AuthToken struct {
+	ID        uint      `gorm:"primaryKey"`
+	UserID    uint      `gorm:"index"`
+	Token     string    `gorm:"uniqueIndex"`
+	ExpiresAt time.Time
 	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type WorkerProfile struct {
@@ -139,6 +148,7 @@ type Disruption struct {
 	ConfirmedAt     *time.Time
 	StartTime       *time.Time
 	EndTime         *time.Time
+	ProcessedAt     *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }

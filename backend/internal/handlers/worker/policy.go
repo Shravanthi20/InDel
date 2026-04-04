@@ -42,13 +42,29 @@ func GetPolicy(c *gin.Context) {
 						breakdown = append(breakdown, gin.H{"feature": item.Feature, "impact": item.Impact})
 					}
 				}
+				// Dynamic calculations for "Real Data"
+				coverageRatio := 0.85
+				if riskScore > 0.7 {
+					coverageRatio = 0.75
+				} else if riskScore < 0.3 {
+					coverageRatio = 0.95
+				}
+
+				dueDate := p.CreatedAt.AddDate(0, 0, 7).Format("2006-01-02")
+				if p.Status == "active" {
+					// If already past, show next week
+					if p.CreatedAt.AddDate(0, 0, 7).Before(time.Now()) {
+						dueDate = time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+					}
+				}
+
 				policy := gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", p.ID),
 					"status":             p.Status,
 					"weekly_premium_inr": premiumAmount,
-					"coverage_ratio":     0.8,
+					"coverage_ratio":     coverageRatio,
 					"zone":               "Tambaram, Chennai",
-					"next_due_date":      "2026-03-30",
+					"next_due_date":      dueDate,
 					"risk_score":         riskScore,
 					"pricing_source":     source,
 					"model_version":      modelVersion,

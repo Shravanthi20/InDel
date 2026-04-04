@@ -7,6 +7,7 @@ data class EarningsSummary(
     @SerializedName("this_week_actual") val thisWeekActual: Int,
     @SerializedName("this_week_baseline") val thisWeekBaseline: Int,
     @SerializedName("protected_income") val protectedIncome: Int,
+    @SerializedName("insight") val insight: String? = null,
     @SerializedName("history") val history: List<EarningsHistoryItem>
 )
 

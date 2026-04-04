@@ -1,6 +1,24 @@
 package worker
 
-import "github.com/gin-gonic/gin"
+import (
+	"fmt"
+	"time"
+
+	workerModels "github.com/Shravanthi20/InDel/backend/internal/models"
+	"github.com/Shravanthi20/InDel/backend/internal/services"
+	"github.com/gin-gonic/gin"
+)
+
+// nowTime returns current UTC time for disruption records.
+func nowTime() time.Time {
+	return time.Now().UTC()
+}
+
+// workerCoreService returns a CoreOpsService backed by the worker DB.
+func workerCoreService() *services.CoreOpsService {
+	return services.NewCoreOpsService(workerDB)
+}
+
 
 // DemoReset resets all in-memory demo state.
 func DemoReset(c *gin.Context) {
@@ -19,7 +37,8 @@ func DemoReset(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "demo_reset", "time": nowISO()})
 }
 
-// DemoTriggerDisruption creates a disruption notification.
+// DemoTriggerDisruption creates a disruption and runs the full pipeline:
+// notify workers → generate claims → fraud check → queue payouts → process payouts.
 func DemoTriggerDisruption(c *gin.Context) {
 	workerID, ok := requireAuth(c)
 	if !ok {
@@ -28,14 +47,10 @@ func DemoTriggerDisruption(c *gin.Context) {
 	body := parseBody(c)
 	disruptionType := bodyString(body, "disruption_type", "heavy_rain")
 	zone := bodyString(body, "zone", "Tambaram, Chennai")
+	severity := bodyString(body, "severity", "high")
+
+	// In-memory notification (fallback for no-DB mode)
 	msg := disruptionType + " detected in " + zone + ". You are protected."
-
-	if hasDB() {
-		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
-			_ = workerDB.Exec("INSERT INTO notifications (worker_id, type, message) VALUES (?, ?, ?)", workerIDUint, "disruption_alert", msg).Error
-		}
-	}
-
 	store.mu.Lock()
 	store.data.Notifications = append([]map[string]any{{
 		"id":         nextID("ntf", len(store.data.Notifications)),
@@ -46,6 +61,63 @@ func DemoTriggerDisruption(c *gin.Context) {
 		"read":       false,
 	}}, store.data.Notifications...)
 	store.mu.Unlock()
+
+	// Full pipeline if DB is connected
+	if hasDB() {
+		workerIDUint, parseErr := parseWorkerID(workerID)
+		if parseErr != nil {
+			c.JSON(400, gin.H{"error": "invalid_worker_id"})
+			return
+		}
+
+		// Find worker's zone
+		var zoneID uint = 1
+		_ = workerDB.Raw("SELECT zone_id FROM worker_profiles WHERE worker_id = ? LIMIT 1", workerIDUint).Scan(&zoneID).Error
+
+		// 1. Create disruption record
+		now := nowTime()
+		confirmedAt := now.Add(1)
+		disruption := workerModels.Disruption{
+			ZoneID:          zoneID,
+			Type:            disruptionType,
+			Severity:        severity,
+			Confidence:      0.91,
+			Status:          "confirmed",
+			SignalTimestamp: &now,
+			ConfirmedAt:     &confirmedAt,
+			StartTime:       &now,
+		}
+		if err := workerDB.Create(&disruption).Error; err != nil {
+			c.JSON(500, gin.H{"error": "failed_to_create_disruption", "detail": err.Error()})
+			return
+		}
+
+		// 2. Auto-process: notify → claims → payouts
+		coreSvc := workerCoreService()
+		result, err := coreSvc.AutoProcessDisruption(disruption.ID, now)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "pipeline_failed", "detail": err.Error()})
+			return
+		}
+
+		// Mark processed
+		processed := nowTime()
+		_ = workerDB.Model(&workerModels.Disruption{}).Where("id = ?", disruption.ID).Update("processed_at", processed).Error
+
+		c.JSON(200, gin.H{
+			"message":          "disruption_pipeline_complete",
+			"disruption_id":    fmt.Sprintf("dis_%d", disruption.ID),
+			"disruption_type":  disruptionType,
+			"zone":             zone,
+			"workers_notified": result.WorkersNotified,
+			"claims_generated": result.ClaimsGenerated,
+			"payouts_succeeded": result.PayoutsSucceeded,
+			"manual_review":    result.ManualReviewClaims,
+			"status":           result.Status,
+			"time":             nowISO(),
+		})
+		return
+	}
 
 	c.JSON(200, gin.H{
 		"message":         "disruption_triggered",

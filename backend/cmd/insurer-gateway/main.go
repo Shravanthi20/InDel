@@ -10,6 +10,7 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/kafka"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
 	"github.com/Shravanthi20/InDel/backend/internal/services"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -22,6 +23,7 @@ func main() {
 
 	// Create Gin router
 	router := gin.Default()
+	router.Use(cors.Default())
 
 	// Optional DB wiring for live aggregate metrics.
 	cfg := config.Load()

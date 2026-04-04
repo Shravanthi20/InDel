@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,11 +30,14 @@ func parseOrderID(orderID string) (uint, error) {
 	return uint(parsed), nil
 }
 
-func totalDeliveryEarningINR(tipINR float64) int {
+func totalDeliveryEarningINR(feeINR, tipINR float64) int {
 	if tipINR < 0 {
 		tipINR = 0
 	}
-	return deliveryBaseEarningINR + int(tipINR)
+	if feeINR <= 0 {
+		feeINR = float64(deliveryBaseEarningINR)
+	}
+	return int(feeINR) + int(tipINR)
 }
 
 func normalizeZoneBandPath(zonePath []string) []string {
@@ -132,7 +136,7 @@ func GetAssignedOrders(c *gin.Context) {
 					"pickup_area":        row.PickupArea,
 					"drop_area":          row.DropArea,
 					"distance_km":        row.DistanceKm,
-					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
+					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -197,7 +201,7 @@ func GetOrders(c *gin.Context) {
 					"pickup_area":        row.PickupArea,
 					"drop_area":          row.DropArea,
 					"distance_km":        row.DistanceKm,
-					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
+					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -238,25 +242,55 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 			if newStatus == "delivered" {
 				_ = workerDB.Exec("UPDATE orders SET status='delivered', delivered_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id = ? AND worker_id = ?", orderNumID, workerIDUint).Error
 				_ = workerDB.Exec("INSERT INTO notifications (worker_id, type, message) VALUES (?, 'order_delivered', ?)", workerIDUint, fmt.Sprintf("%s delivered. Earnings updated.", orderID)).Error
+
+				// Update earnings in DB
+				var tip, fee float64
+				_ = workerDB.Raw("SELECT COALESCE(tip_inr, 0), COALESCE(delivery_fee_inr, 0) FROM orders WHERE id = ?", orderNumID).Row().Scan(&tip, &fee)
+				earning := totalDeliveryEarningINR(fee, tip)
+
+				weekStart, _ := weekBounds(time.Now().UTC())
+
+				// Update weekly summary
+				_ = workerDB.Exec(`
+					INSERT INTO weekly_earnings_summary (worker_id, week_start, week_end, total_earnings, claim_eligible)
+					VALUES (?, ?, ?, ?, false)
+					ON CONFLICT (worker_id, week_start)
+					DO UPDATE SET total_earnings = weekly_earnings_summary.total_earnings + ?, updated_at = CURRENT_TIMESTAMP
+				`, workerIDUint, weekStart, weekStart.AddDate(0, 0, 7), float64(earning), float64(earning)).Error
+
+				// Update daily record
+				_ = workerDB.Exec(`
+					INSERT INTO earnings_records (worker_id, date, amount_earned, hours_worked, created_at)
+					VALUES (?, CURRENT_DATE, ?, 0, CURRENT_TIMESTAMP)
+					ON CONFLICT (worker_id, date)
+					DO UPDATE SET amount_earned = earnings_records.amount_earned + ?
+				`, workerIDUint, float64(earning), float64(earning)).Error
+
+				// Update lifetime earnings
+				_ = workerDB.Exec("UPDATE worker_profiles SET total_earnings_lifetime = total_earnings_lifetime + ?, updated_at = CURRENT_TIMESTAMP WHERE worker_id = ?", float64(earning), workerIDUint).Error
 			}
 
 			type row struct {
-				ID         uint    `gorm:"column:id"`
-				OrderValue float64 `gorm:"column:order_value"`
-				TipInr     float64 `gorm:"column:tip_inr"`
-				Status     string  `gorm:"column:status"`
-				CreatedAt  string  `gorm:"column:created_at"`
-				UpdatedAt  string  `gorm:"column:updated_at"`
+				ID             uint    `gorm:"column:id"`
+				OrderValue     float64 `gorm:"column:order_value"`
+				TipInr         float64 `gorm:"column:tip_inr"`
+				DeliveryFeeInr float64 `gorm:"column:delivery_fee_inr"`
+				Status         string  `gorm:"column:status"`
+				PickupArea     string  `gorm:"column:pickup_area"`
+				DropArea       string  `gorm:"column:drop_area"`
+				DistanceKm     float64 `gorm:"column:distance_km"`
+				CreatedAt      string  `gorm:"column:created_at"`
+				UpdatedAt      string  `gorm:"column:updated_at"`
 			}
 			var r row
-			err := workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, status, created_at::text, updated_at::text FROM orders WHERE id = ? AND worker_id = ?", orderNumID, workerIDUint).Scan(&r).Error
+			err := workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, status, COALESCE(pickup_area, '') AS pickup_area, COALESCE(drop_area, '') AS drop_area, COALESCE(distance_km, 0) AS distance_km, created_at::text, updated_at::text FROM orders WHERE id = ? AND worker_id = ?", orderNumID, workerIDUint).Scan(&r).Error
 			if err == nil && r.ID != 0 {
 				c.JSON(200, gin.H{"message": message, "order": gin.H{
 					"order_id":    fmt.Sprintf("ord-%03d", r.ID),
-					"pickup_area": "Tambaram",
-					"drop_area":   "Camp Road",
-					"distance_km": 3.1,
-					"earning_inr": totalDeliveryEarningINR(r.TipInr),
+					"pickup_area": r.PickupArea,
+					"drop_area":   r.DropArea,
+					"distance_km": r.DistanceKm,
+					"earning_inr": totalDeliveryEarningINR(r.DeliveryFeeInr, r.TipInr),
 					"tip_inr":     r.TipInr,
 					"status":      r.Status,
 					"assigned_at": r.CreatedAt,
@@ -284,9 +318,12 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 
 		if newStatus == "delivered" && previousStatus != "delivered" {
 			tip, _ := order["tip_inr"].(float64)
-			earning := totalDeliveryEarningINR(tip)
+			fee, _ := order["delivery_fee_inr"].(float64)
+			earning := totalDeliveryEarningINR(fee, tip)
 			if current, ok := store.data.Earnings["this_week_actual"].(int); ok {
 				store.data.Earnings["this_week_actual"] = current + earning
+			} else if currentF, ok := store.data.Earnings["this_week_actual"].(float64); ok {
+				store.data.Earnings["this_week_actual"] = int(currentF) + earning
 			}
 			if profile, exists := store.data.WorkerProfiles[workerID]; exists {
 				if completed, ok := profile["orders_completed"].(int); ok {
@@ -333,7 +370,7 @@ func GetAvailableOrders(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "50")
 	zoneIDStr := c.Query("zone_id")
 
-	limit := 50
+	limit := 4
 	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
 		limit = l
 	}
@@ -385,6 +422,18 @@ func GetAvailableOrders(c *gin.Context) {
 
 		err := workerDB.Raw(query, args...).Scan(&rows).Error
 		if err == nil {
+			if len(rows) == 0 {
+				zoneToUse := 1
+				if zoneIDStr != "" {
+					z, _ := strconv.Atoi(zoneIDStr)
+					zoneToUse = z
+				}
+				for i := 0; i < 5; i++ {
+					_ = workerDB.Exec("INSERT INTO orders (order_value, tip_inr, delivery_fee_inr, zone_id, status, pickup_area, drop_area, distance_km) VALUES (?, ?, ?, ?, 'assigned', 'Fast Food Outlet', 'Residential Block', ?)", 50+i*10, 0, 30, zoneToUse, 2.5+float64(i)*0.5).Error
+				}
+				_ = workerDB.Raw(query, args...).Scan(&rows).Error
+			}
+
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
 				zonePath := decodeZonePath(row.ZoneRoutePath)
@@ -395,7 +444,7 @@ func GetAvailableOrders(c *gin.Context) {
 				orders = append(orders, gin.H{
 					"order_id":           fmt.Sprintf("ord-%d", row.ID),
 					"order_value":        row.OrderValue,
-					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
+					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -520,7 +569,7 @@ func GetDeliveries(c *gin.Context) {
 				delivery := gin.H{
 					"order_id":           fmt.Sprintf("ord-%d", row.ID),
 					"order_value":        row.OrderValue,
-					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
+					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -567,4 +616,12 @@ func GetDeliveries(c *gin.Context) {
 		"count":      len(delivered),
 		"deliveries": delivered,
 	})
+}
+
+func weekBounds(now time.Time) (time.Time, time.Time) {
+	normalized := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	offset := (int(normalized.Weekday()) + 6) % 7
+	start := normalized.AddDate(0, 0, -offset)
+	end := start.AddDate(0, 0, 6)
+	return start, end
 }

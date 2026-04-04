@@ -6,6 +6,7 @@ data class Earnings(
     @SerializedName("this_week_actual") val thisWeekActual: Double,
     @SerializedName("this_week_baseline") val thisWeekBaseline: Double,
     @SerializedName("protected_income") val protectedIncome: Double,
+    @SerializedName("insight") val insight: String? = null,
     val history: List<EarningRecord> = emptyList()
 )
 

@@ -21,11 +21,27 @@ class PremiumPayViewModel @Inject constructor(
     private val _amount = MutableStateFlow("")
     val amount = _amount.asStateFlow()
 
-    fun onAmountChanged(value: String) { _amount.value = value }
+    init {
+        fetchPolicyPremium()
+    }
+
+    private fun fetchPolicyPremium() {
+        viewModelScope.launch {
+            try {
+                val response = policyRepository.getPolicy()
+                if (response.isSuccessful) {
+                    val premium = response.body()?.policy?.weeklyPremiumInr ?: 0
+                    _amount.value = premium.toString()
+                }
+            } catch (e: Exception) {
+                // Fallback or ignore for init
+            }
+        }
+    }
 
     fun pay() {
         viewModelScope.launch {
-            _uiState.value = PayUiState.Loading
+            _uiState.value = PayUiState.Loading  
             try {
                 val response = policyRepository.payPremium(_amount.value.toIntOrNull())
                 if (response.isSuccessful) {

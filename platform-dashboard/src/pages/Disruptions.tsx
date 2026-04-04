@@ -472,6 +472,28 @@ export default function Disruptions() {
                    <CloudRain className="w-3 h-3" /> Step 2: Inject External Signal
                 </div>
                 
+                <button
+                  disabled={loadingAction}
+                  onClick={async () => {
+                    if (loadingAction) return;
+                    setLoadingAction(true);
+                    setActionStatus('Fast-tracking Heavy Rain Disruption & Autopayout...');
+                    try {
+                      await postTriggerDemo({ zone_id: 1, force_order_drop: true, external_signal: 'heavy_rain' });
+                      await new Promise((resolve) => setTimeout(resolve, 1500));
+                      await fetchData();
+                    } finally {
+                      setActionStatus('');
+                      setLoadingAction(false);
+                    }
+                  }}
+                  className="w-full rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-left transition hover:bg-cyan-500/20 disabled:opacity-60 mb-4"
+                >
+                  <div className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Trigger Rain & Payouts (Quick Demo)</div>
+                  <div className="mt-1 text-xs text-slate-300">Fast-tracks volume drop and heavy rain signal simultaneously to trigger auto-payouts instantly.</div>
+                </button>
+
+                
                 {actionStatus && (
                   <div className="px-3 py-2 rounded border border-cyan-500/30 bg-cyan-900/20 text-cyan-400 text-[10px] font-mono animate-pulse">
                     &gt; {actionStatus}
