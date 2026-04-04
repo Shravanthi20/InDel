@@ -22,42 +22,62 @@ export default function FraudQueue() {
 
   return (
     <PageShell
-      eyebrow="Fraud"
-      title="Fraud Queue"
-      description="Review the claims that the scoring layer has routed for manual attention."
+      eyebrow="Security"
+      title="Fraud Analysis Queue"
+      description="Review high-risk claims routed for manual verification by the ML scoring engine."
     >
-      <Panel title="Flagged Claims">
-        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-slate-500">
-              <tr>
-                <th className="pb-3 pr-4">Claim</th>
-                <th className="pb-3 pr-4">Status</th>
-                <th className="pb-3 pr-4">Verdict</th>
-                <th className="pb-3 pr-4">Score</th>
-                <th className="pb-3 pr-4">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.claim_id} className="border-t border-slate-100">
-                  <td className="py-3 pr-4 font-medium text-slate-900">#{row.claim_id}</td>
-                  <td className="py-3 pr-4">{row.status}</td>
-                  <td className="py-3 pr-4">{row.fraud_verdict}</td>
-                  <td className="py-3 pr-4">{(row.fraud_score ?? 0).toFixed(2)}</td>
-                  <td className="py-3 pr-4">{row.created_at}</td>
+      <div className="grid gap-8">
+        <Panel title="Security Flags" subtitle="Sorted by anomaly priority for manual review.">
+          {error ? <p className="text-[10px] font-black uppercase text-rose-600 mb-6 font-bold">{error}</p> : null}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800">
+                  <th className="pb-4 font-black uppercase tracking-widest text-slate-400">ID</th>
+                  <th className="pb-4 font-black uppercase tracking-widest text-slate-400">Signal</th>
+                  <th className="pb-4 font-black uppercase tracking-widest text-slate-400 text-right">Anomaly Score</th>
+                  <th className="pb-4 text-right font-black uppercase tracking-widest text-slate-400">Verification</th>
                 </tr>
-              ))}
-              {rows.length === 0 && !error ? (
-                <tr>
-                  <td className="py-6 text-slate-500" colSpan={5}>No flagged claims currently.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                {rows.map((row) => (
+                  <tr key={row.claim_id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-none">
+                    <td className="py-5 font-bold text-slate-900 dark:text-white">#{row.claim_id}</td>
+                    <td className="py-5">
+                       <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-500">
+                          {row.status}
+                       </span>
+                    </td>
+                    <td className="py-5 text-right font-black text-slate-900 dark:text-white">
+                       <div className="flex items-center justify-end gap-3">
+                          <span className="text-sm font-black">{(row.fraud_score ?? 0).toFixed(2)}</span>
+                          <div className="h-1 w-16 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                             <div 
+                                className={`h-full ${row.fraud_score > 0.7 ? 'bg-rose-500' : 'bg-orange-500'}`}
+                                style={{ width: `${Math.min((row.fraud_score ?? 0) * 100, 100)}%` }}
+                             ></div>
+                          </div>
+                       </div>
+                    </td>
+                    <td className="py-5 text-right font-black tracking-[0.2em] uppercase text-[9px]">
+                       <span className={row.fraud_verdict === 'safe' ? 'text-emerald-600' : 'text-rose-600'}>
+                          {row.fraud_verdict}
+                       </span>
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && !error ? (
+                  <tr>
+                    <td className="py-12 text-center text-slate-400 italic" colSpan={4}>
+                       Security clearance complete. No flags.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </div>
     </PageShell>
   )
 }

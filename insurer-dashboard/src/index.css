@@ -1,22 +1,42 @@
-:root {
-  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
-  color: #111827;
-  background:
-    radial-gradient(circle at top left, rgba(251, 146, 60, 0.18), transparent 25%),
-    linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-main: #f8fafc;
+    --border-subtle: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+  }
+  .dark {
+    --bg-main: #020617;
+    --border-subtle: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+  }
+  
+  body {
+    @apply bg-[var(--bg-main)] text-[var(--text-primary)] antialiased font-['Outfit'];
+  }
+
+  /* Enterprise-grade high-precision response (Instant feel) */
+  * {
+    @apply transition-none !important;
+    @apply duration-0 !important;
+    @apply animate-none !important;
+  }
+
+  /* High precision focus states */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-slate-400 dark:ring-slate-600;
+  }
 }
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: transparent;
-}
-
-button,
-input {
-  font: inherit;
+@layer components {
+  .enterprise-panel {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-lg;
+  }
 }
