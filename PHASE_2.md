@@ -1,92 +1,138 @@
 # InDel — Implementation Phase 2
 
-This document provides a practical, execution-focused overview of the InDel platform as implemented in **Phase 2**. For the theoretical background and project vision, refer to the [original README](file:///f:/DevTrails/InDel/README.md).
+This document provides a technical and execution-focused overview of the InDel platform as implemented in Phase 2.
 
-## 🏗️ Functional Architecture
+## 🏛️ Functional Architecture
 
-InDel is built as a high-precision, event-driven ecosystem. The Phase 2 implementation focuses on three core pillars:
+InDel is an event-driven parametric insurance ecosystem designed to protect gig-worker income from regional disruptions. The architecture is composed of a high-performance Go backend, dual enterprise React dashboards, and a native mobile application.
 
-### 1. The Core Infrastructure (Backend)
-- **Technology**: Go (Gin), PostgreSQL (GORM), JWT Authentication.
-- **Port**: `8003`
-- **Key Logic**: Handles worker registration, policy management, real-time zone monitoring (`DisruptionEngine`), and automated claim/payout generation.
+### 🧩 System Components
 
-### 2. Insurer Command Center (Insurer Dashboard)
-- **Technology**: React (Vite), Tailwind CSS, Lucide Icons.
-- **Port**: `5173`
-- **Goal**: Provides insurers with high-density data on risk, premium health, and a dedicated queue for manual fraud verification.
+The following diagram illustrates the high-level relationship between the platform's core components:
+
+```mermaid
+graph TD
+    subgraph "External Layers"
+        WA[Worker Mobile App]
+        ES[External Signals - Weather/AQI]
+    end
+
+    subgraph "InDel Core (Backend)"
+        API[Gin REST API]
+        DE[Disruption Engine]
+        CO[Core Ops Service]
+        DB[(PostgreSQL)]
+    end
+
+    subgraph "Management Layers"
+        PD[Platform Dashboard]
+        ID[Insurer Dashboard]
+    end
+
+    WA <-->|Real-time Tracking| API
+    ES -->|Event Ingestion| API
+    API <--> DB
+    DE <--> DB
+    CO <--> DB
+    PD <-->|Simulation / Telemetry| API
+    ID <-->|Risk Management| API
+```
+
+### ⚡ Economic Impact Lifecycle
+
+This sequence diagram traces the flow from a triggered disruption to an automated payout:
+
+```mermaid
+sequenceDiagram
+    participant C as Chaos Engine (Simulator)
+    participant B as Backend (Disruption Engine)
+    participant W as Worker Activity Telemetry
+    participant G as Claim Generator
+    participant P as Payout Processor
+
+    C->>B: Inject Signal (e.g., Heavy Rain)
+    B->>B: Monitor Zone Baseline vs Actuals
+    W->>B: Report Drop in Order Volume
+    Note over B: Multi-Signal Validation (Signal + Telemetry)
+    B->>B: Confirm Disruption Event
+    B->>G: Trigger Claim Scoping
+    G->>G: Identify Eligible Workers in Zone
+    G->>G: Calculate Income Loss (Baseline - Actual)
+    G->>B: Save Approved Claims
+    B->>P: Queue Asynchronous Payouts
+    P->>P: Process via Kafka/Razorpay Mock
+```
+
+---
+
+## 📂 Repository Structure
+
+The repository is organized into distinct modules for backend logic, dashboard management, and mobile operations.
+
+### 📍 Repository Root
+- `backend/`: Core Go API and business logic.
+- `insurer-dashboard/`: React application for insurance providers.
+- `platform-dashboard/`: React application for platform operators and simulator control.
+- `worker-app/`: Native Kotlin implementation for worker-side tracking and notifications.
+- `migrations/`: SQL schema definitions and baseline data seeds.
+- `ml/`: Model training scripts and synthetic data generators.
+- `PHASE_2.md`: This implementation-focused documentation.
+- `README.md`: High-level project vision and theoretical background.
+
+### 📍 Backend Deep Dive (`/backend`)
+- `cmd/api/`: Entry point for the Gin server.
+- `internal/handlers/`: Domain-specific API endpoint logic.
+    - `platform/`: Zone monitoring and Chaos Engine endpoints.
+    - `insurer/`: Policy and risk analytics endpoints.
+    - `worker/`: Identity and notification endpoints.
+    - `demo/`: Specialized simulation and seeding handlers.
+- `internal/services/`: The "Engine" layer containing core business logic.
+    - `disruption_engine.go`: Logic for real-time baseline calculation and disruption confirmation.
+    - `core_ops_service.go`: Batch processing for claim generation, eligibility checks, and payouts.
+    - `premium_pricing.go`: Dynamic risk-based pricing logic.
+- `internal/models/`: GORM-based entity definitions (Users, Zones, Policies, Claims).
+- `internal/router/`: Centralized Gin route definitions.
+
+### 📍 Dashboard Deep Dive (`/platform-dashboard` & `/insurer-dashboard`)
+- `src/api/`: Axios-based clients for backend communication.
+- `src/components/`: Reusable UI components.
+    - `layout/`: Shared Sidebar and Navbar with theme management.
+    - `ui/`: Atomic components like panels, badges, and metrics.
+- `src/pages/`: Feature-specific views.
+    - `Overview.tsx`: Holistic system health telemetry.
+    - `Disruptions.tsx`: The "Chaos Engine" simulation interface.
+    - `Workers.tsx`: Native-style searchable node directory.
+- `src/context/`: React Context for Theme (Light/Dark) and Global State.
+
+---
+
+## ⚙️ Core Functional Components
+
+### 1. Disruption Engine (The Brain)
+The engine maintains a sliding 10-minute window of regional order volume. It calculates a **Dynamic Baseline** for each zone. A disruption is confirmed only through **Multi-Signal Validation**:
+- **Environmental**: External signal (Weather, AQI, Curfew).
+- **Economic**: Internal telemetry showing a >30% drop in order volume relative to the baseline.
+
+### 2. Core Ops Service (The Scale)
+This service handles high-volume batch operations. When a disruption is confirmed, it:
+1. Scans the database for all workers with **Active Policies** in the affected zone.
+2. Identifies workers who were **Logged In** during the disruption.
+3. Computes **Income Loss** using the worker's historical 4-week average vs. actual earnings.
+4. Generates a **Claim Record** with an automated fraud verdict based on the signal strength.
+
+### 3. Chaos Engine (The Simulator)
+Integrated directly into the Platform Dashboard, the Chaos Engine provides a practical way to test the entire parametric pipeline. It allows for:
+- **Demand Collapse**: Artificially resetting the baseline to simulate a massive order drop.
+- **Signal Injection**: Sending real-time weather or local restriction events to the backend.
+
+---
+
+## 🚀 Technical Specifications
+
+- **Backend**: Go (Gin), PostgreSQL (GORM), JWT.
+- **Frontend**: React 18 (Vite), Tailwind CSS, Lucide Icons.
 - **Theme**: Enterprise High-Precision (Slate/Orange).
-
-### 3. Platform Mission Control (Platform Dashboard)
-- **Technology**: React (Vite), Tailwind CSS, Lucide Icons.
-- **Port**: `5174`
-- **Goal**: Regional telemetry monitoring and the **Chaos Engine** — a specialized tool for simulating environmental and demand disruptions.
-
----
-
-## ⚡ Key Phase 2 Features
-
-### 🎨 Unified Enterprise Design
-A cohesive design system implemented across all dashboards:
-- **Typography**: Integrated `Outfit` font for maximum legibility.
-- **Dark/Light Modes**: Standardized theme switching using CSS variables and React Context.
-- **High-Density Layouts**: "Mission Control" style panels for displaying complex telemetry and workers.
-- **Snappy Response**: Global transitions minimized for a fast, enterprise-grade feel.
-
-### ⚙️ Automation & Chaos Engine
-- **Parametric Triggers**: Automated detection of Rain, AQI, and Curfew events via backend engines.
-- **Simulation Layer**: The Chaos Engine allows developers to manually:
-  - **Collapse Demand**: Force a drop in regional order activity.
-  - **Inject Signals**: Trigger simulated weather or local alerts.
-- **Instant Processing**: Claims are automatically generated and queued for payout the moment a multi-signal disruption is confirmed.
-
-### 🔍 Dynamic Data & Operations
-- **Real-Time Telemetry**: Dashboards use 2-second polling to reflect live backend state.
-- **Active Search & Filter**: Robust client-side filtering for searching workers, zones, and historical analytics.
-- **Data Export**: Built-in CSV generation for auditing worker lists and disruption feeds.
-
----
-
-## 🚀 Local Development Setup
-
-### 1. Prerequisites
-- **Go** (1.25.0+)
-- **Node.js** (v18+)
-- **PostgreSQL** (running locally or via Docker)
-
-### 2. Backend Setup
-```bash
-cd backend
-go mod download
-# Update .env with your credentials
-go run cmd/api/main.go
-```
-
-### 3. Dashboard Setup (Run for both Insurer and Platform)
-```bash
-cd insurer-dashboard # or platform-dashboard
-npm install
-npm run dev
-```
-
-### 4. Database Initialization
-Migrations and seed data are managed via the backend's internal logic. On first startup, the system initializes:
-- Standardised InDel Zones (Tambaram, Koramangala, etc.)
-- Mock Workers and active policies
-- Baseline telemetry benchmarks
-
----
-
-## 📂 Project Directory Map
-
-- `/backend`: Go source code, API routes, and business logic.
-- `/insurer-dashboard`: React frontend for insurance providers.
-- `/platform-dashboard`: React frontend for platform operators (Mission Control).
-- `/worker-app`: Native mobile application for delivery workers.
-- `/migrations`: SQL schema and baseline data.
-- `/ml`: Model training scripts and synthetic data generators.
-
----
+- **Communication**: 2-second polling interval for real-time telemetry updates.
 
 > [!NOTE]
-> Phase 2 implementation successfully unified the disparate MVP components into a professional "InDel Suite" with a consistent enterprise skin and functional telemetry.
+> All automated systems are idempotent, ensuring that mass disruption events do not cause duplicate claim generation or payout errors.
