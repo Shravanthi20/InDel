@@ -56,12 +56,12 @@ class OrdersViewModel @Inject constructor(
             val assignedRes = workerRepository.getAssignedOrders()
 
             val availableOrders = if (availableRes.isSuccessful) {
-                availableRes.body()?.orders ?: emptyList()
+                availableRes.body()?.orders?.take(4) ?: emptyList()
             } else {
                 emptyList()
             }
             val assignedOrders = if (assignedRes.isSuccessful) {
-                assignedRes.body()?.orders ?: emptyList()
+                assignedRes.body()?.orders?.filter { it.status != "delivered" } ?: emptyList()
             } else {
                 emptyList()
             }

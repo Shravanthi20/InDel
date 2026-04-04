@@ -43,5 +43,6 @@ func Migrate(db *gorm.DB) error {
 		&models.ClaimFraudScore{},
 		&models.ClaimAuditLog{},
 		&models.MaintenanceCheck{},
+		&models.AuthToken{},
 	)
 }

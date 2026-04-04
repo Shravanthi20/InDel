@@ -27,6 +27,7 @@ func GetOrderDetail(c *gin.Context) {
 				DropArea       string  `gorm:"column:drop_area"`
 				DistanceKm     float64 `gorm:"column:distance_km"`
 				TipInr         float64 `gorm:"column:tip_inr"`
+				DeliveryFeeInr float64 `gorm:"column:delivery_fee_inr"`
 				CreatedAt      string  `gorm:"column:created_at"`
 				ZoneName       string  `gorm:"column:zone_name"`
 				ZoneLevel      string  `gorm:"column:zone_level"`
@@ -44,6 +45,7 @@ func GetOrderDetail(c *gin.Context) {
 					COALESCE(o.drop_area, 'Drop Location') AS drop_area,
 					COALESCE(o.distance_km, 0) AS distance_km,
 					COALESCE(o.tip_inr, 0) AS tip_inr,
+					COALESCE(o.delivery_fee_inr, 0) AS delivery_fee_inr,
 					o.created_at::text,
 					COALESCE(z.name, '') AS zone_name,
 					COALESCE(z.level, '') AS zone_level,
@@ -57,7 +59,7 @@ func GetOrderDetail(c *gin.Context) {
 					COALESCE(o.pickup_area, '') || ' -> ' || COALESCE(o.drop_area, '') AS route
 				FROM orders o
 				LEFT JOIN zones z ON z.id = o.zone_id
-				WHERE o.id = ? AND (o.worker_id = ? OR o.status = 'assigned')
+				WHERE o.id = ? AND (o.worker_id = ? OR o.worker_id IS NULL OR o.status = 'assigned')
 				LIMIT 1
 			`, orderNumID, workerIDUint).Scan(&r).Error
 			if err == nil && r.ID != 0 {
@@ -66,7 +68,7 @@ func GetOrderDetail(c *gin.Context) {
 					"pickup_area":      r.PickupArea,
 					"drop_area":        r.DropArea,
 					"distance_km":      r.DistanceKm,
-					"earning_inr":      totalDeliveryEarningINR(r.TipInr),
+					"earning_inr":      totalDeliveryEarningINR(r.DeliveryFeeInr, r.TipInr),
 					"tip_inr":          r.TipInr,
 					"status":           r.Status,
 					"assigned_at":      r.CreatedAt,

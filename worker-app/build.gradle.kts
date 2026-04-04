@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "2.0.21"
-    id("com.android.application") version "8.13.2" apply false
-    id("com.android.library") version "8.13.2" apply false
+    id("com.android.application") version "8.7.3" apply false
+    id("com.android.library") version "8.7.3" apply false
     kotlin("android") version "2.0.21" apply false
     kotlin("kapt") version "2.0.21" apply false
     id("com.google.dagger.hilt.android") version "2.52" apply false

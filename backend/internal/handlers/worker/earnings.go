@@ -28,11 +28,26 @@ func GetEarnings(c *gin.Context) {
 				history = append(history, gin.H{"week": row.WeekStart, "actual": int(row.TotalEarnings), "baseline": int(baseline)})
 			}
 
+			insight := "You are on track to meet your baseline."
+			if actual < baseline*0.5 {
+				insight = "Earnings are lower than baseline. Stay online for protection eligibility."
+			} else if actual > baseline {
+				insight = "Great job! You've exceeded your weekly baseline."
+			}
+
+			var paidAmount float64 = 0
+			_ = workerDB.Raw(`
+				SELECT COALESCE(SUM(c.claim_amount), 0)
+				FROM claims c
+				WHERE c.worker_id = ? AND c.status IN ('paid', 'approved', 'queued_for_payout')
+			`, workerIDUint).Scan(&paidAmount).Error
+
 			c.JSON(200, gin.H{
 				"currency":           "INR",
 				"this_week_actual":   int(actual),
 				"this_week_baseline": int(baseline),
-				"protected_income":   int(baseline * 0.8),
+				"protected_income":   int(paidAmount),
+				"insight":            insight,
 				"history":            history,
 			})
 			return

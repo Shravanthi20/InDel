@@ -1,3 +1,6 @@
+import java.net.NetworkInterface
+import java.net.Inet4Address
+
 plugins {
     id("com.android.application")
     kotlin("android")
@@ -6,20 +9,38 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Load .env file for configuration
-val envFile = rootProject.file("../.env").takeIf { it.exists() }
-    ?: rootProject.file("worker-app/.env").takeIf { it.exists() }
-    ?: rootProject.file(".env").takeIf { it.exists() }
-
-val apiBaseUrl = if (envFile != null && envFile.exists()) {
-    envFile.readLines()
-        .find { it.startsWith("API_BASE_URL=") }
-        ?.removePrefix("API_BASE_URL=")
-        ?.trim() ?: "http://10.0.2.2:8001/"
-} else {
-    // Fallback to default for Android Emulator
-    "http://10.0.2.2:8001/"
+// Load .env file for configuration with robust discovery and auto-IP detection
+fun getHostIpAddress(): String {
+    try {
+        val interfaces = NetworkInterface.getNetworkInterfaces()
+        while (interfaces.hasMoreElements()) {
+            val iface = interfaces.nextElement()
+            // Skip loopback, inactive, or virtual interfaces
+            if (iface.isLoopback || !iface.isUp || iface.displayName.contains("Virtual") || iface.displayName.contains("VMware")) continue
+            val addresses = iface.inetAddresses
+            while (addresses.hasMoreElements()) {
+                val addr = addresses.nextElement()
+                if (addr is Inet4Address && !addr.isLoopbackAddress) {
+                    return addr.hostAddress
+                }
+            }
+        }
+    } catch (e: Exception) {}
+    return "10.0.2.2" // Ultimate fallback for official emulator
 }
+
+val apiBaseUrl = listOf("../.env", "worker-app/.env", ".env")
+    .map { rootProject.file(it) }
+    .filter { it.exists() }
+    .firstNotNullOfOrNull { file ->
+        file.readLines()
+            .find { it.startsWith("API_BASE_URL=") }
+            ?.removePrefix("API_BASE_URL=")
+            ?.trim()
+            ?.removeSurrounding("\"")
+    } ?: "http://${getHostIpAddress()}:8001/"
+
+println(">>> InDel Build: Using API_BASE_URL=$apiBaseUrl")
 
 android {
     namespace = "com.imaginai.indel"
@@ -100,7 +121,10 @@ dependencies {
     
     // Testing
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.5")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.7.5")
 }
 
 kapt {

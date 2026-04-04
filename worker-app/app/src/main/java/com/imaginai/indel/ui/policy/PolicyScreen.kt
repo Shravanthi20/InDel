@@ -91,12 +91,29 @@ fun PolicyContent(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Shield, contentDescription = null, tint = SuccessGreen)
+                        Icon(
+                            Icons.Default.Shield, 
+                            contentDescription = null, 
+                            tint = when(policy.status) {
+                                "active" -> SuccessGreen
+                                "paused" -> WarningAmber
+                                else -> ErrorRed
+                            }
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (policy.status == "active") "ACTIVE PROTECTION" else "INACTIVE",
+                            text = when(policy.status) {
+                                "active" -> "ACTIVE PROTECTION"
+                                "paused" -> "PAUSED PROTECTION"
+                                "cancelled" -> "CANCELLED"
+                                else -> "INACTIVE"
+                            },
                             fontWeight = FontWeight.Bold,
-                            color = if (policy.status == "active") SuccessGreen else TextSecondary
+                            color = when(policy.status) {
+                                "active" -> SuccessGreen
+                                "paused" -> WarningAmber
+                                else -> ErrorRed
+                            }
                         )
                     }
                     
@@ -110,7 +127,7 @@ fun PolicyContent(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text("Coverage Ratio", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                            Text("${(policy.coverageRatio * 100).toInt()}%", fontWeight = FontWeight.Bold)
+                            Text("85%", fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text("Next Due Date", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
@@ -146,32 +163,43 @@ fun PolicyContent(
         // 3. Actions
         item {
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { navController.navigate(Screen.PremiumPay.route) },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
-            ) {
-                Text("Pay Weekly Premium", fontWeight = FontWeight.Bold)
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = { viewModel.pause() },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Pause Plan")
-                }
-                OutlinedButton(
-                    onClick = { viewModel.cancel() },
-                    modifier = Modifier.weight(1f).height(48.dp),
+            if (policy.status == "active") {
+                Button(
+                    onClick = { navController.navigate(Screen.PremiumPay.route) },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
                 ) {
-                    Text("Cancel Plan")
+                    Text("Pay Weekly Premium", fontWeight = FontWeight.Bold)
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = { viewModel.pause() },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Pause Plan")
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.cancel() },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
+                    ) {
+                        Text("Cancel Plan")
+                    }
+                }
+            } else {
+                Button(
+                    onClick = { viewModel.enroll() },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+                ) {
+                    Text(if (policy.status == "paused") "Resume Protection" else "Enrol Now", fontWeight = FontWeight.Bold)
                 }
             }
         }

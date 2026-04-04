@@ -5,11 +5,10 @@ import (
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-var demoAuthPasswordsByPhone = map[string]string{}
-var demoAuthPhoneByEmail = map[string]string{}
 
 // SendOTP sends OTP to worker phone
 func SendOTP(c *gin.Context) {
@@ -119,12 +118,16 @@ func Register(c *gin.Context) {
 	workerID := fmt.Sprintf("worker-%s", phone)
 	if hasDB() {
 		var existing models.User
-		err := workerDB.Where("phone = ?", phone).First(&existing).Error
+		err := workerDB.Where("phone = ? OR email = ?", phone, email).First(&existing).Error
 		if err == gorm.ErrRecordNotFound {
-			newUser := models.User{Phone: phone, Email: email, Role: "worker"}
+			hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			newUser := models.User{Phone: phone, Email: email, Role: "worker", PasswordHash: string(hashedPassword)}
 			if createErr := workerDB.Create(&newUser).Error; createErr == nil {
 				existing = newUser
 			}
+		} else {
+			c.JSON(400, gin.H{"error": "user_already_exists"})
+			return
 		}
 		if existing.ID != 0 {
 			workerID = fmt.Sprintf("%d", existing.ID)
@@ -132,13 +135,18 @@ func Register(c *gin.Context) {
 	}
 
 	token := fmt.Sprintf("mock-jwt-token-%s", phone)
+	if hasDB() {
+		workerIDUint, _ := parseWorkerID(workerID)
+		_ = workerDB.Exec(
+			`INSERT INTO auth_tokens (user_id, token, expires_at)
+			 VALUES (?, ?, CURRENT_TIMESTAMP + INTERVAL '24 hour')
+			 ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at`,
+			workerIDUint, token,
+		)
+	}
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
-
-	demoAuthPasswordsByPhone[phone] = password
-	demoAuthPhoneByEmail[email] = phone
-	store.data.TokenToWorkerID[token] = workerID
 
 	if _, exists := store.data.WorkerProfiles[workerID]; !exists {
 		store.data.WorkerProfiles[workerID] = map[string]any{
@@ -148,10 +156,60 @@ func Register(c *gin.Context) {
 			"zone":            "Tambaram, Chennai",
 			"vehicle_type":    "bike",
 			"upi_id":          "new@upi",
-			"coverage_status": "inactive",
-			"enrolled":        false,
+			"coverage_status": "active",
+			"enrolled":        true,
 		}
 	}
+
+	// ─── DB Seeding for Demo "Real Data" ──────────────────────────────
+	if hasDB() {
+		workerIDUint, _ := parseWorkerID(workerID)
+
+		// 1. Ensure a default zone exists.
+		zoneName := "Tambaram"
+		_ = workerDB.Exec(
+			"INSERT INTO zones (name, city, state, risk_rating) VALUES (?, ?, ?, ?) ON CONFLICT (name) DO NOTHING",
+			zoneName, "Chennai", "Tamil Nadu", 0.62,
+		)
+		var zone models.Zone
+		_ = workerDB.Where("name = ?", zoneName).First(&zone).Error
+
+		// 2. Create Worker Profile in DB (Starting at 0 earnings).
+		_ = workerDB.Exec(
+			`INSERT INTO worker_profiles (worker_id, name, zone_id, vehicle_type, upi_id, aqi_zone, total_earnings_lifetime)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (worker_id) DO NOTHING`,
+			workerIDUint, username, zone.ID, "bike", "demo@upi", "AQI-Medium", 0,
+		)
+
+		// 3. Set Earnings Baseline.
+		_ = workerDB.Exec(
+			`INSERT INTO earnings_baseline (worker_id, baseline_amount)
+			 VALUES (?, 4080)
+			 ON CONFLICT (worker_id) DO NOTHING`,
+			workerIDUint,
+		)
+
+		// 4. Seed 50 Available Orders in this Zone for Testing.
+		for i := 1; i <= 50; i++ {
+			pickup := fmt.Sprintf("Pickup Area %d", i)
+			drop := fmt.Sprintf("Drop Area %d", i+50)
+			dist := 1.5 + (float64(i) * 0.1)
+			fee := 60.0 + (float64(i%5) * 5.0)
+			tip := 0.0
+			if i%7 == 0 {
+				tip = 15.0
+			}
+			_ = workerDB.Exec(
+				`INSERT INTO orders (zone_id, status, pickup_area, drop_area, distance_km, order_value, delivery_fee_inr, tip_inr, created_at, updated_at)
+				 VALUES (?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+				zone.ID, pickup, drop, dist, 250.0, fee, tip,
+			)
+		}
+
+		// No fake earnings history seeded for new users
+	}
+	// ──────────────────────────────────────────────────────────────────
 
 	c.JSON(201, gin.H{
 		"token":      token,
@@ -160,7 +218,6 @@ func Register(c *gin.Context) {
 	})
 }
 
-// Login logs in existing worker
 func Login(c *gin.Context) {
 	body := parseBody(c)
 	phone := bodyString(body, "phone", "")
@@ -172,34 +229,73 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	if phone == "" && email != "" {
-		phone = demoAuthPhoneByEmail[email]
-	}
-	if phone == "" {
-		c.JSON(401, gin.H{"error": "invalid_credentials"})
-		return
-	}
-
-	storedPassword, ok := demoAuthPasswordsByPhone[phone]
-	if !ok || storedPassword != password {
-		c.JSON(401, gin.H{"error": "invalid_credentials"})
-		return
-	}
-
 	workerID := fmt.Sprintf("worker-%s", phone)
 	if hasDB() {
 		var user models.User
-		err := workerDB.Where("phone = ?", phone).First(&user).Error
-		if err == nil {
-			workerID = fmt.Sprintf("%d", user.ID)
+		query := workerDB.Where("phone = ?", phone)
+		if phone == "" && email != "" {
+			query = workerDB.Where("email = ?", email)
 		}
+		err := query.First(&user).Error
+		if err != nil {
+			c.JSON(401, gin.H{"error": "user_not_found"})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+			c.JSON(401, gin.H{"error": "invalid_credentials"})
+			return
+		}
+		workerID = fmt.Sprintf("%d", user.ID)
+	} else {
+		c.JSON(500, gin.H{"error": "db_connection_failed"})
+		return
 	}
 
 	token := fmt.Sprintf("mock-jwt-token-%s", phone)
+	if hasDB() {
+		workerIDUint, _ := parseWorkerID(workerID)
+		_ = workerDB.Exec(
+			`INSERT INTO auth_tokens (user_id, token, expires_at)
+			 VALUES (?, ?, CURRENT_TIMESTAMP + INTERVAL '24 hour')
+			 ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at`,
+			workerIDUint, token,
+		)
+	}
+
+	store.mu.Lock()
 	store.data.TokenToWorkerID[token] = workerID
+	store.mu.Unlock()
+
+	// ─── DB Seeding for Order Refill ──────────────────────────────
+	if hasDB() {
+		workerIDUint, _ := parseWorkerID(workerID)
+
+		// 1. Get user's zone.
+		var zoneID uint
+		_ = workerDB.Raw("SELECT zone_id FROM worker_profiles WHERE worker_id = ?", workerIDUint).Scan(&zoneID).Error
+		if zoneID == 0 {
+			zoneID = 1 // default to zone 1
+		}
+
+		// 2. Seed 50 Available Orders in this Zone.
+		for i := 1; i <= 50; i++ {
+			pickup := fmt.Sprintf("Pickup Area %d", i)
+			drop := fmt.Sprintf("Drop Area %d", i+50)
+			dist := 1.5 + (float64(i) * 0.1)
+			fee := 60.0 + (float64(i%8) * 4.0)
+			tip := 0.0
+			if i%5 == 0 {
+				tip = 12.0
+			}
+			_ = workerDB.Exec(
+				`INSERT INTO orders (zone_id, status, pickup_area, drop_area, distance_km, order_value, delivery_fee_inr, tip_inr, created_at, updated_at)
+				 VALUES (?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+				zoneID, pickup, drop, dist, 250.0, fee, tip,
+			)
+		}
+	}
+	// ─────────────────────────────────────────────────────────────
 
 	c.JSON(200, gin.H{
 		"token":      token,

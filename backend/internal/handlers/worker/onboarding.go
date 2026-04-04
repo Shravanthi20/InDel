@@ -123,16 +123,33 @@ func GetProfile(c *gin.Context) {
 				Where("u.id = ?", workerIDUint).
 				Scan(&row).Error
 			if err == nil && row.WorkerID != 0 {
-				zone := strings.TrimSpace(fmt.Sprintf("%s, %s", row.ZoneName, row.City))
+				name := row.Name
+				if name == "" {
+					name = "New Worker"
+				}
+				zoneName := row.ZoneName
+				if zoneName == "" {
+					zoneName = "Tambaram"
+				}
+				city := row.City
+				if city == "" {
+					city = "Chennai"
+				}
+				zone := strings.TrimSpace(fmt.Sprintf("%s, %s", zoneName, city))
+				
+				var ordersCompleted int64
+				_ = workerDB.Model(&models.Order{}).Where("worker_id = ? AND status = 'delivered'", row.WorkerID).Count(&ordersCompleted).Error
+
 				c.JSON(200, gin.H{"worker": gin.H{
-					"worker_id":       fmt.Sprintf("%d", row.WorkerID),
-					"name":            row.Name,
-					"phone":           row.Phone,
-					"zone":            zone,
-					"vehicle_type":    row.VehicleType,
-					"upi_id":          row.UPIId,
-					"coverage_status": "active",
-					"enrolled":        true,
+					"worker_id":        fmt.Sprintf("%d", row.WorkerID),
+					"name":             name,
+					"phone":            row.Phone,
+					"zone":             zone,
+					"vehicle_type":     row.VehicleType,
+					"upi_id":           row.UPIId,
+					"coverage_status":  "active",
+					"enrolled":         true,
+					"orders_completed": ordersCompleted,
 				}})
 				return
 			}

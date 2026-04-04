@@ -110,7 +110,7 @@ fun HomeContent(
         DashboardCard(
             title = "Earnings Today",
             value = "₹${earnings.thisWeekActual.toInt()}",
-            subtitle = "Completed: 8 Orders",
+            subtitle = "Completed: ${worker.ordersCompleted ?: 0} Orders",
             icon = Icons.Default.CurrencyRupee,
             onClick = { navController.navigate(Screen.Earnings.route) }
         )
@@ -124,6 +124,18 @@ fun HomeContent(
             color = if (policy.status == "active") SuccessGreen else WarningAmber,
             onClick = { navController.navigate(Screen.Policy.route) }
         )
+
+        // 3.a. Protected Payouts (if any)
+        if (earnings.protectedIncome > 0) {
+            DashboardCard(
+                title = "Protected Payouts",
+                value = "₹${earnings.protectedIncome.toInt()}",
+                subtitle = "Auto-Processed Claims",
+                icon = Icons.Default.VerifiedUser,
+                color = SuccessGreen,
+                onClick = { navController.navigate(Screen.Claims.route) }
+            )
+        }
 
         // 4. Disruption Banner (Conditional)
         if (worker.coverageStatus == "at_risk") {

@@ -174,8 +174,8 @@ fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavContro
             
             val buttonText = when(order.status) {
                 "assigned" -> "Accept Order"
-                "accepted" -> "Picked Up"
-                "picked_up" -> "Delivered"
+                "accepted" -> "Complete Delivery"
+                "picked_up" -> "Complete Delivery"
                 else -> "Complete"
             }
 
@@ -184,7 +184,7 @@ fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavContro
                     onClick = {
                         when(order.status) {
                             "assigned" -> viewModel.acceptOrder(order.orderId)
-                            "accepted" -> navController.navigate(Screen.DeliveryExecution.createRoute(order.orderId))
+                            "accepted" -> navController.navigate(Screen.DeliveryCompletion.createRoute(order.orderId))
                             "picked_up" -> navController.navigate(Screen.DeliveryCompletion.createRoute(order.orderId))
                         }
                     },

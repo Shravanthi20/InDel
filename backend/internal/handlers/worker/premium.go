@@ -28,7 +28,9 @@ func GetPremium(c *gin.Context) {
 				{"feature": "historical_disruptions", "impact": 0.27},
 			}
 			if quote != nil {
-				amount = int(quote.WeeklyPremiumINR)
+				if quote.Source == "premium-ml" {
+					amount = int(quote.WeeklyPremiumINR)
+				}
 				source = quote.Source
 				riskScore = quote.RiskScore
 				modelVersion = quote.ModelVersion

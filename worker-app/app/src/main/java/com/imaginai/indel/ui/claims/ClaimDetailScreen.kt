@@ -133,7 +133,7 @@ fun ClaimDetailContent(claim: Claim) {
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 BreakdownRow("Income Loss", "₹${claim.incomeLoss}")
-                BreakdownRow("Coverage Ratio", "85%") // Static for demo or from policy
+                BreakdownRow("Coverage Ratio", "85%")
                 HorizontalDivider(color = BackgroundWarmWhite)
                 BreakdownRow("Final Payout", "₹${claim.payoutAmount}", isTotal = true)
             }

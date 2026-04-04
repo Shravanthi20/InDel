@@ -130,7 +130,7 @@ fun EarningsContent(earnings: Earnings) {
                             color = if (isGapped) BlueDeep else SuccessGreen
                         )
                         Text(
-                            if (isGapped) {
+                            text = earnings.insight ?: if (isGapped) {
                                 "Due to reduced activity (likely disruption), your earnings dropped by ₹${gap.toInt()}. Your protection ensures you receive ₹${earnings.protectedIncome.toInt()}."
                             } else {
                                 "You've exceeded your baseline by ₹${(-gap).toInt()}. Great job! Your protection remains active for next week."
