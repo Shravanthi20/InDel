@@ -32,7 +32,7 @@ func setupMockDB() *gorm.DB {
 		CREATE TABLE zones (id INTEGER PRIMARY KEY, city TEXT, name TEXT);
 		CREATE TABLE disruptions (id INTEGER PRIMARY KEY, zone_id INTEGER);
 		CREATE TABLE worker_profiles (worker_id INTEGER, zone_id INTEGER);
-		CREATE TABLE claim_fraud_scores (claim_id INTEGER PRIMARY KEY, score REAL, final_verdict TEXT, rule_violations TEXT, created_at DATETIME, updated_at DATETIME);
+		CREATE TABLE claim_fraud_scores (claim_id INTEGER PRIMARY KEY, isolation_forest_score REAL, dbscan_score REAL, final_verdict TEXT, rule_violations TEXT, created_at DATETIME);
 		CREATE TABLE claim_audit_logs (id INTEGER PRIMARY KEY, claim_id INTEGER, action TEXT, notes TEXT, reviewer TEXT, created_at DATETIME);
 	`)
 
@@ -177,7 +177,7 @@ func TestReviewClaimIdempotencyAndAudit(t *testing.T) {
 	db.Exec("INSERT INTO claims (id, status, fraud_verdict) VALUES (1, 'pending', 'review')")
 
 	payload := []byte(`{"status": "denied", "fraud_verdict": "fraud", "notes": "GPS anomalies"}`)
-	
+
 	// First call
 	req, _ := http.NewRequest("POST", "/api/v1/insurer/claims/1/review", bytes.NewBuffer(payload))
 	req.Header.Set("Content-Type", "application/json")
