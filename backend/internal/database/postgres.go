@@ -22,7 +22,12 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	// AutoMigrate is necessary for tests using in-memory SQLite
+	// In Docker/runtime, schema is managed by SQL migrations (db-migrate service).
+	// Keep AutoMigrate for SQLite-based tests only.
+	if db != nil && db.Dialector != nil && db.Dialector.Name() == "postgres" {
+		return nil
+	}
+
 	return db.AutoMigrate(
 		&models.User{},
 		&models.WorkerProfile{},
@@ -36,6 +41,8 @@ func Migrate(db *gorm.DB) error {
 		&models.EarningsBaseline{},
 		&models.WeeklyEarningsSummary{},
 		&models.Disruption{},
+		&models.Batch{},
+		&models.BatchOrder{},
 		&models.Payout{},
 		&models.PayoutAttempt{},
 		&models.KafkaEventLog{},

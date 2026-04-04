@@ -23,6 +23,9 @@ func setupCoreOpsTestDB(t *testing.T) *gorm.DB {
 	if err := database.Migrate(db); err != nil {
 		t.Fatalf("failed to migrate db: %v", err)
 	}
+	// Service queries use singular earnings table names; expose compatibility views in sqlite tests.
+	_ = db.Exec("CREATE VIEW IF NOT EXISTS earnings_baseline AS SELECT * FROM earnings_baselines").Error
+	_ = db.Exec("CREATE VIEW IF NOT EXISTS weekly_earnings_summary AS SELECT * FROM weekly_earnings_summaries").Error
 	return db
 }
 

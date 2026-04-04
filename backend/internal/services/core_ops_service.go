@@ -216,8 +216,8 @@ func (s *CoreOpsService) GenerateClaimsForDisruption(disruptionID uint, now time
 	if err := s.DB.Table("worker_profiles wp").
 		Select("wp.worker_id, eb.baseline_amount, COALESCE(wes.total_earnings, 0) AS actual_earnings").
 		Joins("JOIN policies p ON p.worker_id = wp.worker_id AND p.status = ?", "active").
-		Joins("LEFT JOIN earnings_baselines eb ON eb.worker_id = wp.worker_id").
-		Joins("LEFT JOIN weekly_earnings_summaries wes ON wes.worker_id = wp.worker_id AND wes.week_start = ?", weekStart).
+		Joins("LEFT JOIN earnings_baseline eb ON eb.worker_id = wp.worker_id").
+		Joins("LEFT JOIN weekly_earnings_summary wes ON wes.worker_id = wp.worker_id AND wes.week_start = ?", weekStart).
 		Where("wp.zone_id = ?", disruption.ZoneID).
 		Scan(&workers).Error; err != nil {
 		return nil, err
@@ -257,12 +257,13 @@ func (s *CoreOpsService) GenerateClaimsForDisruption(disruptionID uint, now time
 			return nil, err
 		}
 
-		score := models.ClaimFraudScore{ClaimID: claim.ID, Score: 0.19, FinalVerdict: "clear", RuleViolations: "[]"}
+		score := models.ClaimFraudScore{ClaimID: claim.ID, IsolationForestScore: 0.19, DbscanScore: 0.14, FinalVerdict: "clear", RuleViolations: "[]"}
 		if status == "manual_review" {
-			score.Score = 0.66
+			score.IsolationForestScore = 0.66
+			score.DbscanScore = 0.58
 			score.FinalVerdict = "review"
 		}
-		if err := s.DB.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "claim_id"}}, DoUpdates: clause.AssignmentColumns([]string{"score", "final_verdict", "rule_violations", "updated_at"})}).Create(&score).Error; err != nil {
+		if err := s.DB.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "claim_id"}}, DoUpdates: clause.AssignmentColumns([]string{"isolation_forest_score", "dbscan_score", "final_verdict", "rule_violations"})}).Create(&score).Error; err != nil {
 			return nil, err
 		}
 
@@ -530,7 +531,7 @@ func (s *CoreOpsService) GenerateSyntheticData(req SyntheticGenerateRequest, now
 			payload, _ := json.Marshal([]map[string]interface{}{{"name": "gps_mismatch", "impact": 0.24}, {"name": "session_gap", "impact": 0.12}})
 			factors = string(payload)
 		}
-		scores = append(scores, models.ClaimFraudScore{ClaimID: claim.ID, Score: round2(score), FinalVerdict: finalVerdict, RuleViolations: factors})
+		scores = append(scores, models.ClaimFraudScore{ClaimID: claim.ID, IsolationForestScore: round2(score), DbscanScore: round2(score * 0.82), FinalVerdict: finalVerdict, RuleViolations: factors})
 		if claim.Status == "approved" {
 			processedAt := now.UTC().Add(-30 * time.Minute)
 			payouts = append(payouts, models.Payout{ClaimID: claim.ID, WorkerID: claim.WorkerID, Amount: round2(claim.ClaimAmount * 0.9), Status: "processed", IdempotencyKey: fmt.Sprintf("pay_clm_%d", claim.ID), RetryCount: 1, RazorpayID: fmt.Sprintf("rzp_seed_%d", claim.ID), RazorpayStatus: "processed", ProcessedAt: &processedAt})

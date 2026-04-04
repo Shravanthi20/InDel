@@ -52,7 +52,7 @@ type Claim struct {
 	ClaimAmount    float64
 	Status         string
 	FraudVerdict   string
-	ManualReviewAt *time.Time
+	ManualReviewAt *time.Time `gorm:"column:manual_reviewed_at"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }

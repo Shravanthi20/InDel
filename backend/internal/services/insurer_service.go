@@ -220,7 +220,7 @@ func (s *InsurerService) GetClaimDetail(claimID string) (*models.ClaimDetail, er
 	}
 	var row r
 	err := s.DB.Table("claims c").
-		Select("c.id AS claim_id, c.worker_id, c.disruption_id, z.name AS zone_name, z.city, c.claim_amount, c.status, COALESCE(c.fraud_verdict, 'pending') AS fraud_verdict, COALESCE(cfs.score, 0.0) AS fraud_score, cfs.rule_violations AS factors, CAST(c.created_at as text) AS created_at").
+		Select("c.id AS claim_id, c.worker_id, c.disruption_id, z.name AS zone_name, z.city, c.claim_amount, c.status, COALESCE(c.fraud_verdict, 'pending') AS fraud_verdict, COALESCE(cfs.isolation_forest_score, 0.0) AS fraud_score, cfs.rule_violations AS factors, CAST(c.created_at as text) AS created_at").
 		Joins("JOIN disruptions d ON d.id = c.disruption_id").
 		Joins("JOIN zones z ON z.id = d.zone_id").
 		Joins("LEFT JOIN claim_fraud_scores cfs ON cfs.claim_id = c.id").
@@ -321,7 +321,7 @@ func (s *InsurerService) GetFraudQueue(offset, limit int) ([]models.FraudQueueIt
 	var total int64
 
 	baseQuery := s.DB.Table("claims c").
-		Select("c.id AS claim_id, COALESCE(cfs.final_verdict, 'pending') AS final_verdict, COALESCE(cfs.score, 0.0) AS score, COALESCE(CAST(cfs.rule_violations as text), '[]') AS violations, CAST(c.created_at as text) AS created_at").
+		Select("c.id AS claim_id, COALESCE(cfs.final_verdict, 'pending') AS final_verdict, COALESCE(cfs.isolation_forest_score, 0.0) AS score, COALESCE(CAST(cfs.rule_violations as text), '[]') AS violations, CAST(c.created_at as text) AS created_at").
 		Joins("LEFT JOIN claim_fraud_scores cfs ON cfs.claim_id = c.id").
 		Where("COALESCE(cfs.final_verdict, 'pending') IN ('flagged', 'manual_review', 'pending')")
 
@@ -330,7 +330,7 @@ func (s *InsurerService) GetFraudQueue(offset, limit int) ([]models.FraudQueueIt
 		Where("COALESCE(cfs.final_verdict, 'pending') IN ('flagged', 'manual_review', 'pending')").
 		Count(&total).Error
 
-	_ = baseQuery.Order("cfs.score DESC, c.created_at DESC").
+	_ = baseQuery.Order("cfs.isolation_forest_score DESC, c.created_at DESC").
 		Offset(offset).
 		Limit(limit).
 		Scan(&rows).Error
