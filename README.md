@@ -5,7 +5,7 @@
 **Team:** ImaginAI
 **Hackathon:** Guidewire DEVTrails 2026
 **Persona:** E-commerce
-**Current Phase:** Phase 1 (Ideation)
+**Current Phase:** Phase 2 (Implementation)
 
 > **Note:** Specific values such as premium amounts, payout figures, coverage ratios, and trigger thresholds are illustrative estimates for design and modelling purposes only. Final figures will be refined during development in collaboration with relevant stakeholders. API integrations and third-party service references are subject to change.
 
@@ -56,16 +56,16 @@ InDel is a **B2B platform built for insurance providers** that combines a delive
 
 The insurance provider is the primary customer. InDel gives them a ready-to-deploy infrastructure that handles delivery worker management, real-time disruption monitoring, income loss calculation, claim verification, and payout processing — all in one system, without depending on third-party delivery app data.
 
-InDel owns the delivery operations side too: workers receive assignments through the platform, complete deliveries, and earn — just like any delivery management platform. In the primary deployment model, InDel operates as a **white-label layer integrated with an existing delivery platform** (e.g. Swiggy, Zomato) via API — the platform routes orders to InDel-enrolled workers, and InDel handles assignment, GPS tracking, earnings recording, and the insurance engine on top of the same data layer. InDel does not independently generate consumer delivery demand; the platform partner brings the order flow. The insurance layer runs in the background using the same first-party activity data the delivery system already collects.
+InDel owns the delivery operations side too: workers receive assignments through the platform, complete deliveries, and earn — just like any delivery management platform. In the primary deployment model, InDel operates as a **white-label layer integrated with an existing delivery platform** (e.g. e-commerce logistics platforms, last-mile delivery partners) via API — the platform routes orders to InDel-enrolled workers, and InDel handles assignment, GPS tracking, earnings recording, and the insurance engine on top of the same data layer. InDel does not independently generate consumer delivery demand; the platform partner brings the order flow. The insurance layer runs in the background using the same first-party activity data the delivery system already collects.
 
 ```
 Traditional Approach:
-Insurance Provider → needs data from Swiggy/Zomato → API access unlikely → incomplete data → weak fraud detection
+Insurance Provider → needs data from e-commerce logistics platforms, last-mile delivery partners → API access unlikely → incomplete data → weak fraud detection
 
 InDel Approach (White-Label Integration):
 Insurance Provider deploys InDel → InDel integrates with platform via API → delivery system + insurance engine share one data layer → accurate verification → reliable payouts
 ```
-
+While the prototype uses familiar delivery scenarios, the system is designed to generalize across e-commerce, hyperlocal delivery, and logistics platforms.
 ---
 
 ## Stakeholders
@@ -73,7 +73,7 @@ Insurance Provider deploys InDel → InDel integrates with platform via API → 
 **Insurance Provider (Primary B2B Customer)**
 Purchases and deploys InDel. Gets access to a previously uninsured worker segment with an integrated data pipeline, automated claim processing, and risk analytics — without negotiating data agreements with existing delivery platforms.
 
-**Delivery Platform Partner (e.g. Swiggy, Zomato) — Optional Integration**
+**Delivery Platform Partner (e.g. e-commerce logistics platforms, last-mile delivery partners) — Optional Integration**
 InDel is not replacing consumer delivery apps. InDel operates as a **white-label delivery management layer** that sits inside or alongside an existing platform's worker operations. The platform partner routes orders to InDel-enrolled workers through an API integration; InDel handles assignment, tracking, earnings recording, and the insurance layer on top. The platform benefits from having their delivery workforce covered and financially protected without building any insurance infrastructure themselves. This is the primary deployment model — InDel does not independently generate consumer delivery demand, which would require capital-intensive marketplace buildout outside the scope of this product. In zones where no platform partner integration exists, InDel can operate as a standalone delivery management system for insurer-deployed worker cohorts, but this is a secondary use case.
 
 **Delivery Worker (End Beneficiary)**
@@ -788,15 +788,186 @@ Worker believes they should have been eligible for a claim. Triggers Maintenance
 
 ---
 
+## Local Development Setup
+
+This guide explains how to run the InDel platform locally, including backend services, web dashboards, and the mobile application.
+
+---
+
+### 1. Prerequisites
+
+Ensure the following tools are installed:
+
+- Docker and Docker Compose  
+- Node.js (v18 or higher recommended)  
+- npm or yarn  
+- Android Studio (for mobile application)
+
+---
+
+### 2. Determine Local IP Address
+
+You may need your local IP address when running the mobile app on a physical device.
+
+**macOS**
+```bash
+ipconfig getifaddr en0
+```
+
+**Windows**
+```bash
+ipconfig
+```
+
+**Linux**
+```bash
+hostname -I
+```
+
+---
+
+### 3. Environment Configuration
+
+Create a `.env` file in the root directory.
+
+You can copy from `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+---
+
+### 4. Start Backend and ML Services
+
+Run all backend services (PostgreSQL, Kafka, APIs, ML models) using Docker.
+
+**Demo Environment (recommended)**
+```bash
+COMPOSE_PARALLEL_LIMIT=1 docker compose -f docker-compose.demo.yml up --build -d
+```
+
+**Production Environment**
+```bash
+COMPOSE_PARALLEL_LIMIT=1 docker compose up --build -d
+```
+
+---
+
+### 5. Run Web Dashboards
+
+Open two terminals:
+
+**Platform Dashboard**
+```bash
+cd platform-dashboard
+npm install
+npm run dev
+```
+
+**Insurer Dashboard**
+```bash
+cd insurer-dashboard
+npm install
+npm run dev
+```
+
+---
+
+### 6. Run Mobile Application
+
+1. Open `worker-app` in Android Studio  
+2. Wait for Gradle sync  
+3. Select emulator or physical device  
+4. Run the app  
+
+**Important:**
+- If using a physical device, replace `127.0.0.1` in `.env` with your local IP (e.g., `192.168.x.x`)  
+- Ensure both laptop and mobile device are connected to the same network  
+
+---
+
+### 7. Verification
+
+- Backend services running via Docker  
+- Dashboards accessible in browser  
+- Mobile app connected to backend  
+
+---
+
+### 8. Troubleshooting
+
+- **Connection issues**: Check `.env` IP configuration  
+- **Docker issues**: Use `COMPOSE_PARALLEL_LIMIT=1`  
+- **Mobile not connecting**: Ensure same Wi-Fi network 
+
+---
+
+## Environment Variables Template
+
+Create a `.env.example` file:
+
+```env
+# InDel — Master Environment File (Template)
+
+# PostgreSQL
+POSTGRES_USER=your_db_user
+POSTGRES_PASSWORD=your_db_password
+POSTGRES_DB=your_db_name
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_NAME=your_db_name
+
+# Network
+HOST_IP=127.0.0.1
+API_BASE_URL=http://127.0.0.1:8001/
+API_BASE_URL1=http://127.0.0.1:8003/
+
+# ML Services
+PREMIUM_ML_URL=http://127.0.0.1:9001
+FRAUD_ML_URL=http://127.0.0.1:9002
+FORECAST_ML_URL=http://127.0.0.1:9003
+
+# External APIs
+OPENWEATHERMAP_API_KEY=your_openweathermap_api_key
+OPENAQ_API_KEY=your_openaq_api_key
+
+# Firebase
+FIREBASE_API_KEY=your_firebase_api_key
+FIREBASE_PROJECT_ID=your_project_id
+FIREBASE_PROJECT_NUMBER=your_project_number
+FIREBASE_STORAGE_BUCKET=your_storage_bucket
+FIREBASE_APP_ID=your_app_id
+FIREBASE_SERVER_KEY=your_server_key
+
+# Kafka
+KAFKA_BROKERS=kafka:9092
+
+# Frontend APIs
+VITE_INSURER_API_URL=http://127.0.0.1:8002
+VITE_CORE_API_URL=http://127.0.0.1:8000
+VITE_PLATFORM_API_URL=http://127.0.0.1:8003
+```
+
+---
+
+### Notes
+
+- Replace all placeholder values with your own credentials  
+- Use `127.0.0.1` for local development  
+- Use your local IP (`192.168.x.x`) for mobile testing  
+- Do not commit `.env` files with real secrets  
+
+---
 ## Team ImaginAI
 
 | Name | Role |
 |---|---|
-| Shravanthi Satyanarayanan | Backend & AI/ML |
-| Gayathri U | Frontend & UX |
-| Rithanya K A | Insurance Model & Research |
-| Saravana Priyaa C R| Delivery Platform & DevOps |
-| Subikha MV | System Design & Integration |
+| Shravanthi S| Core Policy, Premium Cycle, Payout & Data Operations |
+| Gayathri U | Delivery Management & DevOps|
+| Rithanya K A | ML Services (Training & Serving) |
+| Saravana Priyaa C R | Platform Integration, Disruption Engine|
+| Subikha MV | Insurer System, Claims Intelligence & System Design |
 
 ---
 
