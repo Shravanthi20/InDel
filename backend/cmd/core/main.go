@@ -9,8 +9,9 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/database"
 	"github.com/Shravanthi20/InDel/backend/internal/handlers/core"
 	"github.com/Shravanthi20/InDel/backend/internal/pollers"
-	"github.com/Shravanthi20/InDel/backend/internal/services"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
+	"github.com/Shravanthi20/InDel/backend/internal/services"
+	"github.com/Shravanthi20/InDel/backend/pkg/razorpay"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -34,8 +35,15 @@ func main() {
 
 	core.SetDB(db)
 
+	// ─── Initialize Razorpay Client ────────────────────────────────────
+	razorpayAPIKey := os.Getenv("RAZORPAY_API_KEY")
+	razorpayAPISecret := os.Getenv("RAZORPAY_API_SECRET")
+	razorpayClient := razorpay.NewRazorpayClient(razorpayAPIKey, razorpayAPISecret)
+	log.Printf("✅ Razorpay client initialized (Mock Mode: %v)", razorpayClient.MockMode)
+
 	// ─── Start Automated Disruption Triggers ────────────────────────────
 	coreSvc := services.NewCoreOpsService(db)
+	coreSvc.SetRazorpayClient(razorpayClient)
 
 	// Trigger 1 & 2: Heavy Rain + Extreme Heat (OpenWeatherMap, every 10 min)
 	weatherPoller := &pollers.WeatherPoller{DB: db}
@@ -62,7 +70,7 @@ func main() {
 	// ────────────────────────────────────────────────────────────────────
 
 	router := gin.Default()
-	
+
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true
 	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "Authorization")

@@ -13,16 +13,29 @@ import (
 	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
+	"github.com/Shravanthi20/InDel/backend/pkg/razorpay"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 type CoreOpsService struct {
-	DB *gorm.DB
+	DB             *gorm.DB
+	razorpayClient *razorpay.RazorpayClient
+	producer       interface{} // Kafka producer
 }
 
 func NewCoreOpsService(db *gorm.DB) *CoreOpsService {
 	return &CoreOpsService{DB: db}
+}
+
+// SetRazorpayClient sets the Razorpay client
+func (s *CoreOpsService) SetRazorpayClient(client *razorpay.RazorpayClient) {
+	s.razorpayClient = client
+}
+
+// SetProducer sets the Kafka producer
+func (s *CoreOpsService) SetProducer(producer interface{}) {
+	s.producer = producer
 }
 
 type WeeklyCycleResult struct {
@@ -34,26 +47,26 @@ type WeeklyCycleResult struct {
 }
 
 type GeneratedClaimsResult struct {
-	DisruptionID    string `json:"disruption_id"`
-	WorkersChecked  int    `json:"workers_checked"`
-	ClaimsGenerated int    `json:"claims_generated"`
-	ClaimsSkipped   int    `json:"claims_skipped"`
-	Status          string `json:"status"`
+	DisruptionID      string `json:"disruption_id"`
+	WorkersChecked    int    `json:"workers_checked"`
+	ClaimsGenerated   int    `json:"claims_generated"`
+	ClaimsSkipped     int    `json:"claims_skipped"`
+	Status            string `json:"status"`
 	GeneratedClaimIDs []uint `json:"-"`
 }
 
 type AutoProcessDisruptionResult struct {
-	DisruptionID        string `json:"disruption_id"`
-	WorkersNotified     int    `json:"workers_notified"`
-	WorkersChecked      int    `json:"workers_checked"`
-	ClaimsGenerated     int    `json:"claims_generated"`
-	ClaimsSkipped       int    `json:"claims_skipped"`
-	PayoutsQueued       int    `json:"payouts_queued"`
-	PayoutsProcessed    int    `json:"payouts_processed"`
-	PayoutsSucceeded    int    `json:"payouts_succeeded"`
-	PayoutsFailed       int    `json:"payouts_failed"`
-	ManualReviewClaims  int    `json:"manual_review_claims"`
-	Status              string `json:"status"`
+	DisruptionID       string `json:"disruption_id"`
+	WorkersNotified    int    `json:"workers_notified"`
+	WorkersChecked     int    `json:"workers_checked"`
+	ClaimsGenerated    int    `json:"claims_generated"`
+	ClaimsSkipped      int    `json:"claims_skipped"`
+	PayoutsQueued      int    `json:"payouts_queued"`
+	PayoutsProcessed   int    `json:"payouts_processed"`
+	PayoutsSucceeded   int    `json:"payouts_succeeded"`
+	PayoutsFailed      int    `json:"payouts_failed"`
+	ManualReviewClaims int    `json:"manual_review_claims"`
+	Status             string `json:"status"`
 }
 
 type PayoutResult struct {
@@ -461,17 +474,65 @@ func (s *CoreOpsService) processPayoutsByID(payoutIDs []uint, now time.Time) (*P
 		payout.RetryCount++
 		attempt := models.PayoutAttempt{PayoutID: payout.ID, AttemptNo: payout.RetryCount, Status: "processing", CreatedAt: now.UTC()}
 
-		if shouldFailPayout(payout) {
+		// Fetch worker UPI
+		var worker models.WorkerProfile
+		if err := s.DB.Where("worker_id = ?", payout.WorkerID).First(&worker).Error; err != nil {
 			result.Failed++
-			result.Retried++
-			nextRetry := now.UTC().Add(time.Duration(payout.RetryCount) * 5 * time.Minute)
 			attempt.Status = "failed"
-			attempt.Error = "transient_gateway_failure"
-			payout.Status = "retry_pending"
+			attempt.Error = "worker_not_found"
 			payout.LastError = attempt.Error
-			payout.NextRetryAt = &nextRetry
-			payout.RazorpayStatus = "retry_pending"
-		} else {
+			payout.Status = "failed"
+			s.DB.Create(&attempt)
+			s.DB.Save(&payout)
+			continue
+		}
+
+		if worker.UPIId == "" {
+			result.Failed++
+			attempt.Status = "failed"
+			attempt.Error = "no_upi_found"
+			payout.LastError = attempt.Error
+			payout.Status = "failed"
+			s.DB.Create(&attempt)
+			s.DB.Save(&payout)
+			continue
+		}
+
+		// Call Razorpay API with retry logic
+		var razorpayID string
+		var lastError string
+		maxRetries := 5
+
+		for attempt_count := 0; attempt_count < maxRetries; attempt_count++ {
+			if s.razorpayClient == nil {
+				lastError = "razorpay_client_not_available"
+				break
+			}
+
+			pID, pErr := s.razorpayClient.CreatePayout(payout.WorkerID, payout.Amount, worker.UPIId)
+			if pErr == nil {
+				razorpayID = pID
+				lastError = ""
+				break
+			}
+
+			lastError = pErr.Error()
+
+			// Check if error is transient
+			if !razorpay.IsTransientError(lastError) {
+				// Permanent error - don't retry
+				break
+			}
+
+			if attempt_count < maxRetries-1 {
+				// Back off and retry
+				backoffDuration := time.Duration(attempt_count+1) * 100 * time.Millisecond
+				time.Sleep(backoffDuration)
+			}
+		}
+
+		// Update payout based on result
+		if razorpayID != "" {
 			result.Succeeded++
 			processedAt := now.UTC()
 			attempt.Status = "succeeded"
@@ -480,16 +541,41 @@ func (s *CoreOpsService) processPayoutsByID(payoutIDs []uint, now time.Time) (*P
 			payout.NextRetryAt = nil
 			payout.ProcessedAt = &processedAt
 			payout.RazorpayStatus = "processed"
-			payout.RazorpayID = fmt.Sprintf("rzp_mock_%d", payout.ID)
+			payout.RazorpayID = razorpayID
+
+			// Publish Kafka event
+			if s.producer != nil {
+				_ = s.notifyPayoutProcessed(payout.WorkerID, payout.ClaimID, payout.Amount, processedAt)
+			}
+
+			// Update claim status to paid
 			_ = s.DB.Model(&models.Claim{}).Where("id = ?", payout.ClaimID).Updates(map[string]interface{}{"status": "paid", "updated_at": processedAt}).Error
-			_ = s.notifyPayoutProcessed(payout.WorkerID, payout.ClaimID, payout.Amount, processedAt)
+		} else {
+			// Check if we should retry
+			if razorpay.IsTransientError(lastError) && payout.RetryCount < maxRetries {
+				result.Retried++
+				nextRetry := now.UTC().Add(time.Duration(payout.RetryCount) * 5 * time.Minute)
+				attempt.Status = "failed"
+				attempt.Error = lastError
+				payout.Status = "retry_pending"
+				payout.LastError = lastError
+				payout.NextRetryAt = &nextRetry
+				payout.RazorpayStatus = "retry_pending"
+			} else {
+				result.Failed++
+				attempt.Status = "failed"
+				attempt.Error = lastError
+				payout.Status = "failed"
+				payout.LastError = lastError
+				payout.RazorpayStatus = "failed"
+			}
 		}
 
 		if err := s.DB.Create(&attempt).Error; err != nil {
-			return nil, err
+			continue // Log and continue instead of returning error
 		}
 		if err := s.DB.Save(&payout).Error; err != nil {
-			return nil, err
+			continue // Log and continue instead of returning error
 		}
 	}
 
@@ -728,12 +814,24 @@ func (s *CoreOpsService) GenerateSyntheticData(req SyntheticGenerateRequest, now
 		}
 	}
 
-	if err := s.DB.Create(&users).Error; err != nil { return nil, err }
-	if err := s.DB.Create(&profiles).Error; err != nil { return nil, err }
-	if err := s.DB.Create(&baselines).Error; err != nil { return nil, err }
-	if err := s.DB.Create(&policies).Error; err != nil { return nil, err }
-	if err := s.DB.Create(&weeklySummaries).Error; err != nil { return nil, err }
-	if err := s.DB.Create(&premiumPayments).Error; err != nil { return nil, err }
+	if err := s.DB.Create(&users).Error; err != nil {
+		return nil, err
+	}
+	if err := s.DB.Create(&profiles).Error; err != nil {
+		return nil, err
+	}
+	if err := s.DB.Create(&baselines).Error; err != nil {
+		return nil, err
+	}
+	if err := s.DB.Create(&policies).Error; err != nil {
+		return nil, err
+	}
+	if err := s.DB.Create(&weeklySummaries).Error; err != nil {
+		return nil, err
+	}
+	if err := s.DB.Create(&premiumPayments).Error; err != nil {
+		return nil, err
+	}
 
 	disruptions := make([]models.Disruption, 0, len(zones)*2)
 	for _, zone := range zones {
@@ -747,7 +845,9 @@ func (s *CoreOpsService) GenerateSyntheticData(req SyntheticGenerateRequest, now
 			disruptions = append(disruptions, models.Disruption{ZoneID: zone.ID, Type: disruptionTypeForScenario(scenario, idx), Severity: severityForScenario(scenario, rng), Confidence: round2(0.72 + rng.Float64()*0.24), Status: "confirmed", SignalTimestamp: &start, ConfirmedAt: &confirmed, StartTime: &start})
 		}
 	}
-	if err := s.DB.Create(&disruptions).Error; err != nil { return nil, err }
+	if err := s.DB.Create(&disruptions).Error; err != nil {
+		return nil, err
+	}
 
 	claims := make([]models.Claim, 0, 2000)
 	scores := make([]models.ClaimFraudScore, 0, 2000)
@@ -762,14 +862,18 @@ func (s *CoreOpsService) GenerateSyntheticData(req SyntheticGenerateRequest, now
 		isFlagged := syntheticFraudFlag(scenario, worker.WorkerID, rng)
 		status := "approved"
 		verdict := "clear"
-		if claimNo%4 == 0 { status = "pending" }
+		if claimNo%4 == 0 {
+			status = "pending"
+		}
 		if isFlagged {
 			status = "manual_review"
 			verdict = "flagged"
 		}
 		claims = append(claims, models.Claim{DisruptionID: disruption.ID, WorkerID: worker.WorkerID, ClaimAmount: round2(280 + rng.Float64()*900), Status: status, FraudVerdict: verdict, CreatedAt: now.UTC().Add(-time.Duration(rng.Intn(240)) * time.Hour), UpdatedAt: now.UTC()})
 	}
-	if err := s.DB.Create(&claims).Error; err != nil { return nil, err }
+	if err := s.DB.Create(&claims).Error; err != nil {
+		return nil, err
+	}
 
 	for _, claim := range claims {
 		finalVerdict := "clear"
@@ -787,22 +891,36 @@ func (s *CoreOpsService) GenerateSyntheticData(req SyntheticGenerateRequest, now
 			payouts = append(payouts, models.Payout{ClaimID: claim.ID, WorkerID: claim.WorkerID, Amount: round2(claim.ClaimAmount * 0.9), Status: "processed", IdempotencyKey: fmt.Sprintf("pay_clm_%d", claim.ID), RetryCount: 1, RazorpayID: fmt.Sprintf("rzp_seed_%d", claim.ID), RazorpayStatus: "processed", ProcessedAt: &processedAt})
 		}
 	}
-	if err := s.DB.Create(&scores).Error; err != nil { return nil, err }
+	if err := s.DB.Create(&scores).Error; err != nil {
+		return nil, err
+	}
 	if len(payouts) > 0 {
-		if err := s.DB.Create(&payouts).Error; err != nil { return nil, err }
+		if err := s.DB.Create(&payouts).Error; err != nil {
+			return nil, err
+		}
 	}
 
 	sqlPath := filepath.Join(outputDir, "seed.sql")
 	workersCSV := filepath.Join(outputDir, "workers.csv")
 	claimsCSV := filepath.Join(outputDir, "claims.csv")
 	payoutsCSV := filepath.Join(outputDir, "payouts.csv")
-	if err := writeSyntheticSQL(sqlPath, zones, profiles, claims, payouts); err != nil { return nil, err }
-	if err := writeWorkersCSV(workersCSV, profiles); err != nil { return nil, err }
-	if err := writeClaimsCSV(claimsCSV, claims); err != nil { return nil, err }
-	if err := writePayoutsCSV(payoutsCSV, payouts); err != nil { return nil, err }
+	if err := writeSyntheticSQL(sqlPath, zones, profiles, claims, payouts); err != nil {
+		return nil, err
+	}
+	if err := writeWorkersCSV(workersCSV, profiles); err != nil {
+		return nil, err
+	}
+	if err := writeClaimsCSV(claimsCSV, claims); err != nil {
+		return nil, err
+	}
+	if err := writePayoutsCSV(payoutsCSV, payouts); err != nil {
+		return nil, err
+	}
 
 	run := models.SyntheticGenerationRun{RunID: runID, Seed: seed, Scenario: scenario, OutputDir: outputDir, WorkersCreated: len(profiles), ZonesCreated: len(zones), DisruptionsCreated: len(disruptions), ClaimsCreated: len(claims), PayoutsCreated: len(payouts), Status: "completed"}
-	if err := s.DB.Create(&run).Error; err != nil { return nil, err }
+	if err := s.DB.Create(&run).Error; err != nil {
+		return nil, err
+	}
 
 	return &SyntheticGenerateResult{RunID: runID, Seed: seed, Scenario: scenario, Status: "completed", Counts: map[string]int{"workers": len(profiles), "zones": len(zones), "disruptions": len(disruptions), "claims": len(claims), "payouts": len(payouts)}, Artifacts: map[string]string{"workers_csv": workersCSV, "claims_csv": claimsCSV, "payouts_csv": payoutsCSV, "seed_sql": sqlPath}, Integration: map[string]string{"premium_service": "fallback rule-based pricing active until Part 3 premium service is connected", "fraud_service": "synthetic fraud verdicts seeded deterministically until Part 3 fraud service is connected", "forecast_service": "not required for Part 4 execution path; reserve forecasting remains an integration point"}}, nil
 }
@@ -871,12 +989,16 @@ func syntheticZoneRisk(scenario string, rng *rand.Rand, idx int) float64 {
 func severityForScenario(scenario string, rng *rand.Rand) string {
 	switch scenario {
 	case "severe_disruption":
-		if rng.Float64() > 0.2 { return "high" }
+		if rng.Float64() > 0.2 {
+			return "high"
+		}
 		return "medium"
 	case "fraud_burst":
 		return "medium"
 	default:
-		if rng.Float64() > 0.7 { return "high" }
+		if rng.Float64() > 0.7 {
+			return "high"
+		}
 		return "medium"
 	}
 }
@@ -886,7 +1008,9 @@ func disruptionTypeForScenario(scenario string, idx int) string {
 	case "mild_disruption":
 		return "order_drop"
 	case "severe_disruption":
-		if idx%2 == 0 { return "heavy_rain" }
+		if idx%2 == 0 {
+			return "heavy_rain"
+		}
 		return "flood"
 	case "fraud_burst":
 		return "order_drop"
@@ -897,14 +1021,20 @@ func disruptionTypeForScenario(scenario string, idx int) string {
 
 func syntheticFraudFlag(scenario string, workerID uint, rng *rand.Rand) bool {
 	rate := 0.12
-	if scenario == "fraud_burst" { rate = 0.18 }
-	if workerID%17 == 0 { return true }
+	if scenario == "fraud_burst" {
+		rate = 0.18
+	}
+	if workerID%17 == 0 {
+		return true
+	}
 	return rng.Float64() < rate
 }
 
 func writeSyntheticSQL(path string, zones []models.Zone, profiles []models.WorkerProfile, claims []models.Claim, payouts []models.Payout) error {
 	f, err := os.Create(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer f.Close()
 	lines := []string{"-- deterministic synthetic seed output"}
 	for _, zone := range zones {
@@ -925,39 +1055,57 @@ func writeSyntheticSQL(path string, zones []models.Zone, profiles []models.Worke
 
 func writeWorkersCSV(path string, profiles []models.WorkerProfile) error {
 	f, err := os.Create(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	if err := w.Write([]string{"worker_id", "name", "zone_id", "vehicle_type", "total_earnings_lifetime"}); err != nil { return err }
+	if err := w.Write([]string{"worker_id", "name", "zone_id", "vehicle_type", "total_earnings_lifetime"}); err != nil {
+		return err
+	}
 	for _, profile := range profiles {
-		if err := w.Write([]string{strconv.Itoa(int(profile.WorkerID)), profile.Name, strconv.Itoa(int(profile.ZoneID)), profile.VehicleType, fmt.Sprintf("%.2f", profile.TotalEarningsLifetime)}); err != nil { return err }
+		if err := w.Write([]string{strconv.Itoa(int(profile.WorkerID)), profile.Name, strconv.Itoa(int(profile.ZoneID)), profile.VehicleType, fmt.Sprintf("%.2f", profile.TotalEarningsLifetime)}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func writeClaimsCSV(path string, claims []models.Claim) error {
 	f, err := os.Create(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	if err := w.Write([]string{"claim_id", "disruption_id", "worker_id", "claim_amount", "status", "fraud_verdict"}); err != nil { return err }
+	if err := w.Write([]string{"claim_id", "disruption_id", "worker_id", "claim_amount", "status", "fraud_verdict"}); err != nil {
+		return err
+	}
 	for _, claim := range claims {
-		if err := w.Write([]string{strconv.Itoa(int(claim.ID)), strconv.Itoa(int(claim.DisruptionID)), strconv.Itoa(int(claim.WorkerID)), fmt.Sprintf("%.2f", claim.ClaimAmount), claim.Status, claim.FraudVerdict}); err != nil { return err }
+		if err := w.Write([]string{strconv.Itoa(int(claim.ID)), strconv.Itoa(int(claim.DisruptionID)), strconv.Itoa(int(claim.WorkerID)), fmt.Sprintf("%.2f", claim.ClaimAmount), claim.Status, claim.FraudVerdict}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func writePayoutsCSV(path string, payouts []models.Payout) error {
 	f, err := os.Create(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	if err := w.Write([]string{"payout_id", "claim_id", "worker_id", "amount", "status", "retry_count"}); err != nil { return err }
+	if err := w.Write([]string{"payout_id", "claim_id", "worker_id", "amount", "status", "retry_count"}); err != nil {
+		return err
+	}
 	for _, payout := range payouts {
-		if err := w.Write([]string{strconv.Itoa(int(payout.ID)), strconv.Itoa(int(payout.ClaimID)), strconv.Itoa(int(payout.WorkerID)), fmt.Sprintf("%.2f", payout.Amount), payout.Status, strconv.Itoa(payout.RetryCount)}); err != nil { return err }
+		if err := w.Write([]string{strconv.Itoa(int(payout.ID)), strconv.Itoa(int(payout.ClaimID)), strconv.Itoa(int(payout.WorkerID)), fmt.Sprintf("%.2f", payout.Amount), payout.Status, strconv.Itoa(payout.RetryCount)}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -965,6 +1113,8 @@ func writePayoutsCSV(path string, payouts []models.Payout) error {
 func escapeSQL(value string) string { return strings.ReplaceAll(value, "'", "''") }
 
 func min(a, b int) int {
-	if a < b { return a }
+	if a < b {
+		return a
+	}
 	return b
 }

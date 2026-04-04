@@ -45,6 +45,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_NAME: indel
       KAFKA_BROKERS: kafka:9092
+      RAZORPAY_API_KEY: ${RAZORPAY_API_KEY:-}
+      RAZORPAY_API_SECRET: ${RAZORPAY_API_SECRET:-}
+      RAZORPAY_MODE: ${RAZORPAY_MODE:-test}
     ports:
       - "8000:8000"
     depends_on:
