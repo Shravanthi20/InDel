@@ -2,11 +2,11 @@
 
 This document provides a technical and execution-focused overview of the InDel platform as implemented in Phase 2.
 
-## 🏛️ Functional Architecture
+## Functional Architecture
 
 InDel is an event-driven parametric insurance ecosystem designed to protect gig-worker income from regional disruptions. The architecture is composed of a high-performance Go backend, dual enterprise React dashboards, and a native mobile application.
 
-### 🧩 System Components
+### System Components
 
 The following diagram illustrates the high-level relationship between the platform's core components:
 
@@ -38,7 +38,7 @@ graph TD
     ID <-->|Risk Management| API
 ```
 
-### ⚡ Economic Impact Lifecycle
+###  Economic Impact Lifecycle
 
 This sequence diagram traces the flow from a triggered disruption to an automated payout:
 
@@ -65,11 +65,11 @@ sequenceDiagram
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 The repository is organized into distinct modules for backend logic, dashboard management, and mobile operations.
 
-### 📍 Repository Root
+###  Repository Root
 - `backend/`: Core Go API and business logic.
 - `insurer-dashboard/`: React application for insurance providers.
 - `platform-dashboard/`: React application for platform operators and simulator control.
@@ -79,7 +79,7 @@ The repository is organized into distinct modules for backend logic, dashboard m
 - `PHASE_2.md`: This implementation-focused documentation.
 - `README.md`: High-level project vision and theoretical background.
 
-### 📍 Backend Deep Dive (`/backend`)
+###  Backend Deep Dive (`/backend`)
 - `cmd/api/`: Entry point for the Gin server.
 - `internal/handlers/`: Domain-specific API endpoint logic.
     - `platform/`: Zone monitoring and Chaos Engine endpoints.
@@ -93,7 +93,7 @@ The repository is organized into distinct modules for backend logic, dashboard m
 - `internal/models/`: GORM-based entity definitions (Users, Zones, Policies, Claims).
 - `internal/router/`: Centralized Gin route definitions.
 
-### 📍 Dashboard Deep Dive (`/platform-dashboard` & `/insurer-dashboard`)
+###  Dashboard Deep Dive (`/platform-dashboard` & `/insurer-dashboard`)
 - `src/api/`: Axios-based clients for backend communication.
 - `src/components/`: Reusable UI components.
     - `layout/`: Shared Sidebar and Navbar with theme management.
@@ -106,7 +106,7 @@ The repository is organized into distinct modules for backend logic, dashboard m
 
 ---
 
-## ⚙️ Core Functional Components
+##  Core Functional Components
 
 ### 1. Disruption Engine (The Brain)
 The engine maintains a sliding 10-minute window of regional order volume. It calculates a **Dynamic Baseline** for each zone. A disruption is confirmed only through **Multi-Signal Validation**:
@@ -127,7 +127,7 @@ Integrated directly into the Platform Dashboard, the Chaos Engine provides a pra
 
 ---
 
-## 🚀 Technical Specifications
+## Technical Specifications
 
 - **Backend**: Go (Gin), PostgreSQL (GORM), JWT.
 - **Frontend**: React 18 (Vite), Tailwind CSS, Lucide Icons.
