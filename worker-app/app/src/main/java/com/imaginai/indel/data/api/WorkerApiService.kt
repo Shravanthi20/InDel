@@ -48,11 +48,20 @@ interface WorkerApiService {
     @GET("api/v1/worker/batches/assigned")
     suspend fun getAssignedBatches(): Response<BatchListResponse>
 
+    @GET("api/v1/worker/batches/delivered")
+    suspend fun getDeliveredBatches(): Response<BatchListResponse>
+
     @POST("api/v1/worker/batches/{batch_id}/accept")
     suspend fun acceptBatch(
         @Path("batch_id") batchId: String,
         @Body request: BatchAcceptRequest,
     ): Response<BatchAcceptResponse>
+
+    @PUT("api/v1/worker/batches/{batch_id}/deliver")
+    suspend fun deliverBatch(
+        @Path("batch_id") batchId: String,
+        @Body request: BatchDeliverRequest,
+    ): Response<BatchDeliverResponse>
 
     @GET("api/v1/worker/orders/{order_id}")
     suspend fun getOrderDetail(@Path("order_id") orderId: String): Response<Order>

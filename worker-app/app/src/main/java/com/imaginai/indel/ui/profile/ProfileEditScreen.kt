@@ -25,7 +25,6 @@ fun ProfileEditScreen(
     val name by viewModel.name.collectAsState()
     val zoneLevel by viewModel.zoneLevel.collectAsState()
     val zoneName by viewModel.zoneName.collectAsState()
-    val area by viewModel.area.collectAsState()
     val vehicleType by viewModel.vehicleType.collectAsState()
     val upiId by viewModel.upiId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
@@ -163,15 +162,6 @@ fun ProfileEditScreen(
                     }
                 }
             }
-
-            // Area
-            OutlinedTextField(
-                value = area,
-                onValueChange = viewModel::onAreaChanged,
-                label = { Text("Area / Locality") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = zoneName.isNotBlank()
-            )
 
             // Vehicle
             ExposedDropdownMenuBox(

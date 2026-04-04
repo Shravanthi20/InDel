@@ -91,11 +91,18 @@ class RegisterViewModel @Inject constructor(
                             ))
                         }
                     }
+
+                    if (paths.size > 10) {
+                        paths.subList(10, paths.size).clear()
+                    }
                     
                     // Fallback to existing paths if any
                     if (paths.isEmpty() && body?.paths != null) {
                         Log.d(TAG, "Using fallback paths")
                         paths.addAll(body.paths)
+                        if (paths.size > 10) {
+                            paths.subList(10, paths.size).clear()
+                        }
                     }
                     
                     Log.d(TAG, "Final paths count: ${paths.size}")

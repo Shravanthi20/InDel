@@ -35,8 +35,8 @@ fun PlanSelectionScreen(
     val isPaymentRequired by viewModel.isPaymentRequired.collectAsState()
 
     LaunchedEffect(uiState) {
-        if (uiState is PlanUiState.SelectionComplete || uiState is PlanUiState.Skipped) {
-            navController.navigate(Screen.Home.route) {
+        if (uiState is PlanUiState.Skipped) {
+            navController.navigate(Screen.Landing.route) {
                 popUpTo(Screen.PlanSelection.route) { inclusive = true }
             }
         }
@@ -76,6 +76,48 @@ fun PlanSelectionScreen(
                         onSkip = { viewModel.skipPlan() }
                     )
                 }
+                is PlanUiState.SelectionComplete -> {
+                    PlanContent(
+                        plans = state.plans,
+                        selectedPlan = state.selectedPlan,
+                        selectedExpectedDeliveries = selectedExpectedDeliveries,
+                        isPaymentRequired = false,
+                        onPlanSelected = { },
+                        onExpectedDeliveriesSelected = { },
+                        premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
+                        onConfirm = { },
+                        onSkip = { }
+                    )
+
+                    SelectionBanner(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 18.dp),
+                        title = "Plan selected",
+                        message = "Your selected plan stays on screen for review. You can continue using the app without leaving this page."
+                    )
+                }
+                is PlanUiState.Skipped -> {
+                    PlanContent(
+                        plans = state.plans,
+                        selectedPlan = selectedPlan,
+                        selectedExpectedDeliveries = selectedExpectedDeliveries,
+                        isPaymentRequired = false,
+                        onPlanSelected = { },
+                        onExpectedDeliveriesSelected = { },
+                        premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
+                        onConfirm = { },
+                        onSkip = { }
+                    )
+
+                    SelectionBanner(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 18.dp),
+                        title = "Plan skipped",
+                        message = "Taking you to the main dashboard now."
+                    )
+                }
                 is PlanUiState.Error -> {
                     Column(
                         modifier = Modifier
@@ -90,13 +132,27 @@ fun PlanSelectionScreen(
                         }
                     }
                 }
-                is PlanUiState.SelectionComplete -> {
-                    // Handled by LaunchedEffect
-                }
-                is PlanUiState.Skipped -> {
-                    // Handled by LaunchedEffect
-                }
             }
+        }
+    }
+}
+
+@Composable
+fun SelectionBanner(
+    modifier: Modifier = Modifier,
+    title: String,
+    message: String
+) {
+    Card(
+        modifier = modifier.padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = BrandBlue),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(message, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
         }
     }
 }

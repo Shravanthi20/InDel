@@ -3,14 +3,14 @@ package com.imaginai.indel.data.model
 import com.google.gson.annotations.SerializedName
 
 data class Policy(
-    @SerializedName("policy_id") val policyId: String,
-    @SerializedName("status") val status: String,
+    @SerializedName("policy_id") val policyId: String = "",
+    @SerializedName("status") val status: String = "inactive",
     @SerializedName("plan_status") val planStatus: String? = null,
-    @SerializedName("weekly_premium_inr") val weeklyPremiumInr: Int,
-    @SerializedName("coverage_ratio") val coverageRatio: Double,
-    @SerializedName("zone") val zone: String,
-    @SerializedName("next_due_date") val nextDueDate: String,
-    @SerializedName("shap_breakdown") val shapBreakdown: List<ShapImpact>,
+    @SerializedName("weekly_premium_inr") val weeklyPremiumInr: Int = 0,
+    @SerializedName("coverage_ratio") val coverageRatio: Double = 0.0,
+    @SerializedName("zone") val zone: String = "",
+    @SerializedName("next_due_date") val nextDueDate: String = "--",
+    @SerializedName("shap_breakdown") val shapBreakdown: List<ShapImpact> = emptyList(),
     @SerializedName("plan_id") val planId: String? = null,
     @SerializedName("plan_name") val planName: String? = null,
     @SerializedName("range_start") val rangeStart: Int? = null,

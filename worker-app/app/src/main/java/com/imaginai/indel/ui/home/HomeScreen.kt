@@ -124,11 +124,48 @@ fun HomeContent(
         DashboardCard(
             title = "Protection Status",
             value = if (policy.status == "active") "Protected" else "Not Enrolled",
-            subtitle = "Coverage: ${(policy.coverageRatio * 100).toInt()}%",
+            subtitle = buildString {
+                append("Coverage: ")
+                append((policy.coverageRatio * 100).toInt())
+                append('%')
+                if (!policy.planName.isNullOrBlank()) {
+                    append(" • ")
+                    append(policy.planName)
+                }
+            },
             icon = Icons.Default.Shield,
             color = if (policy.status == "active") SuccessGreen else WarningAmber,
-            onClick = { navController.navigate(Screen.Policy.route) }
+            onClick = {
+                navController.navigate(Screen.Policy.route) {
+                    launchSingleTop = true
+                }
+            }
         )
+
+        if (!policy.planName.isNullOrBlank()) {
+            DashboardCard(
+                title = "Selected Plan",
+                value = policy.planName,
+                subtitle = buildString {
+                    append("Deliveries/week: ")
+                    append(policy.selectedDeliveries ?: policy.rangeStart ?: 0)
+                    if (policy.rangeStart != null && policy.rangeEnd != null) {
+                        append(" (range ")
+                        append(policy.rangeStart)
+                        append('-')
+                        append(policy.rangeEnd)
+                        append(')')
+                    }
+                },
+                icon = Icons.Default.LocalOffer,
+                color = BrandBlue,
+                onClick = {
+                    navController.navigate(Screen.Policy.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
 
         // 4. Disruption Banner (Conditional)
         if (worker.coverageStatus == "at_risk") {
@@ -142,7 +179,11 @@ fun HomeContent(
             NavBox("Earnings", Icons.Default.Payments, Modifier.weight(1f)) { navController.navigate(Screen.Earnings.route) }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            NavBox("Policy", Icons.Default.Description, Modifier.weight(1f)) { navController.navigate(Screen.Policy.route) }
+            NavBox("Policy", Icons.Default.Description, Modifier.weight(1f)) {
+                navController.navigate(Screen.Policy.route) {
+                    launchSingleTop = true
+                }
+            }
             NavBox("Claims", Icons.AutoMirrored.Filled.AssignmentReturn, Modifier.weight(1f)) { navController.navigate(Screen.Claims.route) }
         }
         
@@ -153,9 +194,16 @@ fun HomeContent(
 @Composable
 fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> Unit) {
     val displayName = worker.name?.trim().orEmpty().ifBlank { "Unknown Worker" }
+    val zoneLevelText = worker.zoneLevel.trim()
+    val zoneNameText = worker.zoneName.trim()
+    val cityText = worker.city?.trim().orEmpty()
+    val zoneText = worker.zone?.trim().orEmpty()
     val displayZone = when {
-        worker.zoneLevel.isNotBlank() && worker.zoneName.isNotBlank() -> "Zone ${worker.zoneLevel.uppercase()} - ${worker.zoneName}"
-        !worker.zone.isNullOrBlank() -> worker.zone
+        zoneLevelText.isNotBlank() && zoneNameText.isNotBlank() -> "Zone ${zoneLevelText.uppercase()} - $zoneNameText"
+        zoneNameText.isNotBlank() && cityText.isNotBlank() -> "$zoneNameText, $cityText"
+        zoneNameText.isNotBlank() -> zoneNameText
+        cityText.isNotBlank() -> cityText
+        zoneText.isNotBlank() -> zoneText
         else -> "Zone unavailable"
     }
 

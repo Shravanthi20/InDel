@@ -16,7 +16,6 @@ class WorkerRepository @Inject constructor(
         name: String,
         zoneLevel: String? = null,
         zoneName: String? = null,
-        area: String? = null,
         zoneId: Int? = null,
         city: String? = null,
         fromCity: String? = null,
@@ -29,7 +28,6 @@ class WorkerRepository @Inject constructor(
             name = name,
             zoneLevel = zoneLevel,
             zoneName = zoneName,
-            area = area,
             zoneId = zoneId,
             city = city,
             fromCity = fromCity,
@@ -46,7 +44,6 @@ class WorkerRepository @Inject constructor(
         name: String,
         zoneLevel: String,
         zoneName: String,
-        area: String? = null,
         zoneId: Int? = null,
         city: String? = null,
         fromCity: String? = null,
@@ -58,7 +55,6 @@ class WorkerRepository @Inject constructor(
             name = name,
             zoneLevel = zoneLevel,
             zoneName = zoneName,
-            area = area,
             zoneId = zoneId,
             city = city,
             fromCity = fromCity,
@@ -85,8 +81,13 @@ class WorkerRepository @Inject constructor(
 
     suspend fun getAssignedBatches() = workerApiService.getAssignedBatches()
 
-    suspend fun acceptBatch(batchId: String, orderIds: List<String>) =
-        workerApiService.acceptBatch(batchId, BatchAcceptRequest(orderIds))
+    suspend fun getDeliveredBatches() = workerApiService.getDeliveredBatches()
+
+    suspend fun acceptBatch(batchId: String, orderIds: List<String>, pickupCode: String) =
+        workerApiService.acceptBatch(batchId, BatchAcceptRequest(orderIds, pickupCode))
+
+    suspend fun deliverBatch(batchId: String, deliveryCode: String) =
+        workerApiService.deliverBatch(batchId, BatchDeliverRequest(deliveryCode))
 
     suspend fun getOrderDetail(orderId: String) = workerApiService.getOrderDetail(orderId)
 

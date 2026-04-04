@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.model.DeliveryBatchDto
 import com.imaginai.indel.data.model.Order
+import com.imaginai.indel.data.model.WorkerProfile
 import com.imaginai.indel.data.repository.WorkerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -20,6 +21,12 @@ import javax.inject.Inject
 class OrdersViewModel @Inject constructor(
     private val workerRepository: WorkerRepository
 ) : ViewModel() {
+
+    data class BatchDeliveryResult(
+        val success: Boolean,
+        val batchCompleted: Boolean,
+        val remainingOrders: Int? = null,
+    )
 
     companion object {
         private const val TAG = "OrdersViewModel"
@@ -66,22 +73,40 @@ class OrdersViewModel @Inject constructor(
             // Both now filtered by worker's zone if available
             val availableRes = workerRepository.getAvailableBatches()
             val assignedRes = workerRepository.getAssignedBatches()
+            val deliveredRes = workerRepository.getDeliveredBatches()
 
-            val availableBatches = if (availableRes.isSuccessful) {
+            val availableRaw = if (availableRes.isSuccessful) {
                 availableRes.body()?.batches?.map { it.toUiModel() } ?: emptyList()
             } else {
                 emptyList()
             }
-            val assignedBatches = if (assignedRes.isSuccessful) {
+            val assignedRaw = if (assignedRes.isSuccessful) {
                 assignedRes.body()?.batches?.map { it.toUiModel() } ?: emptyList()
             } else {
                 emptyList()
             }
+            val deliveredRaw = if (deliveredRes.isSuccessful) {
+                deliveredRes.body()?.batches?.map { it.toUiModel() } ?: emptyList()
+            } else {
+                emptyList()
+            }
+
+            val workerCity = resolveWorkerCity(worker)
+            val workerOwned = dedupeByBatchId(assignedRaw + deliveredRaw)
+            val assignedBatches = workerOwned.filter { normalizeBatchStatus(it.status) == "Assigned" }
+            val pickedUpBatches = workerOwned.filter { normalizeBatchStatus(it.status) == "Picked Up" }
+            val deliveredBatches = workerOwned.filter { normalizeBatchStatus(it.status) == "Delivered" }
+
+            val usedOwnedIds = (assignedBatches + pickedUpBatches + deliveredBatches).map { it.batchId }.toHashSet()
+            val availableBatches = dedupeByBatchId(availableRaw)
+                .filter { normalizeBatchStatus(it.status) == "Assigned" }
+                .filter { it.batchId !in usedOwnedIds }
+                .filter { isReachableFromWorkerLocation(it, workerCity) }
 
             Log.d(
                 TAG,
-                "fetchOrders availableStatus=${availableRes.code()} assignedStatus=${assignedRes.code()} " +
-                    "availableCount=${availableBatches.size} assignedCount=${assignedBatches.size} zoneId=$workerZoneId"
+                "fetchOrders availableStatus=${availableRes.code()} assignedStatus=${assignedRes.code()} deliveredStatus=${deliveredRes.code()} " +
+                    "availableCount=${availableBatches.size} assignedCount=${assignedBatches.size} pickedUpCount=${pickedUpBatches.size} deliveredCount=${deliveredBatches.size} zoneId=$workerZoneId workerCity=$workerCity"
             )
 
             val diagnostics = buildString {
@@ -91,12 +116,18 @@ class OrdersViewModel @Inject constructor(
                 append(availableRes.code())
                 append(" assigned=")
                 append(assignedRes.code())
+                append(" delivered=")
+                append(deliveredRes.code())
                 append(" zoneId=")
                 append(workerZoneId ?: "null")
                 append(" counts=")
                 append(availableBatches.size)
                 append("/")
                 append(assignedBatches.size)
+                append("/")
+                append(pickedUpBatches.size)
+                append("/")
+                append(deliveredBatches.size)
             }
 
             // Success if at least one call works (resilient loading)
@@ -104,11 +135,13 @@ class OrdersViewModel @Inject constructor(
                 _uiState.value = OrdersUiState.Success(
                     availableBatches = availableBatches,
                     assignedBatches = assignedBatches,
+                    pickedUpBatches = pickedUpBatches,
+                    deliveredBatches = deliveredBatches,
                     diagnostics = diagnostics
                 )
             } else {
                 _uiState.value = OrdersUiState.Error(
-                    "Failed to load orders (profile=${profileRes.code()}, available=${availableRes.code()}, assigned=${assignedRes.code()})"
+                    "Failed to load orders (profile=${profileRes.code()}, available=${availableRes.code()}, assigned=${assignedRes.code()}, delivered=${deliveredRes.code()})"
                 )
             }
         } catch (e: Exception) {
@@ -127,9 +160,9 @@ class OrdersViewModel @Inject constructor(
         }
     }
 
-    suspend fun acceptBatch(batch: DeliveryBatch): Boolean {
+    suspend fun acceptBatch(batch: DeliveryBatch, pickupCode: String): Boolean {
         return try {
-            val response = workerRepository.acceptBatch(batch.batchId, batch.orders.map { it.orderId })
+            val response = workerRepository.acceptBatch(batch.batchId, batch.orders.map { it.orderId }, pickupCode)
             if (response.isSuccessful) {
                 fetchOrders()
                 true
@@ -140,6 +173,27 @@ class OrdersViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "acceptBatch exception", e)
             false
+        }
+    }
+
+    suspend fun deliverBatch(batch: DeliveryBatch, deliveryCode: String): BatchDeliveryResult {
+        return try {
+            val response = workerRepository.deliverBatch(batch.batchId, deliveryCode)
+            if (response.isSuccessful) {
+                val responseBody = response.body()
+                fetchOrders()
+                BatchDeliveryResult(
+                    success = true,
+                    batchCompleted = responseBody?.batchCompleted ?: true,
+                    remainingOrders = responseBody?.remainingOrders,
+                )
+            } else {
+                Log.w(TAG, "deliverBatch failed code=${response.code()} batchId=${batch.batchId}")
+                BatchDeliveryResult(success = false, batchCompleted = false)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "deliverBatch exception", e)
+            BatchDeliveryResult(success = false, batchCompleted = false)
         }
     }
 
@@ -196,8 +250,8 @@ class OrdersViewModel @Inject constructor(
             )
             val status = when {
                 acceptedBatchIds.contains(batchId) -> "Assigned"
-                isAssignedSection -> "Out for Delivery"
-                else -> "Pending"
+                isAssignedSection -> "Picked Up"
+                else -> "Assigned"
             }
 
             DeliveryBatch(
@@ -208,6 +262,8 @@ class OrdersViewModel @Inject constructor(
                 totalWeight = batchOrders.sumOf { it.weight },
                 orderCount = batchOrders.size,
                 status = status,
+                pickupCode = pickupCodeForBatch(batchId),
+                deliveryCode = deliveryCodeForBatch(batchId),
                 orders = batchOrders,
             )
         }
@@ -258,7 +314,100 @@ class OrdersViewModel @Inject constructor(
     }
 
     private fun normalizeWeight(weight: Double): Double {
-        return if (weight > 0) weight else 1.2
+        val fallback = if (weight > 0) weight else 1.2
+        return fallback.coerceIn(0.05, 5.0)
+    }
+
+    private fun normalizeBatchStatus(status: String): String {
+        return when (status.trim().lowercase(Locale.ROOT)) {
+            "assigned", "accepted" -> "Assigned"
+            "picked_up", "picked up" -> "Picked Up"
+            "delivered" -> "Delivered"
+            else -> status.replace("_", " ").replaceFirstChar { it.uppercase() }
+        }
+    }
+
+    private fun dedupeByBatchId(batches: List<DeliveryBatch>): List<DeliveryBatch> {
+        val score: (String) -> Int = { status ->
+            when (normalizeBatchStatus(status)) {
+                "Delivered" -> 3
+                "Picked Up" -> 2
+                "Assigned" -> 1
+                else -> 0
+            }
+        }
+
+        val byId = mutableMapOf<String, DeliveryBatch>()
+        batches.forEach { batch ->
+            val existing = byId[batch.batchId]
+            if (existing == null || score(batch.status) >= score(existing.status)) {
+                byId[batch.batchId] = batch.copy(status = normalizeBatchStatus(batch.status))
+            }
+        }
+
+        return byId.values.toList()
+    }
+
+    private fun resolveWorkerCity(worker: WorkerProfile?): String {
+        if (worker == null) return ""
+
+        val fromCity = worker.fromCity?.trim().orEmpty()
+        val city = worker.city?.trim().orEmpty()
+        val zoneName = worker.zoneName.trim()
+        val zone = worker.zone?.trim().orEmpty()
+
+        if (fromCity.isNotBlank()) return fromCity
+        if (city.isNotBlank()) return city
+        if (zoneName.isNotBlank()) return zoneName
+        if (zone.isNotBlank()) return zone.split(",").first().trim()
+        return ""
+    }
+
+    private fun isReachableFromWorkerLocation(batch: DeliveryBatch, workerCityRaw: String): Boolean {
+        val workerCity = workerCityRaw.trim()
+        if (workerCity.isBlank()) return false
+
+        val fromCity = batch.fromCity.trim()
+        val toCity = batch.toCity.trim()
+        val zoneLevel = batch.zoneLevel.trim().uppercase(Locale.ROOT)
+
+        return when (zoneLevel) {
+            "A" -> fromCity.equals(workerCity, ignoreCase = true) && toCity.equals(workerCity, ignoreCase = true)
+            "B", "C" -> fromCity.equals(workerCity, ignoreCase = true)
+            else -> false
+        }
+    }
+
+    fun pickupCodeForBatch(batchId: String): String {
+        val normalized = batchId.trim().uppercase(Locale.ROOT)
+        var seed = 0
+        normalized.forEach { ch ->
+            seed = (seed * 31 + ch.code) % 9000
+        }
+        return String.format(Locale.ROOT, "%04d", 1000 + seed)
+    }
+
+    fun deliveryCodeForBatch(batchId: String): String {
+        val normalized = batchId.trim().uppercase(Locale.ROOT)
+        var seed = 7
+        normalized.forEach { ch ->
+            seed = (seed * 37 + ch.code) % 9000
+        }
+        return String.format(Locale.ROOT, "%04d", 1000 + seed)
+    }
+
+    fun deliveryCodeForOrder(orderId: String): String {
+        val normalized = orderId.trim().uppercase(Locale.ROOT)
+        var seed = 11
+        normalized.forEach { ch ->
+            seed = (seed * 41 + ch.code) % 9000
+        }
+        return String.format(Locale.ROOT, "%04d", 1000 + seed)
+    }
+
+    fun isZoneASingleStop(batch: DeliveryBatch): Boolean {
+        if (!batch.zoneLevel.equals("A", ignoreCase = true)) return false
+        return batch.fromCity.trim().equals(batch.toCity.trim(), ignoreCase = true)
     }
 
     private fun DeliveryBatchDto.toUiModel(): DeliveryBatch {
@@ -269,14 +418,30 @@ class OrdersViewModel @Inject constructor(
             toCity = toCity,
             totalWeight = totalWeight,
             orderCount = orderCount,
-            status = status,
+            status = normalizeBatchStatus(status),
+            pickupCode = pickupCode,
+            deliveryCode = deliveryCode,
+            pickupTime = pickupTime,
+            deliveryTime = deliveryTime,
+            batchEarningInr = batchEarningInr,
             orders = orders.map {
+                val zoneASingleStop = zoneLevel.equals("A", ignoreCase = true) && fromCity.trim().equals(toCity.trim(), ignoreCase = true)
                 BatchOrder(
                     orderId = it.orderId,
                     deliveryAddress = it.deliveryAddress,
                     contactName = it.contactName,
                     contactPhone = it.contactPhone,
                     weight = it.weight,
+                    pickupArea = it.pickupArea,
+                    dropArea = it.dropArea,
+                    deliveryCode = if (zoneASingleStop) {
+                        it.deliveryCode ?: deliveryCodeForOrder(it.orderId)
+                    } else {
+                        null
+                    },
+                    status = it.status,
+                    pickupTime = it.pickupTime,
+                    deliveryTime = it.deliveryTime,
                 )
             },
         )
@@ -286,7 +451,9 @@ class OrdersViewModel @Inject constructor(
         val state = _uiState.value
         if (state !is OrdersUiState.Success) return null
         return state.assignedBatches.firstOrNull { it.batchId == batchId }
+            ?: state.pickedUpBatches.firstOrNull { it.batchId == batchId }
             ?: state.availableBatches.firstOrNull { it.batchId == batchId }
+            ?: state.deliveredBatches.firstOrNull { it.batchId == batchId }
     }
 }
 
@@ -295,6 +462,8 @@ sealed class OrdersUiState {
     data class Success(
         val availableBatches: List<DeliveryBatch>,
         val assignedBatches: List<DeliveryBatch>,
+        val pickedUpBatches: List<DeliveryBatch>,
+        val deliveredBatches: List<DeliveryBatch>,
         val diagnostics: String
     ) : OrdersUiState()
     data class Error(val message: String) : OrdersUiState()

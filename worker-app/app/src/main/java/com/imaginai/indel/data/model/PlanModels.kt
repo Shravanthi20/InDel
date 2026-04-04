@@ -12,7 +12,7 @@ data class DeliveryPlan(
     @SerializedName("weekly_premium_max_inr") val weeklyPremiumMaxInr: Int? = null,
     @SerializedName("coverage_ratio") val coverageRatio: Double,
     @SerializedName("max_payout_inr") val maxPayoutInr: Int,
-    @SerializedName("description") val description: String
+    @SerializedName("description") val description: String = ""
 )
 
 data class PlanListResponse(
@@ -29,5 +29,14 @@ data class PlanSelectionRequest(
 data class PlanSelectionResponse(
     @SerializedName("message") val message: String,
     @SerializedName("plan") val plan: DeliveryPlan,
-    @SerializedName("policy") val policy: Policy
+    @SerializedName("policy") val policy: PlanSelectionPolicy? = null
+)
+
+data class PlanSelectionPolicy(
+    @SerializedName("policy_id") val policyId: String? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("weekly_premium_inr") val weeklyPremiumInr: Int? = null,
+    @SerializedName("coverage_ratio") val coverageRatio: Double? = null,
+    @SerializedName("payment_amount_inr") val paymentAmountInr: Int? = null,
+    @SerializedName("payment_status") val paymentStatus: String? = null
 )

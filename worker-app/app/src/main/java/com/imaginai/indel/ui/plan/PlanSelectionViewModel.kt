@@ -32,6 +32,8 @@ class PlanSelectionViewModel @Inject constructor(
     private val _isPaymentRequired = MutableStateFlow(false)
     val isPaymentRequired = _isPaymentRequired.asStateFlow()
 
+    private var cachedPlans: List<DeliveryPlan> = emptyList()
+
     init {
         loadPlans()
     }
@@ -43,6 +45,7 @@ class PlanSelectionViewModel @Inject constructor(
                 val response = workerRepository.getPlans()
                 if (response.isSuccessful) {
                     val plans = response.body()?.plans ?: emptyList()
+                    cachedPlans = plans
                     Log.d(TAG, "Loaded ${plans.size} plans")
                     _uiState.value = PlanUiState.Success(plans)
                 } else {
@@ -80,23 +83,35 @@ class PlanSelectionViewModel @Inject constructor(
     fun confirmSelection() {
         val plan = _selectedPlan.value ?: return
         val deliveries = _selectedExpectedDeliveries.value ?: plan.rangeStart
-        val premiumAmount = calculatePremium(plan, deliveries)
         viewModelScope.launch {
             try {
+                val premium = calculatePremium(plan, deliveries)
                 val response = workerRepository.selectPlan(
                     planId = plan.planId,
                     expectedDeliveries = deliveries,
-                    paymentAmountInr = premiumAmount,
+                    paymentAmountInr = premium,
                 )
+
                 if (response.isSuccessful) {
-                    _uiState.value = PlanUiState.SelectionComplete(plan)
-                    Log.d(TAG, "Plan ${plan.planId} selected successfully")
+                    val selectedFromApi = response.body()?.plan
+                    val selectedPlan = selectedFromApi?.copy(
+                        weeklyPremiumInr = premium,
+                        weeklyPremiumMinInr = plan.weeklyPremiumMinInr,
+                        weeklyPremiumMaxInr = plan.weeklyPremiumMaxInr,
+                        description = if (selectedFromApi.description.isBlank()) plan.description else selectedFromApi.description,
+                    ) ?: plan.copy(weeklyPremiumInr = premium)
+
+                    _selectedPlan.value = selectedPlan
+                    _selectedExpectedDeliveries.value = deliveries
+                    _isPaymentRequired.value = false
+                    _uiState.value = PlanUiState.SelectionComplete(cachedPlans, selectedPlan)
+                    Log.d(TAG, "Plan ${plan.planId} selected with premium Rs.$premium and deliveries $deliveries")
                 } else {
-                    _uiState.value = PlanUiState.Error("Failed to select plan")
+                    _uiState.value = PlanUiState.Error("Failed to confirm plan selection")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error selecting plan", e)
-                _uiState.value = PlanUiState.Error(e.message ?: "Unknown error")
+                Log.e(TAG, "Error confirming plan selection", e)
+                _uiState.value = PlanUiState.Error(e.message ?: "Failed to confirm plan selection")
             }
         }
     }
@@ -109,15 +124,10 @@ class PlanSelectionViewModel @Inject constructor(
 
     fun skipPlan() {
         viewModelScope.launch {
-            _uiState.value = PlanUiState.Skipped
-            try {
-                val response = workerRepository.skipPlan()
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "Skip plan returned ${response.code()}, continuing with skipped state")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error skipping plan, keeping skipped state", e)
-            }
+            // NOTE: API call to backend disabled - plan skip stays local only
+            // Previously called workerRepository.skipPlan() here
+            _uiState.value = PlanUiState.Skipped(cachedPlans)
+            Log.d(TAG, "Plan skipped (local state only)")
         }
     }
 }
@@ -125,7 +135,7 @@ class PlanSelectionViewModel @Inject constructor(
 sealed class PlanUiState {
     object Loading : PlanUiState()
     data class Success(val plans: List<DeliveryPlan>) : PlanUiState()
-    data class SelectionComplete(val selectedPlan: DeliveryPlan) : PlanUiState()
-    object Skipped : PlanUiState()
+    data class SelectionComplete(val plans: List<DeliveryPlan>, val selectedPlan: DeliveryPlan) : PlanUiState()
+    data class Skipped(val plans: List<DeliveryPlan>) : PlanUiState()
     data class Error(val message: String) : PlanUiState()
 }

@@ -1,5 +1,6 @@
 package com.imaginai.indel.ui.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -40,7 +41,7 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Orders : Screen("orders")
     object BatchDetail : Screen("batch-detail/{batchId}") {
-        fun createRoute(batchId: String) = "batch-detail/$batchId"
+        fun createRoute(batchId: String) = "batch-detail/${Uri.encode(batchId)}"
     }
     object FetchVerification : Screen("fetch-verification")
     object DeliveryExecution : Screen("delivery-execution/{orderId}") {
@@ -97,7 +98,8 @@ fun NavGraph() {
             route = Screen.BatchDetail.route,
             arguments = listOf(navArgument("batchId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val batchId = backStackEntry.arguments?.getString("batchId") ?: ""
+            val encodedBatchId = backStackEntry.arguments?.getString("batchId") ?: ""
+            val batchId = Uri.decode(encodedBatchId)
             BatchDetailScreen(navController, batchId)
         }
         composable(Screen.FetchVerification.route) {

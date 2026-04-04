@@ -167,8 +167,7 @@ fun RegisterScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (availablePaths.isNotEmpty()) {
-                        // Limit to first 100 items to prevent UI freeze with large lists
-                        val displayItems = availablePaths.take(100)
+                        val displayItems = availablePaths.take(10)
                         displayItems.forEach { path ->
                             if (path.displayName != null) {
                                 DropdownMenuItem(
@@ -180,9 +179,9 @@ fun RegisterScreen(
                                 )
                             }
                         }
-                        if (availablePaths.size > 100) {
+                        if (availablePaths.size > 10) {
                             DropdownMenuItem(
-                                text = { Text("... and ${availablePaths.size - 100} more") },
+                                text = { Text("... and ${availablePaths.size - 10} more") },
                                 onClick = {},
                                 enabled = false
                             )

@@ -29,9 +29,6 @@ class ProfileEditViewModel @Inject constructor(
     private val _zoneName = MutableStateFlow("")
     val zoneName = _zoneName.asStateFlow()
 
-    private val _area = MutableStateFlow("")
-    val area = _area.asStateFlow()
-
     private val _selectedZone = MutableStateFlow<Zone?>(null)
     val selectedZone = _selectedZone.asStateFlow()
     
@@ -57,8 +54,8 @@ class ProfileEditViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     val filteredPaths: StateFlow<List<ZonePath>> = combine(_zoneName, _availablePaths) { query, paths ->
-        if (query.isBlank()) paths.take(30)
-        else paths.filter { it.displayName?.contains(query, ignoreCase = true) == true }.take(30)
+        if (query.isBlank()) paths.take(10)
+        else paths.filter { it.displayName?.contains(query, ignoreCase = true) == true }.take(10)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredZones: StateFlow<List<Zone>> = combine(_zoneName, _availableZones) { query, zones ->
@@ -76,7 +73,7 @@ class ProfileEditViewModel @Inject constructor(
             try {
                 val response = workerRepository.getZones()
                 if (response.isSuccessful) {
-                    _availableZones.value = response.body()?.zones ?: emptyList()
+                    _availableZones.value = response.body()?.zones.orEmpty().take(10)
                 }
             } catch (e: Exception) {
                 Log.e("ProfileEdit", "Zones fetch failed", e)
@@ -104,6 +101,7 @@ class ProfileEditViewModel @Inject constructor(
                             result.add(ZonePath(displayName = display, fromCity = pair.from, toCity = pair.to))
                         }
                         if (result.isEmpty() && body?.paths != null) result.addAll(body.paths)
+                        if (result.size > 10) result.subList(10, result.size).clear()
                         result
                     }
                     _availablePaths.value = paths
@@ -121,7 +119,6 @@ class ProfileEditViewModel @Inject constructor(
     fun onZoneLevelChanged(value: String) {
         _zoneLevel.value = value
         _zoneName.value = ""
-        _area.value = ""
         _selectedZone.value = null
         _selectedPath.value = null
         _availablePaths.value = emptyList()
@@ -140,7 +137,6 @@ class ProfileEditViewModel @Inject constructor(
         _zoneName.value = path.displayName ?: ""
     }
 
-    fun onAreaChanged(value: String) { _area.value = value }
     fun onVehicleTypeChanged(value: String) { _vehicleType.value = value }
     fun onUpiIdChanged(value: String) { _upiId.value = value }
 
@@ -155,7 +151,6 @@ class ProfileEditViewModel @Inject constructor(
                         _name.value = worker.name
                         _zoneLevel.value = worker.zoneLevel
                         _zoneName.value = worker.zoneName
-                        _area.value = worker.area ?: ""
                         _vehicleType.value = worker.vehicleType
                         _upiId.value = worker.upiId
                         if (worker.zoneLevel.isNotBlank()) fetchZonePaths(worker.zoneLevel)
@@ -180,7 +175,6 @@ class ProfileEditViewModel @Inject constructor(
                     name = _name.value,
                     zoneLevel = _zoneLevel.value,
                     zoneName = _zoneName.value,
-                    area = _area.value,
                     zoneId = _selectedZone.value?.zoneId,
                     city = _selectedPath.value?.city ?: _selectedZone.value?.city ?: _selectedPath.value?.fromCity,
                     vehicleType = _vehicleType.value,
