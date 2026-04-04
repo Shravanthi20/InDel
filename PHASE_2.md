@@ -126,7 +126,27 @@ Integrated directly into the Platform Dashboard, the Chaos Engine provides a pra
 - **Signal Injection**: Sending real-time weather or local restriction events to the backend.
 
 ---
+Platform Dashboard
+<img width="2550" height="1376" alt="image" src="https://github.com/user-attachments/assets/eb6861dc-981a-4421-974c-f0f906a308e2" />
+<img width="2558" height="1344" alt="image" src="https://github.com/user-attachments/assets/78f9734b-e6f1-4474-9797-b99360365a19" />
+<img width="2560" height="1374" alt="image" src="https://github.com/user-attachments/assets/964e5256-7f20-4a2f-953a-c0d80081d896" />
+<img width="2552" height="1370" alt="image" src="https://github.com/user-attachments/assets/cb0c9ec4-ec01-4a94-ad90-9bf3be66f369" />
+<img width="2560" height="1372" alt="image" src="https://github.com/user-attachments/assets/4777ca60-9f84-4827-9a67-57bc910362ee" />
 
+Insurer Dashboard
+<img width="2548" height="1374" alt="image" src="https://github.com/user-attachments/assets/62f26bb3-c1b7-4686-9c86-80f05a13ae5b" />
+<img width="2554" height="1372" alt="image" src="https://github.com/user-attachments/assets/ee38be36-7289-4c80-bb41-66c2ae521e55" />
+<img width="2560" height="1362" alt="image" src="https://github.com/user-attachments/assets/840e9bfd-b5f9-494b-8b68-adfb4eb03afc" />
+<img width="2558" height="1372" alt="image" src="https://github.com/user-attachments/assets/3300467d-52bf-4db1-a340-5c68543cf28b" />
+<img width="2456" height="1372" alt="image" src="https://github.com/user-attachments/assets/eac3ad8d-6677-4bb8-ac60-8cef07693071" />
+
+Mobile App
+<img width="702" height="1600" alt="image" src="https://github.com/user-attachments/assets/b4b9d0f8-4dda-40e0-90b9-9aba2c48b065" />
+<img width="702" height="1600" alt="image" src="https://github.com/user-attachments/assets/34664da4-b267-43c0-8ee3-2bd181abfd3c" />
+<img width="702" height="1600" alt="image" src="https://github.com/user-attachments/assets/64637df5-53ab-4964-b3d6-55d578f4ae77" />
+<img width="702" height="1600" alt="image" src="https://github.com/user-attachments/assets/7f62b262-60b9-42e0-b967-0fc35e88f415" />
+
+---
 ## Technical Specifications
 
 - **Backend**: Go (Gin), PostgreSQL (GORM), JWT.
