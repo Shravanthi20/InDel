@@ -10,7 +10,7 @@
 > **Note:** Specific values such as premium amounts, payout figures, coverage ratios, and trigger thresholds are illustrative estimates for design and modelling purposes only. Final figures will be refined during development in collaboration with relevant stakeholders. API integrations and third-party service references are subject to change.
 
 ---
-
+> ### **The implementation details of Phase 2 are documented in Phase2.md.**
 ## Table of Contents
 
 1. [The Problem](#the-problem)
