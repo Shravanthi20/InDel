@@ -125,6 +125,25 @@ Integrated directly into the Platform Dashboard, the Chaos Engine provides a pra
 - **Demand Collapse**: Artificially resetting the baseline to simulate a massive order drop.
 - **Signal Injection**: Sending real-time weather or local restriction events to the backend.
 
+### 4. Machine Learning & Risk Modeling
+InDel uses a dual-layer approach for pricing and fraud detection, combining XGBoost regressors with deterministic fallback formulas for mission-critical reliability.
+
+#### ML Architecture
+- **Predictive Pricing (XGBoost)**: Analyzes 18 variables including zone risk, vehicle type, weather stats, and historical volatility to determine optimal worker premiums.
+- **Anomaly Detection (Isolation Forest)**: Provides unsupervised fraud detection by identifying claims that deviate significantly from regional economic baselines.
+- **State Clustering (DBSCAN)**: Identifies coordinated suspicious activity among worker cohorts to prevent multi-node spoofing.
+
+#### Risk Modeling Formulas
+The platform utilizes a weighted risk-scoring heuristic for real-time premium calculation:
+
+- **Weighted Risk Score ($R$):**
+  $$R = (V_o \cdot 0.24) + (V_e \cdot 0.22) + (D_r \cdot 0.2) + (W_{rain} \cdot 0.12) + (W_{aqi} \cdot 0.1) + (W_{temp} \cdot 0.12)$$
+  *Where $V_o$ is Order Volatility, $V_e$ is Earnings Volatility, and $D_r$ is the Disruption Rate.*
+
+- **Dynamic Premium Calculation ($P$):**
+  $$P = (E_{avg} \cdot 0.0375) \times (0.72 + R) \times VF$$
+  *Where $E_{avg}$ is average daily earnings and $VF$ is the Vehicle Risk Factor.*
+
 ---
 
 ## Technical Specifications
