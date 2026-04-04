@@ -42,14 +42,42 @@ const rejectUnauthorized = (error: any) => {
   return Promise.reject(error)
 }
 
+// Network Debugger Interceptor
+const logNetwork = (clientName: string) => {
+  const logResponse = (response: any) => {
+    console.log(`%c[API-SUCCESS] ${clientName} %c${response.config.method?.toUpperCase()} %c${response.config.url}`, 'color: #10b981; font-weight: bold;', 'color: #f97316; font-weight: bold;', 'color: #94a3b8;', response.data);
+    return response
+  }
+  const logError = (error: any) => {
+    console.error(`%c[API-ERROR] ${clientName} %c${error.config?.method?.toUpperCase()} %c${error.config?.url}`, 'color: #f43f5e; font-weight: bold;', 'color: #f97316; font-weight: bold;', 'color: #94a3b8;', error.response?.data || error.message);
+    return Promise.reject(error)
+  }
+  return { logResponse, logError }
+}
+
+const insurerLogs = logNetwork('Insurer-Gateway')
+const coreLogs = logNetwork('Core-Service')
+
 insurerClient.interceptors.response.use(
-  handleUnauthorized,
-  rejectUnauthorized
+  (response) => {
+    handleUnauthorized(response)
+    return insurerLogs.logResponse(response)
+  },
+  (error) => {
+    rejectUnauthorized(error)
+    return insurerLogs.logError(error)
+  }
 )
 
 coreClient.interceptors.response.use(
-  handleUnauthorized,
-  rejectUnauthorized
+  (response) => {
+    handleUnauthorized(response)
+    return coreLogs.logResponse(response)
+  },
+  (error) => {
+    rejectUnauthorized(error)
+    return coreLogs.logError(error)
+  }
 )
 
 export { coreClient }
