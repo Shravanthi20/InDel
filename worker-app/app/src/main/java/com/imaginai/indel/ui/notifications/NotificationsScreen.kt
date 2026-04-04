@@ -108,6 +108,7 @@ private fun NotificationsContent(
     navController: NavController
 ) {
     val disruptionCount = notifications.count { it.type == "disruption_alert" }
+    val claimCount = notifications.count { it.type == "claim_generated" }
     val payoutCount = notifications.count { it.type == "payout_credited" }
 
     LazyColumn(
@@ -122,6 +123,13 @@ private fun NotificationsContent(
                     value = disruptionCount.toString(),
                     subtitle = "Auto protection started",
                     color = WarningAmber,
+                    modifier = Modifier.weight(1f)
+                )
+                SummaryCard(
+                    title = "Claims Generated",
+                    value = claimCount.toString(),
+                    subtitle = "Amount ready for review",
+                    color = BlueSoft,
                     modifier = Modifier.weight(1f)
                 )
                 SummaryCard(
@@ -216,6 +224,10 @@ private fun NotificationCard(notification: Notification) {
         "payout_credited" -> {
             icon = Icons.Default.AccountBalanceWallet
             accent = SuccessGreen
+        }
+        "claim_generated" -> {
+            icon = Icons.Default.Notifications
+            accent = BrandBlue
         }
         "disruption_alert" -> {
             icon = Icons.Default.Warning

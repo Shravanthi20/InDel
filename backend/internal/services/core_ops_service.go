@@ -295,6 +295,9 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 		payload, _ := json.Marshal(map[string]interface{}{"event_id": fmt.Sprintf("evt_claim_%d", claim.ID), "event_type": "claim.generated", "occurred_at": now.UTC().Format(time.RFC3339), "producer": "core-backend", "payload": map[string]interface{}{"claim_id": claim.ID, "disruption_id": disruptionID, "worker_id": worker.WorkerID, "amount": claim.ClaimAmount, "status": claim.Status}})
 		_ = s.DB.Create(&models.KafkaEventLog{Topic: "indel.claims.generated", EventType: "claim.generated", PayloadJSON: string(payload)}).Error
 
+		// Trigger the missing worker notification!
+		_ = s.notifyClaimGenerated(worker.WorkerID, claim.ID, claim.ClaimAmount, now, disruption.Type)
+
 		generated++
 		generatedClaimIDs = append(generatedClaimIDs, claim.ID)
 	}
@@ -579,6 +582,20 @@ func (s *CoreOpsService) notifyPayoutProcessed(workerID uint, claimID uint, amou
 		 )`,
 		workerID, "payout_credited", message, now.UTC(),
 		workerID, "payout_credited", message,
+	).Error
+}
+
+func (s *CoreOpsService) notifyClaimGenerated(workerID uint, claimID uint, amount float64, now time.Time, disruptionType string) error {
+	message := fmt.Sprintf("An automated claim of Rs %.2f has been generated for disruption %s. Review is underway.", amount, humanizeDisruptionType(disruptionType))
+	return s.DB.Exec(
+		`INSERT INTO notifications (worker_id, type, message, created_at)
+		 SELECT ?, ?, ?, ?
+		 WHERE NOT EXISTS (
+		   SELECT 1 FROM notifications
+		   WHERE worker_id = ? AND type = ? AND message = ?
+		 )`,
+		workerID, "claim_generated", message, now.UTC(),
+		workerID, "claim_generated", message,
 	).Error
 }
 

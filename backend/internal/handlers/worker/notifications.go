@@ -10,6 +10,8 @@ func notificationTitle(kind string) string {
 	switch kind {
 	case "disruption_alert":
 		return "Disruption detected"
+	case "claim_generated":
+		return "Claim Generated"
 	case "payout_credited":
 		return "Payout credited"
 	case "order_delivered":
