@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
 	"github.com/gin-gonic/gin"
@@ -248,6 +249,7 @@ func SelectPlan(c *gin.Context) {
 	if hasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
+			now := time.Now().UTC()
 			// Create or update policy
 			policy := models.Policy{
 				WorkerID:      workerIDUint,
@@ -259,6 +261,7 @@ func SelectPlan(c *gin.Context) {
 					"INSERT INTO premium_payments (worker_id, policy_id, amount, status, payment_date) VALUES (?, ?, ?, 'completed', CURRENT_TIMESTAMP)",
 					workerIDUint, policy.ID, paymentAmount,
 				).Error
+				_ = upsertPaymentSchedule(workerIDUint, now, false, "Active")
 
 				c.JSON(200, gin.H{
 					"message": "plan_selected_successfully",
@@ -273,12 +276,16 @@ func SelectPlan(c *gin.Context) {
 						"max_payout_inr":      plan.MaxPayoutINR,
 					},
 					"policy": gin.H{
-						"policy_id":          fmt.Sprintf("pol-%03d", policy.ID),
-						"status":             policy.Status,
-						"weekly_premium_inr": int(policy.PremiumAmount),
-						"coverage_ratio":     plan.CoverageRatio,
-						"payment_amount_inr": paymentAmount,
-						"payment_status":     "completed",
+						"policy_id":               fmt.Sprintf("pol-%03d", policy.ID),
+						"status":                  policy.Status,
+						"weekly_premium_inr":      int(policy.PremiumAmount),
+						"coverage_ratio":          plan.CoverageRatio,
+						"payment_amount_inr":      paymentAmount,
+						"payment_status":          "Locked",
+						"days_since_last_payment": 0,
+						"next_payment_enabled":    false,
+						"coverage_status":         "Active",
+						"last_payment_timestamp":  now.Format(time.RFC3339),
 					},
 				})
 				return
@@ -292,19 +299,23 @@ func SelectPlan(c *gin.Context) {
 
 	// Update or create policy in in-memory store
 	policy := gin.H{
-		"plan_id":             planID,
-		"plan_name":           plan.PlanName,
-		"plan_status":         "selected",
-		"range_start":         plan.RangeStart,
-		"range_end":           plan.RangeEnd,
-		"selected_deliveries": expectedDeliveries,
-		"weekly_premium_inr":  premiumAmount,
-		"coverage_ratio":      plan.CoverageRatio,
-		"max_payout_inr":      plan.MaxPayoutINR,
-		"status":              "active",
-		"payment_amount_inr":  paymentAmount,
-		"payment_status":      "completed",
-		"created_at":          nowISO(),
+		"plan_id":                 planID,
+		"plan_name":               plan.PlanName,
+		"plan_status":             "selected",
+		"range_start":             plan.RangeStart,
+		"range_end":               plan.RangeEnd,
+		"selected_deliveries":     expectedDeliveries,
+		"weekly_premium_inr":      premiumAmount,
+		"coverage_ratio":          plan.CoverageRatio,
+		"max_payout_inr":          plan.MaxPayoutINR,
+		"status":                  "active",
+		"payment_amount_inr":      paymentAmount,
+		"payment_status":          "Locked",
+		"days_since_last_payment": 0,
+		"next_payment_enabled":    false,
+		"coverage_status":         "Active",
+		"last_payment_timestamp":  nowISO(),
+		"created_at":              nowISO(),
 	}
 
 	store.data.Policy = policy
@@ -320,11 +331,15 @@ func SelectPlan(c *gin.Context) {
 		"message": "plan_selected_successfully",
 		"plan":    policy,
 		"policy": gin.H{
-			"status":             "active",
-			"weekly_premium_inr": premiumAmount,
-			"coverage_ratio":     plan.CoverageRatio,
-			"payment_amount_inr": paymentAmount,
-			"payment_status":     "completed",
+			"status":                  "active",
+			"weekly_premium_inr":      premiumAmount,
+			"coverage_ratio":          plan.CoverageRatio,
+			"payment_amount_inr":      paymentAmount,
+			"payment_status":          "Locked",
+			"days_since_last_payment": 0,
+			"next_payment_enabled":    false,
+			"coverage_status":         "Active",
+			"last_payment_timestamp":  policy["last_payment_timestamp"],
 		},
 	})
 }

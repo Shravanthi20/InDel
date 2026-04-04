@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Claims{% endblock %}
+{% block page_title %}Claims{% endblock %}
+{% block page_subtitle %}Income protection claim history{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
+{% if claims %}
+<div class="card">
+  <div class="card-header mb-12">
+    <div class="card-title">All Claims</div>
+    <span class="chip chip-blue">{{ claims|length }}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Claim ID</th>
+          <th>Zone</th>
+          <th>Disruption</th>
+          <th>Loss</th>
+          <th>Payout</th>
+          <th>Fraud</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for claim in claims %}
+        <tr>
+          <td><code>{{ claim.claim_id[:8] }}…</code></td>
+          <td>{{ claim.zone }}</td>
+          <td>{{ claim.disruption_type }}</td>
+          <td class="text-error fw-600">₹{{ claim.income_loss }}</td>
+          <td class="text-success fw-600">₹{{ claim.payout_amount }}</td>
+          <td>
+            <span class="chip
+              {% if claim.fraud_verdict|lower == 'clean' %}chip-success
+              {% elif claim.fraud_verdict|lower == 'suspicious' %}chip-warning
+              {% else %}chip-error{% endif %}">
+              {{ claim.fraud_verdict }}
+            </span>
+          </td>
+          <td>
+            <span class="chip
+              {% if claim.status == 'approved' %}chip-success
+              {% elif claim.status == 'pending' %}chip-warning
+              {% else %}chip-muted{% endif %}">
+              {{ claim.status }}
+            </span>
+          </td>
+          <td>
+            <a href="{{ url_for('worker.claim_detail', claim_id=claim.claim_id) }}"
+               class="btn btn-ghost btn-sm">View →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">⊗</div>
+  <h3>No claims yet</h3>
+  <p>Claims are triggered automatically when a disruption is detected in your zone and you have an active policy.</p>
+</div>
+{% endif %}
+{% endblock %}

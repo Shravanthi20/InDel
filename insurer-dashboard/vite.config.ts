@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: process.env.VITE_INSURER_API_URL || 'http://localhost:8002',
+        target: process.env.VITE_INSURER_API_URL || 'http://192.168.1.6:8004',
         changeOrigin: true
       }
     }

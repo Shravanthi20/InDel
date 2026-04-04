@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+{% block page_subtitle %}Alerts and preferences{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+{% if success %}
+<div class="alert alert-success">✓ {{ success }}</div>
+{% endif %}
+
+<!-- Notification list -->
+<div class="card mb-16">
+  <div class="card-header mb-12">
+    <div class="card-title">All Notifications</div>
+    <span class="chip chip-blue">{{ notifications|length }}</span>
+  </div>
+  {% if notifications %}
+  {% for notif in notifications %}
+  <div class="notif-item">
+    <div class="notif-dot {{ 'notif-dot-read' if notif.read else '' }}"></div>
+    <div class="notif-body">
+      <h4>{{ notif.title }}</h4>
+      <p>{{ notif.body }}</p>
+      <time>{{ notif.created_at }}</time>
+    </div>
+    {% if not notif.read %}
+    <span class="chip chip-blue" style="flex-shrink:0;">New</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state" style="padding:24px;">
+    <div class="empty-icon">◆</div>
+    <h3>No notifications</h3>
+    <p>Policy updates, claim alerts and payout confirmations will appear here.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Preferences -->
+<div class="card">
+  <div class="card-title mb-16">Notification Preferences</div>
+  <form method="POST" action="{{ url_for('worker.notifications') }}" id="prefs-form">
+    <input type="hidden" name="action" value="save_prefs">
+    {% set pref_items = [
+      ('policy_updates', 'Policy updates'),
+      ('claim_alerts', 'Claim alerts'),
+      ('payout_alerts', 'Payout confirmations'),
+      ('disruption_alerts', 'Disruption notices'),
+      ('earnings_summary', 'Weekly earnings summary'),
+    ] %}
+    {% for key, label in pref_items %}
+    <div class="d-flex align-center justify-between" style="padding:10px 0;border-bottom:1px solid var(--border);">
+      <label for="pref_{{ key }}" class="text-sm fw-600" style="cursor:pointer;">{{ label }}</label>
+      <input type="checkbox" id="pref_{{ key }}" name="{{ key }}" checked
+             style="width:18px;height:18px;cursor:pointer;">
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary mt-16" id="save-prefs-btn">Save Preferences</button>
+  </form>
+</div>
+{% endblock %}

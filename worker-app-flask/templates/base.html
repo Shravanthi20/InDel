@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}InDel Worker{% endblock %} — InDel</title>
+  <meta name="description" content="InDel Worker App — delivery-proof and income-protection platform">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="mobile-shell">
+  <header class="mobile-topbar">
+    <div class="topbar-left">
+      <div class="topbar-brand">InDel</div>
+      <div class="topbar-title">{% block page_title %}Worker{% endblock %}</div>
+      <div class="topbar-subtitle">{% block page_subtitle %}{% endblock %}</div>
+    </div>
+    <div class="topbar-actions">
+      <a href="{{ url_for('worker.notifications') }}" class="icon-action" aria-label="Notifications" title="Notifications">⊕</a>
+      <a href="{{ url_for('worker.profile_edit') }}" class="icon-action" aria-label="Profile" title="Edit Profile">◉</a>
+    </div>
+  </header>
+
+  <main class="mobile-page-container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <nav class="bottom-nav" aria-label="Primary">
+    <a href="{{ url_for('worker.home') }}" data-nav-item>
+      <span class="nav-label">Home</span>
+    </a>
+    <a href="{{ url_for('worker.orders') }}" data-nav-item>
+      <span class="nav-label">Orders</span>
+    </a>
+    <a href="{{ url_for('worker.earnings') }}" data-nav-item>
+      <span class="nav-label">Earnings</span>
+    </a>
+    <a href="{{ url_for('worker.policy') }}" data-nav-item>
+      <span class="nav-label">Policy</span>
+    </a>
+    <a href="{{ url_for('auth.logout') }}" data-nav-item>
+      <span class="nav-label">Logout</span>
+    </a>
+  </nav>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

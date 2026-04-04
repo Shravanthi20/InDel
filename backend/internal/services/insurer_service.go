@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/kafka"
@@ -225,7 +226,7 @@ func (s *InsurerService) GetClaimDetail(claimID string) (*models.ClaimDetail, er
 		Joins("JOIN zones z ON z.id = d.zone_id").
 		Joins("LEFT JOIN claim_fraud_scores cfs ON cfs.claim_id = c.id").
 		Where("c.id = ?", claimID).
-		First(&row).Error
+		Take(&row).Error
 
 	if err != nil {
 		return nil, fmt.Errorf("claim not found")
@@ -259,17 +260,13 @@ func (s *InsurerService) ReviewClaim(claimID string, req models.ClaimAction) err
 		return nil
 	}
 
-	err := s.DB.Transaction(func(tx *gorm.DB) error {
-		res := tx.Exec("UPDATE claims SET status = ?, fraud_verdict = ?, updated_at = ? WHERE id = ?", req.Status, req.FraudVerdict, time.Now(), claimID)
-		if res.Error != nil {
-			return res.Error
-		}
+	res := s.DB.Exec("UPDATE claims SET status = ?, fraud_verdict = ?, updated_at = ? WHERE id = ?", req.Status, req.FraudVerdict, time.Now(), claimID)
+	if res.Error != nil {
+		return fmt.Errorf("failed to update claim: %w", res.Error)
+	}
 
-		cid := 0
-		if _, err := fmt.Sscanf(claimID, "%d", &cid); err != nil {
-			return err
-		}
-
+	cid := 0
+	if _, err := fmt.Sscanf(claimID, "%d", &cid); err == nil {
 		audit := models.ClaimAuditLog{
 			ClaimID:   uint(cid),
 			Action:    "review",
@@ -278,15 +275,13 @@ func (s *InsurerService) ReviewClaim(claimID string, req models.ClaimAction) err
 			CreatedAt: time.Now(),
 		}
 
-		if err := tx.Create(&audit).Error; err != nil {
-			return err
+		if err := s.DB.Create(&audit).Error; err != nil {
+			// Some demo databases may not include claim_audit_logs yet.
+			// Keep review successful if only audit logging is unavailable.
+			if !strings.Contains(strings.ToLower(err.Error()), "claim_audit_logs") {
+				return fmt.Errorf("failed to create audit entry: %w", err)
+			}
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to review claim: %w", err)
 	}
 
 	// Emit Kafka event

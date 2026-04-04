@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Edit Profile{% endblock %}
+{% block page_title %}Profile Edit{% endblock %}
+{% block page_subtitle %}Update your worker details{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:0 auto;">
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+  <div class="alert alert-success">{{ success }}</div>
+  {% endif %}
+
+  <div class="card mb-16">
+    <div class="card-title mb-12">Identity (read-only)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div>
+        <div class="text-xs text-secondary fw-600">Worker ID</div>
+        <code style="font-size:.8rem;">{{ profile.worker_id or '—' }}</code>
+      </div>
+      <div>
+        <div class="text-xs text-secondary fw-600">Phone</div>
+        <div class="text-sm fw-600">{{ profile.phone or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title mb-16">Editable Details</div>
+    <form method="POST" action="{{ url_for('worker.profile_edit') }}" id="profile-form">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input id="name" name="name" type="text" value="{{ form_data.name }}" required>
+      </div>
+
+      <div class="form-group">
+        <label for="zone_level">Zone Level</label>
+        <select id="zone_level" name="zone_level" required>
+          <option value="">Select zone level</option>
+          {% for level in zone_levels %}
+          <option value="{{ level.level }}" {% if form_data.zone_level == level.level %}selected{% endif %}>{{ level.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="zone_name">Zone Name</label>
+        <select id="zone_name" name="zone_name" required disabled>
+          <option value="">Select zone name</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="city">City</label>
+        <input id="city" name="city" type="text" value="{{ form_data.city }}" placeholder="e.g. Chennai">
+      </div>
+
+      <div class="form-group">
+        <label for="vehicle_type">Vehicle Type</label>
+        <select id="vehicle_type" name="vehicle_type" required>
+          <option value="">Select vehicle</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="upi_id">UPI ID</label>
+        <input id="upi_id" name="upi_id" type="text" value="{{ form_data.upi_id }}" placeholder="yourname@upi" required>
+      </div>
+
+      <div class="d-flex gap-8 mt-8">
+        <button type="submit" class="btn btn-primary" style="flex:1;" id="save-profile-btn">
+          Save Changes
+        </button>
+        <a href="{{ url_for('worker.home') }}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const zonePathsUrl = "{{ url_for('auth.zone_paths') }}";
+const zoneLevelSelect = document.getElementById('zone_level');
+const zoneNameSelect = document.getElementById('zone_name');
+const vehicleTypeSelect = document.getElementById('vehicle_type');
+const selectedZoneName = "{{ form_data.zone_name }}";
+const selectedVehicleType = "{{ form_data.vehicle_type }}";
+const vehiclesByLevel = {
+  A: ["scooter", "motorcycle", "auto-rickshaw", "car", "van", "mini-truck", "truck"],
+  B: ["scooter", "motorcycle", "auto-rickshaw", "car", "van", "mini-truck", "truck"],
+  C: ["car", "van", "mini-truck", "truck"],
+};
+
+function formatZoneOption(level, item) {
+  if (level === 'a') {
+    return item;
+  }
+  const from = item.from || '';
+  const to = item.to || '';
+  if (level === 'b') {
+    return `${from} to ${to}${item.state ? ` (${item.state})` : ''}`;
+  }
+  return `${from}${item.from_state ? ` (${item.from_state})` : ''} to ${to}${item.to_state ? ` (${item.to_state})` : ''}`;
+}
+
+async function loadZoneNames() {
+  const level = zoneLevelSelect.value;
+  zoneNameSelect.innerHTML = '<option value="">Select zone name</option>';
+  zoneNameSelect.disabled = !level;
+  populateVehicles(level);
+  if (!level) return;
+
+  try {
+    const response = await fetch(`${zonePathsUrl}?type=${level.toLowerCase()}`);
+    const data = await response.json();
+    const items = level === 'A' ? (data.cities || []) : (data.city_pairs || []);
+    const limit = Math.min(items.length, 10);
+    for (let index = 0; index < limit; index += 1) {
+      const item = items[index];
+      const option = document.createElement('option');
+      option.value = level === 'A' ? item : formatZoneOption(level.toLowerCase(), item);
+      option.textContent = option.value;
+      if (option.value === selectedZoneName) option.selected = true;
+      zoneNameSelect.appendChild(option);
+    }
+    if (items.length > 10) {
+      const more = document.createElement('option');
+      more.disabled = true;
+      more.textContent = `... and ${items.length - 10} more`;
+      zoneNameSelect.appendChild(more);
+    }
+  } catch (error) {
+    const option = document.createElement('option');
+    option.disabled = true;
+    option.textContent = 'No zones available';
+    zoneNameSelect.appendChild(option);
+  }
+}
+
+function populateVehicles(level) {
+  vehicleTypeSelect.innerHTML = '<option value="">Select vehicle</option>';
+  const vehicles = level && vehiclesByLevel[level] ? vehiclesByLevel[level] : [];
+  vehicles.forEach((vehicle) => {
+    const option = document.createElement('option');
+    option.value = vehicle;
+    option.textContent = vehicle.charAt(0).toUpperCase() + vehicle.slice(1);
+    if (vehicle === selectedVehicleType) option.selected = true;
+    vehicleTypeSelect.appendChild(option);
+  });
+}
+
+zoneLevelSelect.addEventListener('change', loadZoneNames);
+document.addEventListener('DOMContentLoaded', loadZoneNames);
+</script>
+{% endblock %}

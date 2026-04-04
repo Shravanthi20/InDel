@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OTP Login — InDel Worker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-logo">
+      <div class="logo-mark">I</div>
+      <div>
+        <div class="auth-logo-text">InDel</div>
+        <div class="auth-logo-sub">OTP Recovery</div>
+      </div>
+    </div>
+
+    <h2>OTP Login</h2>
+    <p class="subtitle">Recovery / fallback login via one-time password.</p>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    {% if otp_sent %}
+    <div class="alert alert-success">✓ OTP sent to your phone.</div>
+    {% endif %}
+
+    <!-- Step 1: send OTP -->
+    {% if not otp_sent %}
+    <form method="POST" action="{{ url_for('auth.otp') }}" id="send-otp-form">
+      <input type="hidden" name="action" value="send">
+      <div class="form-group">
+        <label for="phone">Phone number</label>
+        <input id="phone" name="phone" type="tel" placeholder="9876543210"
+               value="{{ phone }}" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Send OTP</button>
+    </form>
+    {% endif %}
+
+    <!-- Step 2: verify OTP -->
+    {% if otp_sent %}
+    <form method="POST" action="{{ url_for('auth.otp') }}" id="verify-otp-form">
+      <input type="hidden" name="action" value="verify">
+      <input type="hidden" name="phone" value="{{ phone }}">
+      <div class="form-group">
+        <label for="otp">Enter OTP</label>
+        <input id="otp" name="otp" type="text" inputmode="numeric"
+               placeholder="6-digit code" maxlength="6" required autofocus>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Verify OTP</button>
+    </form>
+    {% endif %}
+
+    <p style="text-align:center;margin-top:20px;font-size:.85rem;color:var(--text-secondary)">
+      <a href="{{ url_for('auth.login') }}">← Back to password login</a>
+    </p>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

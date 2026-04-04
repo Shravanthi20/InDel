@@ -114,6 +114,9 @@ class WorkerRepository @Inject constructor(
 
     suspend fun endSession(sessionId: String) = workerApiService.endSession(sessionId)
 
+    // Earnings
+    suspend fun getPayouts(limit: Int = 10) = workerApiService.getPayouts(limit)
+
     // Notifications
     suspend fun getNotifications() = workerApiService.getNotifications()
 

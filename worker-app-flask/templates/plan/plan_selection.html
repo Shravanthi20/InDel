@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Plan Selection{% endblock %}
+{% block page_title %}Choose Your Plan{% endblock %}
+{% block page_subtitle %}Select a delivery plan for income protection{% endblock %}
+
+{% block content %}
+<div style="max-width:700px;margin:0 auto;">
+  {% if error %}
+  <div class="alert alert-error">⚠ {{ error }}</div>
+  {% endif %}
+
+  <div class="card mb-24">
+    <div class="card-title mb-12">Available Plans</div>
+    <p class="text-sm text-secondary mb-16">
+      Choose a plan that matches your weekly delivery volume. Premium is auto-calculated.
+    </p>
+
+    {% if plans %}
+    <form method="POST" action="{{ url_for('auth.plan_selection') }}" id="plan-form">
+      <input type="hidden" name="action" value="select">
+      <div style="display:grid;gap:14px;margin-bottom:20px;">
+        {% for plan in plans %}
+        <label class="order-card" style="cursor:pointer;display:block;" for="plan_{{ plan.plan_id }}">
+          <div style="display:flex;align-items:flex-start;gap:14px;">
+            <input type="radio" id="plan_{{ plan.plan_id }}" name="plan_id"
+                   value="{{ plan.plan_id }}" style="margin-top:4px;"
+                   {% if loop.first %}checked{% endif %}>
+            <div style="flex:1;">
+              <div class="order-card-header">
+                <span style="font-weight:700;font-size:1rem;">{{ plan.plan_name }}</span>
+                <span class="chip chip-blue">{{ (plan.coverage_ratio * 100)|int }}% coverage</span>
+              </div>
+              <div class="order-meta">
+                <span>▦ {{ plan.range_start }}–{{ plan.range_end }} deliveries/week</span>
+                <span>₹ ₹{{ plan.weekly_premium_inr }}/week</span>
+                <span>◉ Max payout ₹{{ plan.max_payout_inr }}</span>
+              </div>
+              {% if plan.description %}
+              <p class="text-sm text-secondary">{{ plan.description }}</p>
+              {% endif %}
+            </div>
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="form-group">
+        <label for="expected_deliveries">Expected deliveries this week (optional)</label>
+        <input id="expected_deliveries" name="expected_deliveries" type="number"
+               placeholder="Leave blank to use plan range" min="1">
+      </div>
+      <div class="form-group">
+        <label for="payment_amount_inr">Payment amount (₹)</label>
+        <input id="payment_amount_inr" name="payment_amount_inr" type="number"
+               placeholder="e.g. 100" required min="1">
+        <div class="form-hint">Enter the weekly premium amount for your selected plan.</div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        <button type="submit" class="btn btn-primary" style="flex:2;">
+          Confirm Plan & Start
+        </button>
+        <button type="submit" form="skip-form" class="btn btn-ghost" style="flex:1;">
+          Skip for Now
+        </button>
+      </div>
+    </form>
+
+    <form id="skip-form" method="POST" action="{{ url_for('auth.plan_selection') }}" style="display:none;">
+      <input type="hidden" name="action" value="skip">
+    </form>
+
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">⊗</div>
+      <h3>No plans available</h3>
+      <p>Could not load plans from the server.</p>
+    </div>
+    <form method="POST" action="{{ url_for('auth.plan_selection') }}" style="margin-top:16px;">
+      <input type="hidden" name="action" value="skip">
+      <button type="submit" class="btn btn-primary btn-block">Continue without plan</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

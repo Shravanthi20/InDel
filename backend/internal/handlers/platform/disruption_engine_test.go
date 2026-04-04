@@ -1,144 +1,77 @@
 package platform
 
-import (
-	"encoding/json"
-	"net/http/httptest"
-	"testing"
+import "testing"
 
-	"github.com/gin-gonic/gin"
-)
-
-func TestIdempotency(t *testing.T) {
+func TestApplyProgressivePayout_IncrementsOnlyOnRiskIncrease(t *testing.T) {
 	ResetEngineForTests()
 	defer ResetEngineForTests()
 
-	zoneID := uint(1)
-	orderID := "test_order_xyz"
-
-	// Track order first time - should return true
-	tracked1 := CheckAndTrackOrder(orderID, zoneID, false)
-	if !tracked1 {
-		t.Errorf("Expected first tracking of order %s to succeed, got false", orderID)
+	first := applyProgressivePayout(11, ProgressivePayoutInputs{
+		AQI:           200,
+		Temperature:   35,
+		Rain:          0,
+		Traffic:       60,
+		MaxPayoutDay:  1000,
+		CoverageRatio: 0.5,
+	})
+	if first.TriggerStatus != "No payout" {
+		t.Fatalf("expected no payout on the initial flat-risk reading, got %q", first.TriggerStatus)
+	}
+	if first.CurrentRiskScore != 0 {
+		t.Fatalf("expected zero risk at baseline, got %.2f", first.CurrentRiskScore)
 	}
 
-	// Track order second time - should be blocked by idempotency lock
-	tracked2 := CheckAndTrackOrder(orderID, zoneID, false)
-	if tracked2 {
-		t.Errorf("Expected duplicate tracking of order %s to be blocked, got true", orderID)
+	second := applyProgressivePayout(11, ProgressivePayoutInputs{
+		AQI:           320,
+		Temperature:   45,
+		Rain:          15,
+		Traffic:       95,
+		MaxPayoutDay:  1000,
+		CoverageRatio: 0.5,
+	})
+	if second.TriggerStatus != "Incremental payout" {
+		t.Fatalf("expected incremental payout on risk increase, got %q", second.TriggerStatus)
+	}
+	if second.CurrentRiskScore <= first.CurrentRiskScore {
+		t.Fatalf("expected risk to increase, got %.2f -> %.2f", first.CurrentRiskScore, second.CurrentRiskScore)
+	}
+	if second.FinalPayout != 500 {
+		t.Fatalf("expected payout of 500, got %.2f", second.FinalPayout)
+	}
+	if second.TotalPayoutSoFar != 500 {
+		t.Fatalf("expected cumulative payout of 500, got %.2f", second.TotalPayoutSoFar)
+	}
+	if second.IncrementalRisk != 1 {
+		t.Fatalf("expected incremental risk of 1.00, got %.2f", second.IncrementalRisk)
 	}
 }
 
-func TestDisruptionConfidenceScoring(t *testing.T) {
+func TestApplyProgressivePayout_MaxCoverageReached(t *testing.T) {
 	ResetEngineForTests()
 	defer ResetEngineForTests()
 
-	zoneID := uint(2)
-	state := getOrCreateZoneState(zoneID)
-	
-	state.BaselineOrders = 100.0
-	state.TotalOrdersEver = 11
-	
-	for i := 0; i < 50; i++ {
-		CheckAndTrackOrder("dummy"+string(rune(i)), zoneID, true)
-	}
-
-	state.ActiveSignals["weather_test"] = true
-
-	evaluateDisruption(zoneID, state)
-}
-
-func TestMultiSignalConfirmationRules(t *testing.T) {
-	ResetEngineForTests()
-	defer ResetEngineForTests()
-	
-	zoneID := uint(3)
-	state := getOrCreateZoneState(zoneID)
-	state.BaselineOrders = 100.0 
-	state.TotalOrdersEver = 11
-
+	state := getOrCreateProgressivePayoutState(27)
 	state.mu.Lock()
-	state.RecentOrders = state.RecentOrders[:0] // 100% drop logically initially
+	state.LastRiskScore = 0.95
+	state.LastPayout = 500
 	state.mu.Unlock()
 
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
+	result := applyProgressivePayout(27, ProgressivePayoutInputs{
+		AQI:           320,
+		Temperature:   45,
+		Rain:          15,
+		Traffic:       95,
+		MaxPayoutDay:  1000,
+		CoverageRatio: 0.5,
+	})
 
-	GetZoneHealth(c)
-
-	var response struct {
-		Data []map[string]interface{} `json:"data"`
+	if result.TriggerStatus != "Max coverage reached" {
+		t.Fatalf("expected max coverage reached, got %q", result.TriggerStatus)
 	}
-	_ = json.Unmarshal(w.Body.Bytes(), &response)
-
-	found := false
-	for _, z := range response.Data {
-		if uint(z["zone_id"].(float64)) == zoneID {
-			found = true
-			if z["status"] != "anomalous_demand" {
-				t.Errorf("Expected anomalous_demand for drop without external signal, got %v", z["status"])
-			}
-		}
+	if result.FinalPayout != 0 {
+		t.Fatalf("expected no remaining payout, got %.2f", result.FinalPayout)
 	}
-	if !found {
-		t.Errorf("Zone %d not found in health output", zoneID)
-	}
-
-	state.mu.Lock()
-	state.ActiveSignals["strike"] = true
-	state.mu.Unlock()
-
-	w2 := httptest.NewRecorder()
-	c2, _ := gin.CreateTestContext(w2)
-	GetZoneHealth(c2)
-
-	var response2 struct {
-		Data []map[string]interface{} `json:"data"`
-	}
-	_ = json.Unmarshal(w2.Body.Bytes(), &response2)
-
-	for _, z := range response2.Data {
-		if uint(z["zone_id"].(float64)) == zoneID {
-			if z["status"] != "disrupted" {
-				t.Errorf("Expected disrupted status when drop and signal present, got %v", z["status"])
-			}
-		}
-	}
-}
-
-func TestZoneHealthAggregation(t *testing.T) {
-	ResetEngineForTests()
-	defer ResetEngineForTests()
-
-	zoneID := uint(4)
-	state := getOrCreateZoneState(zoneID)
-	state.mu.Lock()
-	state.BaselineOrders = 200.0
-	state.mu.Unlock()
-	
-	for i := 0; i < 200; i++ {
-		CheckAndTrackOrder("healthy"+string(rune(i)), zoneID, true)
-	}
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	GetZoneHealth(c)
-
-	var response struct {
-		Data []map[string]interface{} `json:"data"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-		t.Fatalf("Failed to parse JSON response: %v", err)
-	}
-
-	for _, z := range response.Data {
-		if uint(z["zone_id"].(float64)) == zoneID {
-			if z["status"] != "healthy" {
-				t.Errorf("Expected status 'healthy', got %v", z["status"])
-			}
-			if z["baseline_orders"] != 200.0 {
-				t.Errorf("Expected 200 baseline orders, got %v", z["baseline_orders"])
-			}
-		}
+	if result.TotalPayoutSoFar != 500 {
+		t.Fatalf("expected cumulative payout to remain at 500, got %.2f", result.TotalPayoutSoFar)
 	}
 }

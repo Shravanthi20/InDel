@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — InDel Worker</title>
+  <meta name="description" content="Log in to your InDel Worker account">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-logo">
+      <div class="logo-mark">I</div>
+      <div>
+        <div class="auth-logo-text">InDel</div>
+        <div class="auth-logo-sub">WORKER PORTAL</div>
+      </div>
+    </div>
+
+    <h2>Welcome back</h2>
+    <p class="subtitle">Enter your email or phone and password to continue.</p>
+
+    {% if error %}
+    <div class="alert alert-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('auth.login') }}" id="login-form">
+      <div class="form-group">
+        <label for="identifier">Email or Phone</label>
+        <input id="identifier" name="identifier" type="text"
+               placeholder="you@example.com or 9876543210"
+               autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block btn-lg" id="login-btn">
+        Sign In
+      </button>
+    </form>
+
+    <div class="auth-divider">or</div>
+
+    <a href="{{ url_for('auth.otp') }}" class="btn btn-ghost btn-block">
+      Login with OTP (recovery)
+    </a>
+
+    <p style="text-align:center;margin-top:20px;font-size:.85rem;color:var(--text-secondary)">
+      No account? <a href="{{ url_for('auth.register') }}">Register</a>
+    </p>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

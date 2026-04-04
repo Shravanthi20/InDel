@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_INSURER_API_URL || 'http://localhost:8002'
+const API_URL = import.meta.env.VITE_INSURER_API_URL || 'http://192.168.1.6:8004'
 
 const client = axios.create({
   baseURL: API_URL,

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Batch Detail{% endblock %}
+{% block page_title %}Batch Detail{% endblock %}
+{% block page_subtitle %}Orders in this delivery batch{% endblock %}
+
+{% block content %}
+{% if not batch %}
+<div class="alert alert-warning">Batch {{ batch_id }} not found.</div>
+<a href="{{ url_for('worker.orders') }}" class="btn btn-ghost">← Back to Orders</a>
+{% else %}
+<div class="card mb-16">
+  <div class="card-title mb-12">Batch {{ batch.batch_id }}</div>
+  <div class="d-flex gap-16 mb-16">
+    <span class="chip chip-blue">{{ batch.status }}</span>
+    <span class="text-sm text-secondary">{{ (batch.orders or [])|length }} orders</span>
+  </div>
+
+  {% for order in (batch.orders or []) %}
+  <div class="order-card">
+    <div class="order-route mb-4">
+      {{ order.pickup_area or '?' }} <span class="route-arrow">→</span> {{ order.drop_area or '?' }}
+    </div>
+    <div class="order-meta">
+      <span>₹{{ order.earning_inr }}</span>
+      <span>{{ order.distance_km }} km</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Batch actions -->
+<div class="d-flex gap-8">
+  {% if batch.status == 'available' %}
+  <form method="POST" action="{{ url_for('worker.fetch_verification') }}"
+        onsubmit="this.querySelector('[name=order_id]').value='{{ batch.batch_id }}'">
+    <input type="hidden" name="order_id" value="">
+    <button type="submit" class="btn btn-primary">Accept & Verify →</button>
+  </form>
+  {% endif %}
+  <a href="{{ url_for('worker.orders') }}" class="btn btn-ghost">← Back</a>
+</div>
+{% endif %}
+{% endblock %}

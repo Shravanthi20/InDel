@@ -74,6 +74,9 @@ func GetZones(c *gin.Context) {
 		zones := make([]gin.H, 0, len(rows))
 		for _, r := range rows {
 			areas := zoneAreas[r.Name]
+			if len(areas) == 0 {
+				areas = []string{r.Name, r.City}
+			}
 			zones = append(zones, gin.H{
 				"zone_id":        r.ZoneID,
 				"name":           r.Name,

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Pay Premium{% endblock %}
+{% block page_title %}Premium Payment{% endblock %}
+{% block page_subtitle %}Pay your weekly income protection premium{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:0 auto;">
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+  <div class="alert alert-success">✓ {{ success }}</div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-title mb-16">Premium Details</div>
+    {% if premium %}
+    <div class="gradient-banner mb-16">
+      <span class="banner-icon">⊕</span>
+      <div>
+        <h3>₹{{ premium.weekly_premium_inr }} {{ premium.currency }}</h3>
+        <p>Weekly income protection premium</p>
+      </div>
+    </div>
+
+    {% if premium.shap_breakdown %}
+    <div class="text-sm text-secondary mb-16">
+      <strong>Risk factors included:</strong>
+      <div class="shap-grid mt-8">
+        {% for shap in premium.shap_breakdown %}
+        <span class="shap-chip">{{ shap.feature }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('worker.premium_pay') }}" id="pay-form">
+      <div class="form-group">
+        <label for="amount">Payment Amount (₹)</label>
+        <input id="amount" name="amount" type="number"
+               value="{{ premium.weekly_premium_inr if premium else '' }}"
+               placeholder="e.g. 150" min="1" required>
+        <div class="form-hint">Leave at the suggested amount or enter a custom value.</div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block btn-lg"
+              data-confirm="Confirm premium payment?"
+              id="pay-btn">
+        ⊕ Pay Now
+      </button>
+    </form>
+
+    <a href="{{ url_for('worker.policy') }}" class="btn btn-ghost btn-block mt-8">
+      ← Back to Policy
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -10,8 +10,18 @@ data class Claim(
     @SerializedName("income_loss") val incomeLoss: Int,
     @SerializedName("payout_amount") val payoutAmount: Int,
     @SerializedName("fraud_verdict") val fraudVerdict: String,
+    @SerializedName("fraud_score") val fraudScore: Double? = null,
+    @SerializedName("claim_reason") val claimReason: String? = null,
+    @SerializedName("main_cause") val mainCause: String? = null,
+    @SerializedName("calculation") val calculation: String? = null,
+    @SerializedName("factors") val factors: List<ClaimFactor> = emptyList(),
     @SerializedName("disruption_window") val disruptionWindow: DisruptionWindow? = null,
     @SerializedName("created_at") val createdAt: String? = null
+)
+
+data class ClaimFactor(
+    @SerializedName("name") val name: String,
+    @SerializedName("impact") val impact: Double
 )
 
 data class DisruptionWindow(

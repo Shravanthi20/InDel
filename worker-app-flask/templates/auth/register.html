@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register — InDel Worker</title>
+  <meta name="description" content="Create your InDel Worker account">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="logo-mark">I</div>
+      <div>
+        <div class="auth-logo-text">InDel</div>
+        <div class="auth-logo-sub">WORKER PORTAL</div>
+      </div>
+    </div>
+
+    <h2>Create account</h2>
+    <p class="subtitle">Register to start delivering and earning income protection.</p>
+
+    {% if error %}
+    <div class="alert alert-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('auth.register') }}" id="register-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" value="{{ form_data.username }}"
+               placeholder="e.g. ravi_delivers" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" value="{{ form_data.email }}"
+               placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" type="tel" value="{{ form_data.phone }}"
+               placeholder="9876543210" required autocomplete="tel">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               placeholder="Create a strong password" required autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label for="confirm_password">Confirm Password</label>
+        <input id="confirm_password" name="confirm_password" type="password"
+               placeholder="Repeat password" required autocomplete="new-password">
+      </div>
+
+      <div class="form-group">
+        <label for="zone_level">Zone Level</label>
+        <select id="zone_level" name="zone_level" required>
+          <option value="">Select zone level</option>
+          {% for level in zone_levels %}
+          <option value="{{ level.level }}" {% if form_data.zone_level == level.level %}selected{% endif %}>{{ level.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="zone_name">Zone Name</label>
+        <select id="zone_name" name="zone_name" required disabled>
+          <option value="">Select zone name</option>
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block btn-lg" id="register-btn">
+        Create Account
+      </button>
+    </form>
+
+    <p style="text-align:center;margin-top:20px;font-size:.85rem;color:var(--text-secondary)">
+      Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a>
+    </p>
+  </div>
+</div>
+<script>
+const zonePathsUrl = "{{ url_for('auth.zone_paths') }}";
+const zoneLevelSelect = document.getElementById('zone_level');
+const zoneNameSelect = document.getElementById('zone_name');
+const selectedZoneName = "{{ form_data.zone_name }}";
+
+function formatZoneOption(level, item) {
+  if (level === 'a') {
+    return item;
+  }
+  const from = item.from || '';
+  const to = item.to || '';
+  if (level === 'b') {
+    return `${from} to ${to}${item.state ? ` (${item.state})` : ''}`;
+  }
+  return `${from}${item.from_state ? ` (${item.from_state})` : ''} to ${to}${item.to_state ? ` (${item.to_state})` : ''}`;
+}
+
+async function loadZoneNames() {
+  const level = zoneLevelSelect.value;
+  zoneNameSelect.innerHTML = '<option value="">Select zone name</option>';
+  zoneNameSelect.disabled = !level;
+  if (!level) return;
+
+  try {
+    const response = await fetch(`${zonePathsUrl}?type=${level.toLowerCase()}`);
+    const data = await response.json();
+    const items = level === 'A' ? (data.cities || []) : (data.city_pairs || []);
+    const limit = Math.min(items.length, 10);
+    for (let index = 0; index < limit; index += 1) {
+      const item = items[index];
+      const option = document.createElement('option');
+      option.value = level === 'A' ? item : formatZoneOption(level.toLowerCase(), item);
+      option.textContent = option.value;
+      if (option.value === selectedZoneName) option.selected = true;
+      zoneNameSelect.appendChild(option);
+    }
+    if (items.length > 10) {
+      const more = document.createElement('option');
+      more.disabled = true;
+      more.textContent = `... and ${items.length - 10} more`;
+      zoneNameSelect.appendChild(more);
+    }
+  } catch (error) {
+    const option = document.createElement('option');
+    option.disabled = true;
+    option.textContent = 'No zones available';
+    zoneNameSelect.appendChild(option);
+  }
+}
+
+zoneLevelSelect.addEventListener('change', loadZoneNames);
+document.addEventListener('DOMContentLoaded', loadZoneNames);
+</script>
+</body>
+</html>

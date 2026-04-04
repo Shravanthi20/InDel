@@ -113,6 +113,17 @@ export type Notice = {
   message: string
 }
 
+export type DisruptionSignal = {
+  sent: boolean
+  sentAt: string
+  scopeLabel: string
+  triggerMode: 'all-factors-combined'
+  zonesCount: number
+  successfulRequests: number
+  claimsCreated: number
+  notificationsCreated: number
+}
+
 const DEFAULT_ENV_INPUTS: EnvInputs = {
   temperature: 33,
   rain: 3,
@@ -391,6 +402,35 @@ function computeResult(
   }
 }
 
+function deriveDisruptionSignal(inputs: EnvInputs) {
+  const temperatureRisk = clamp01((inputs.temperature - 35) / 10)
+  const rainRisk = clamp01(inputs.rain / 15)
+  const aqiRisk = clamp01((inputs.aqi - 200) / 100)
+  const trafficRisk = clamp01((inputs.traffic - 60) / 25)
+
+  const weights = [
+    { key: 'temperature' as const, score: temperatureRisk, signal: 'temperature_extreme' },
+    { key: 'rain' as const, score: rainRisk, signal: 'weather_rain' },
+    { key: 'aqi' as const, score: aqiRisk, signal: 'aqi_hazardous' },
+    { key: 'traffic' as const, score: trafficRisk, signal: 'traffic_congestion' },
+  ]
+
+  const top = weights.reduce((winner, current) => (current.score > winner.score ? current : winner), weights[0])
+  const compositeScore = round2((temperatureRisk * 0.3) + (rainRisk * 0.25) + (aqiRisk * 0.25) + (trafficRisk * 0.2))
+
+  return {
+    signal: top.signal,
+    dominantFactor: top.key,
+    compositeScore,
+    details: {
+      temperatureRisk: round2(temperatureRisk),
+      rainRisk: round2(rainRisk),
+      aqiRisk: round2(aqiRisk),
+      trafficRisk: round2(trafficRisk),
+    },
+  }
+}
+
 export function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -441,12 +481,16 @@ type GodModeContextValue = {
   setPolicyInput: (key: keyof PolicyInputs, value: number) => void
   loading: boolean
   running: boolean
+  addingDisruption: boolean
   error: string
   result: SimulationResult
   runSimulation: () => void
+  addDisruption: () => Promise<void>
   generatingBatches: boolean
   generateBatches: () => void
+  lastDisruptionSignal: DisruptionSignal | null
   notice: Notice | null
+  previewResult: SimulationResult
   clearNotice: () => void
   batches: BatchRow[]
   showCodes: boolean
@@ -471,9 +515,11 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
   const [showCodes, setShowCodes] = useState(false)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
+  const [addingDisruption, setAddingDisruption] = useState(false)
   const [generatingBatches, setGeneratingBatches] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [lastDisruptionSignal, setLastDisruptionSignal] = useState<DisruptionSignal | null>(null)
   const [endpointStatus, setEndpointStatus] = useState<EndpointStatus>({
     zoneHealth: 'pending',
     availableBatches: 'pending',
@@ -505,19 +551,9 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     return [{ value: '', label: 'Select Zone Name', zoneId: 0 }, ...effectiveZonePaths]
   }, [zoneLevel, zoneNameLoading, effectiveZonePaths])
 
-  const affectedZoneIds = useMemo(
-    () => resolveTargetZoneIds(zoneLevel, zoneName, zones, effectiveZonePaths),
-    [zoneLevel, zoneName, zones, effectiveZonePaths],
-  )
+  const affectedZoneIds = useMemo(() => zones.map((zone) => zone.zone_id), [zones])
 
-  const scopeLabel = useMemo(() => {
-    if (zoneLevel === 'ALL' || zoneName === 'ALL ZONES') {
-      return 'ALL ZONES'
-    }
-
-    const selected = zoneNameOptions.find((option) => option.value === zoneName)
-    return selected ? `${zoneLevel} / ${selected.label}` : `${zoneLevel}`
-  }, [zoneLevel, zoneName, zoneNameOptions])
+  const scopeLabel = useMemo(() => 'ALL ZONES', [])
 
   const batches = useMemo(() => {
     const merged = [...availableBatches, ...assignedBatches]
@@ -773,7 +809,7 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
 
     try {
       const preview = livePreview
-      const targetZoneIds = affectedZoneIds.length > 0 ? affectedZoneIds : zones.map((zone) => zone.zone_id)
+      const targetZoneIds = zones.map((zone) => zone.zone_id)
 
       if (targetZoneIds.length === 0) {
         setError('No zones available for simulation.')
@@ -844,6 +880,96 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const addDisruption = async () => {
+  if (addingDisruption) {
+    return
+  }
+
+  setAddingDisruption(true)
+  setError('')
+
+  try {
+    const sourceInputs = godModeEnabled ? manualInputs : apiInputs
+    const targetZoneIds = zones.map((zone) => zone.zone_id)
+
+    if (targetZoneIds.length === 0) {
+    setError('No zones available to add disruption.')
+    return
+    }
+
+    const signalPlan = deriveDisruptionSignal(sourceInputs)
+    const results = await Promise.allSettled(
+    targetZoneIds.map((zoneId) => postTriggerDemo({
+      zone_id: zoneId,
+      force_order_drop: true,
+      external_signal: 'composite_all_factors',
+      generate_claims: true,
+      aqi: sourceInputs.aqi,
+      rain: sourceInputs.rain,
+      traffic: sourceInputs.traffic,
+      max_payout_inr: policyInputs.maxPayoutPerDay,
+      max_payout_per_day: policyInputs.maxPayoutPerDay,
+      coverage_ratio: policyInputs.coverageRatio,
+      temperature: sourceInputs.temperature,
+    })),
+    )
+
+    let totalClaims = 0
+    let totalNotifications = 0
+    let successfulRequests = 0
+    results.forEach((entry) => {
+    if (entry.status !== 'fulfilled') {
+      return
+    }
+    successfulRequests += 1
+    const payload = entry.value.data?.data
+    totalClaims += Number(payload?.claims_generated || 0)
+    totalNotifications += Number(payload?.notifications_created || 0)
+    })
+
+    const [zoneHealthResponse, availableResponse, assignedResponse] = await Promise.allSettled([
+    getZoneHealth(),
+    getAvailableBatches(),
+    getAssignedBatches(),
+    ])
+
+    if (zoneHealthResponse.status === 'fulfilled') {
+    const zoneHealths = (zoneHealthResponse.value.data?.data || []) as ZoneHealth[]
+    const mapped = mapApiToInputs(zoneHealths)
+    setApiInputs(mapped)
+    setManualInputs(mapped)
+    }
+    if (availableResponse.status === 'fulfilled') {
+    setAvailableBatches(availableResponse.value.data?.batches || [])
+    }
+    if (assignedResponse.status === 'fulfilled') {
+    setAssignedBatches(assignedResponse.value.data?.batches || [])
+    }
+
+    setCommittedResult(computeResult(sourceInputs, policyInputs, scopeLabel, targetZoneIds.length, 'god-mode-override'))
+    setLastDisruptionSignal({
+    sent: successfulRequests > 0,
+    sentAt: new Date().toISOString(),
+    scopeLabel,
+    triggerMode: 'all-factors-combined',
+    zonesCount: targetZoneIds.length,
+    successfulRequests,
+    claimsCreated: totalClaims,
+    notificationsCreated: totalNotifications,
+    })
+    setNotice({
+    tone: 'success',
+    message: `Combined disruption sent for ${scopeLabel} (score ${signalPlan.compositeScore.toFixed(2)}). Claims created: ${totalClaims}, notifications created: ${totalNotifications}.`,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unable to add disruption'
+    setError(message)
+    setNotice({ tone: 'error', message })
+  } finally {
+    setAddingDisruption(false)
+  }
+  }
+
   return (
     <GodModeContext.Provider
       value={{
@@ -864,11 +990,15 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         setPolicyInput,
         loading,
         running,
+        addingDisruption,
         generatingBatches,
+        lastDisruptionSignal,
         error,
         notice,
         result: committedResult,
+        previewResult: livePreview,
         runSimulation,
+        addDisruption,
         generateBatches,
         clearNotice: () => setNotice(null),
         batches,
