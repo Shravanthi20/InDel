@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"context"
 	"strings"
 
 	"github.com/IBM/sarama"
@@ -22,6 +23,10 @@ func NewConsumer(brokers string, group string, topics []string) (*Consumer, erro
 	}
 
 	return &Consumer{consumer: consumerGroup}, nil
+}
+
+func (c *Consumer) Subscribe(ctx context.Context, topics []string, handler sarama.ConsumerGroupHandler) error {
+	return c.consumer.Consume(ctx, topics, handler)
 }
 
 func (c *Consumer) Close() error {

@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("failed to migrate sqlite database: %v", err)
 	}
 
-	service := services.NewCoreOpsService(db)
+	service := services.NewCoreOpsService(db, nil)
 	result, err := service.GenerateSyntheticData(services.SyntheticGenerateRequest{
 		Seed:      *seed,
 		Scenario:  *scenario,

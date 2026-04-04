@@ -5,6 +5,7 @@ const (
 	TopicClaimsGenerated     = "indel.claims.generated"
 	TopicClaimsScored        = "indel.claims.scored"
 	TopicPayoutsQueued       = "indel.payouts.queued"
+	TopicPayoutsCompleted    = "indel.payouts.completed"
 	TopicPayoutsFailed       = "indel.payouts.failed"
 	TopicWeatherAlerts       = "indel.weather.alerts"
 	TopicAQIAlerts           = "indel.aqi.alerts"

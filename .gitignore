@@ -99,6 +99,24 @@ docker-compose.override.yml
 logs/
 *.log
 
+# Test & Implementation Documentation (temporary)
+BACKEND_STRUCTURE_DETAILED.md
+COMPLETE_PAYOUT_TEST.md
+IMPLEMENTATION_COMPLETE.md
+PAYOUT_IMPLEMENTATION.md
+PAYOUT_TESTING.md
+QUICKSTART.md
+TESTING_START_HERE.md
+VERIFY_PAYOUTS_STATUS.md
+
+# Test Scripts (PowerShell & Bash)
+*.ps1
+*.sh
+
+# Keep these for commit
+!VERIFICATION_REPORT.md
+!GIT_COMMIT_SUMMARY.md
+
 # Database
 *.db
 *.sqlite

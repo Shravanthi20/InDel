@@ -16,7 +16,7 @@ func nowTime() time.Time {
 
 // workerCoreService returns a CoreOpsService backed by the worker DB.
 func workerCoreService() *services.CoreOpsService {
-	return services.NewCoreOpsService(workerDB)
+	return services.NewCoreOpsService(workerDB, nil)
 }
 
 

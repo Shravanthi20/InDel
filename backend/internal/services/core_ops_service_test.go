@@ -55,7 +55,7 @@ func seedCycleFixtures(t *testing.T, db *gorm.DB, includeBroken bool) {
 func TestRunWeeklyCycleIdempotencyAndRecovery(t *testing.T) {
 	db := setupCoreOpsTestDB(t)
 	seedCycleFixtures(t, db, true)
-	service := NewCoreOpsService(db)
+	service := NewCoreOpsService(db, nil)
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 
 	result1, err := service.RunWeeklyCycle(now)
@@ -95,7 +95,7 @@ func TestRunWeeklyCycleIdempotencyAndRecovery(t *testing.T) {
 
 func TestGenerateClaimsAndQueueProcessPayouts(t *testing.T) {
 	db := setupCoreOpsTestDB(t)
-	service := NewCoreOpsService(db)
+	service := NewCoreOpsService(db, nil)
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 	weekStart, weekEnd := weekBounds(now)
 
@@ -141,7 +141,7 @@ func TestGenerateClaimsAndQueueProcessPayouts(t *testing.T) {
 
 func TestQueueClaimPayoutDoesNotRequeueProcessedPayout(t *testing.T) {
 	db := setupCoreOpsTestDB(t)
-	service := NewCoreOpsService(db)
+	service := NewCoreOpsService(db, nil)
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 
 	claim := models.Claim{ID: 1, WorkerID: 21, ClaimAmount: 500, Status: "paid", FraudVerdict: "clear", CreatedAt: now, UpdatedAt: now}
@@ -173,7 +173,7 @@ func TestQueueClaimPayoutDoesNotRequeueProcessedPayout(t *testing.T) {
 
 func TestAutoProcessDisruptionScopesProcessingToThatDisruption(t *testing.T) {
 	db := setupCoreOpsTestDB(t)
-	service := NewCoreOpsService(db)
+	service := NewCoreOpsService(db, nil)
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 	weekStart, weekEnd := weekBounds(now)
 
@@ -214,8 +214,8 @@ func TestAutoProcessDisruptionScopesProcessingToThatDisruption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auto process disruption failed: %v", err)
 	}
-	if result.PayoutsProcessed != 1 || result.PayoutsSucceeded != 1 {
-		t.Fatalf("expected only disruption A payout to be processed, got %+v", result)
+	if result.PayoutsQueued != 1 {
+		t.Fatalf("expected 1 payout to be queued, got %+v", result)
 	}
 
 	var refreshedOtherPayout models.Payout
@@ -229,7 +229,7 @@ func TestAutoProcessDisruptionScopesProcessingToThatDisruption(t *testing.T) {
 
 func TestPayoutReconciliationMath(t *testing.T) {
 	db := setupCoreOpsTestDB(t)
-	service := NewCoreOpsService(db)
+	service := NewCoreOpsService(db, nil)
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 
 	claim1 := models.Claim{ID: 1, WorkerID: 1, ClaimAmount: 500, Status: "paid"}
@@ -255,7 +255,7 @@ func TestPayoutReconciliationMath(t *testing.T) {
 
 func TestSyntheticGenerationOutputs(t *testing.T) {
 	db := setupCoreOpsTestDB(t)
-	service := NewCoreOpsService(db)
+	service := NewCoreOpsService(db, nil)
 	outputDir := filepath.Join(t.TempDir(), "synthetic")
 	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 
