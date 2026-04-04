@@ -1,15 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  background-color: #0f172a;
-  color-scheme: dark;
+@layer base {
+  :root {
+    --bg-main: #f8fafc;
+    --border-subtle: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+  }
+  .dark {
+    --bg-main: #020617;
+    --border-subtle: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+  }
+  
+  body {
+    @apply bg-[var(--bg-main)] text-[var(--text-primary)] antialiased font-['Outfit'];
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  /* Enterprise-grade high-precision response (Instant feel) */
+  * {
+    @apply transition-none !important;
+    @apply duration-0 !important;
+    @apply animate-none !important;
+  }
+
+  /* High precision focus states */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-slate-400 dark:ring-slate-600;
+  }
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer components {
+  .enterprise-panel {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-lg;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 dark:bg-slate-800 rounded-full;
+  }
 }
