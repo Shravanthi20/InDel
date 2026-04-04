@@ -428,8 +428,13 @@ func GetAvailableOrders(c *gin.Context) {
 					z, _ := strconv.Atoi(zoneIDStr)
 					zoneToUse = z
 				}
+				var defaultUser int
+				_ = workerDB.Raw("SELECT id FROM users LIMIT 1").Scan(&defaultUser)
+				if defaultUser == 0 {
+					defaultUser = 1
+				}
 				for i := 0; i < 5; i++ {
-					_ = workerDB.Exec("INSERT INTO orders (order_value, tip_inr, delivery_fee_inr, zone_id, status, pickup_area, drop_area, distance_km) VALUES (?, ?, ?, ?, 'assigned', 'Fast Food Outlet', 'Residential Block', ?)", 50+i*10, 0, 30, zoneToUse, 2.5+float64(i)*0.5).Error
+					_ = workerDB.Exec("INSERT INTO orders (worker_id, order_value, tip_inr, delivery_fee_inr, zone_id, status, pickup_area, drop_area, distance_km) VALUES (?, ?, ?, ?, ?, 'assigned', 'Fast Food Outlet', 'Residential Block', ?)", defaultUser, 50+i*10, 0, 30, zoneToUse, 2.5+float64(i)*0.5).Error
 				}
 				_ = workerDB.Raw(query, args...).Scan(&rows).Error
 			}

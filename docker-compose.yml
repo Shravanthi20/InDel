@@ -102,6 +102,11 @@ services:
       INDEL_ENV: production
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: indel
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: indel
     ports:
       - "8003:8003"
     depends_on:
