@@ -18,6 +18,8 @@ from urllib.parse import parse_qs, urlparse
 HOST = os.environ.get("INDEL_MOCK_HOST", "0.0.0.0")
 PUBLIC_HOST = os.environ.get("INDEL_MOCK_PUBLIC_HOST", "10.0.2.2")
 PORT = int(os.environ.get("INDEL_MOCK_PORT", "8001"))
+ZONE_PATH_LIMIT = 10
+ORDERS_PER_ZONE_LIMIT = 5
 
 
 class MockState:
@@ -188,11 +190,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/platform/zone-paths":
             level = query.get("type", ["a"])[0].lower()
             if level == "a":
-                return self._ok({"cities": STATE.zone_paths_a})
+                return self._ok({"cities": STATE.zone_paths_a[:ZONE_PATH_LIMIT]})
             elif level == "b":
-                return self._ok({"city_pairs": STATE.zone_paths_b})
+                return self._ok({"city_pairs": STATE.zone_paths_b[:ZONE_PATH_LIMIT]})
             elif level == "c":
-                return self._ok({"city_pairs": STATE.zone_paths_c})
+                return self._ok({"city_pairs": STATE.zone_paths_c[:ZONE_PATH_LIMIT]})
             else:
                 return self._ok({"cities": [], "city_pairs": []})
 
@@ -231,10 +233,10 @@ class Handler(BaseHTTPRequestHandler):
             limit = int(query.get("limit", ["10"])[0])
             return self._ok({"payouts": STATE.payouts[: max(limit, 1)]})
         if path == "/api/v1/worker/orders/assigned":
-            assigned_orders = [order for order in STATE.orders if order["status"] == "assigned"]
+            assigned_orders = [order for order in STATE.orders if order["status"] == "assigned"][:ORDERS_PER_ZONE_LIMIT]
             return self._ok({"orders": assigned_orders})
         if path == "/api/v1/worker/orders":
-            return self._ok({"orders": STATE.orders})
+            return self._ok({"orders": STATE.orders[:ORDERS_PER_ZONE_LIMIT]})
         if path == "/api/v1/worker/notifications":
             return self._ok({"notifications": STATE.notifications})
 
@@ -380,7 +382,7 @@ class Handler(BaseHTTPRequestHandler):
             )
 
         if path == "/api/v1/demo/simulate-orders":
-            count = int(body.get("count", 3))
+            count = min(int(body.get("count", 3)), ORDERS_PER_ZONE_LIMIT)
             base_index = len(STATE.orders) + 1
             for idx in range(count):
                 STATE.orders.append(

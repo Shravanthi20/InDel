@@ -38,6 +38,13 @@ class PremiumModel:
                 self.label_encoders[col] = le
             else:
                 le = self.label_encoders[col]
+                # Handle unseen categorical values at inference by mapping
+                # them to the first known class for that feature.
+                known_classes = set(le.classes_)
+                fallback = le.classes_[0]
+                df_proc[col] = df_proc[col].apply(
+                    lambda v: v if v in known_classes else fallback
+                )
                 df_proc[col] = le.transform(df_proc[col])
         return df_proc[self.feature_cols]
 

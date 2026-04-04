@@ -1,5 +1,10 @@
 import unittest
-from scripts.fake_order_publisher import random_order, CITY_STATE_LOOKUP, determine_zone_and_vehicle
+from scripts.fake_order_publisher import (
+    CITY_STATE_LOOKUP,
+    determine_zone_and_vehicle,
+    load_zone_pairs,
+    random_order_from_pair,
+)
 
 
 class TestOrderEligibility(unittest.TestCase):
@@ -18,7 +23,16 @@ class TestOrderEligibility(unittest.TestCase):
         self.assertFalse(result['needs_hub_transfer'])
 
     def test_random_order_fields(self):
-        order = random_order(1)
+        zone_a, _, _ = load_zone_pairs()
+        self.assertGreater(len(zone_a), 0)
+        pair = {
+            "from": "Port Blair",
+            "to": "Port Blair",
+            "from_state": CITY_STATE_LOOKUP.get("Port Blair", "Andaman and Nicobar Islands"),
+            "to_state": CITY_STATE_LOOKUP.get("Port Blair", "Andaman and Nicobar Islands"),
+            "distance_km": 8.0,
+        }
+        order = random_order_from_pair(1, pair, "same-city", zone_id=1)
         self.assertIn(order['zone_type'], ['intra-zone', 'inter-state', 'unknown'])
         self.assertIn(order['required_vehicle_type'], ['bike/small van', 'van/truck', 'unknown'])
         self.assertIn('needs_hub_transfer', order)

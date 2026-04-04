@@ -42,16 +42,24 @@ LAST_NAMES = ["Kumar", "Reddy", "Sharma", "Patel", "Iyer", "Verma", "Gupta", "Ra
 PAYMENT_METHODS = ["upi", "cod", "card"]
 PACKAGE_SIZES = ["small", "medium", "large"]
 ZONES = {}
+MAX_ZONE_NAMES_PER_LEVEL = 10
+ORDERS_PER_ZONE_NAME = 5
 
 
-# Load zone pairs from zone_b.json (intra-state) and zone_c.json (inter-state)
+# Load zone pairs from zone_a.json (same city), zone_b.json (intra-state) and zone_c.json (inter-state)
 def load_zone_pairs():
     base_dir = os.path.dirname(__file__)
+    with open(os.path.join(base_dir, '../zone_a.json'), encoding='utf-8') as f:
+        zone_a = json.load(f)
     with open(os.path.join(base_dir, '../zone_b.json'), encoding='utf-8') as f:
         zone_b = json.load(f)
     with open(os.path.join(base_dir, '../zone_c.json'), encoding='utf-8') as f:
         zone_c = json.load(f)
-    return zone_b, zone_c
+    return zone_a, zone_b, zone_c
+
+
+def limit_zone_pairs(zone_a_pairs, zone_b_pairs, zone_c_pairs, limit: int = MAX_ZONE_NAMES_PER_LEVEL):
+    return zone_a_pairs[:limit], zone_b_pairs[:limit], zone_c_pairs[:limit]
 
 ZONE_BAND_FEE_INR = {
     "A": 25,
@@ -115,10 +123,11 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
     amount = round(random.uniform(120, 1450), 2)
     package_size = random.choice(PACKAGE_SIZES)
     weight = {
-        "small": round(random.uniform(0.2, 2.0), 2),
-        "medium": round(random.uniform(2.1, 7.0), 2),
-        "large": round(random.uniform(7.1, 20.0), 2),
+        "small": round(random.uniform(0.05, 1.0), 2),
+        "medium": round(random.uniform(1.0, 3.0), 2),
+        "large": round(random.uniform(3.0, 5.0), 2),
     }[package_size]
+    weight = min(max(weight, 0.05), 5.0)
     distance = pair.get("distance_km", round(random.uniform(5, 1000), 1))
     # Use from/to city/state/lat/lon
     from_city = pair.get("from")
@@ -183,23 +192,37 @@ def reset_backend_orders(reset_url: str, timeout: int):
 
 
 
-def post_json(url: str, payload: dict, timeout: int) -> tuple[int, str]:
+def post_json(url: str, payload: dict, timeout: int, retries: int = 3) -> tuple[int, str]:
     body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            text = resp.read().decode("utf-8", errors="replace")
-            return resp.getcode(), text
-    except urllib.error.HTTPError as http_err:
-        text = http_err.read().decode("utf-8", errors="replace")
-        return http_err.code, text
-    except urllib.error.URLError as url_err:
-        return 500, str(url_err)
+    last_error = None
+    
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                text = resp.read().decode("utf-8", errors="replace")
+                return resp.getcode(), text
+        except urllib.error.HTTPError as http_err:
+            text = http_err.read().decode("utf-8", errors="replace")
+            return http_err.code, text
+        except (urllib.error.URLError, TimeoutError) as err:
+            last_error = err
+            if attempt < retries - 1:
+                # Exponential backoff: 0.5s, 1s, 2s
+                wait_time = 0.5 * (2 ** attempt)
+                # Skip sleep on first attempt to avoid delays
+                if attempt > 0:
+                    time.sleep(wait_time)
+                continue
+            else:
+                return 500, f"Timeout after {retries} retries: {str(err)}"
+    
+    return 500, str(last_error)
 
 
 def request_json(method: str, url: str, timeout: int, payload: dict | None = None, headers: dict | None = None) -> tuple[int, str]:
@@ -437,8 +460,8 @@ def main() -> None:
     parser.add_argument(
         "--orders-per-run",
         type=int,
-        default=1,
-        help="Orders published per cycle",
+        default=5,
+        help="Orders published per route pair before moving to the next pair",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -513,24 +536,48 @@ def main() -> None:
     reset_backend_orders(args.reset_url, args.timeout_seconds)
 
     # Load zone pairs
-    zone_b_pairs, zone_c_pairs = load_zone_pairs()
+    zone_a_pairs, zone_b_pairs, zone_c_pairs = load_zone_pairs()
+    zone_a_pairs, zone_b_pairs, zone_c_pairs = limit_zone_pairs(zone_a_pairs, zone_b_pairs, zone_c_pairs)
 
     print(f"Publishing to: {args.url}")
     print(f"Available orders URL: {args.available_url}")
-    print(f"Plan: generate and post all orders immediately")
+    print(f"Plan: generate 5 orders for the first {MAX_ZONE_NAMES_PER_LEVEL} zone names in each zone level")
 
-    # Generate and publish new orders for ALL zone_b and zone_c paths, as fast as possible
-    all_pairs = [(pair, "intra-zone") for pair in zone_b_pairs] + [(pair, "inter-state") for pair in zone_c_pairs]
+    # Convert zone_a city strings into pair dicts
+    zone_a_pair_dicts = [
+        {"from": city, "to": city, "from_state": "", "to_state": "", "distance_km": 1.0, "from_lat": 0, "from_lon": 0, "to_lat": 0, "to_lon": 0}
+        for city in zone_a_pairs
+    ]
+
+    # Generate and publish new orders for the first zone names in each level with throttling
+    all_pairs = (
+        [(pair, "local") for pair in zone_a_pair_dicts] +
+        [(pair, "intra-zone") for pair in zone_b_pairs] +
+        [(pair, "inter-state") for pair in zone_c_pairs]
+    )
     published_count = 0
-    for i, (pair, zone_type) in enumerate(all_pairs):
-        payload = random_order_from_pair(i + 1, pair, zone_type, args.zone_id or 1)
-        status, response_text = post_json(args.url, payload, args.timeout_seconds)
-        print(f"  -> {payload['order_id']} {payload['from_city']}->{payload['to_city']} status={status}")
-        if status >= 400:
-            print(f"     error={response_text}")
-        else:
-            published_count += 1
-    print(f"\nDone. {published_count} orders published.")
+    failed_count = 0
+    orders_per_route = ORDERS_PER_ZONE_NAME
+    order_index = 0
+    for pair_index, (pair, zone_type) in enumerate(all_pairs):
+        for route_order_index in range(orders_per_route):
+            order_index += 1
+            payload = random_order_from_pair(order_index, pair, zone_type, args.zone_id or 1)
+            status, response_text = post_json(args.url, payload, args.timeout_seconds, retries=2)
+            print(f"  -> {payload['order_id']} {payload['from_city']}->{payload['to_city']} status={status}")
+            if status >= 400:
+                print(f"     error={response_text}")
+                failed_count += 1
+            else:
+                published_count += 1
+
+            # Throttle publishing: 5ms delay between orders to allow backend to keep up
+            # This prevents overwhelming the backend while still being reasonably fast
+            is_last_order = pair_index == len(all_pairs) - 1 and route_order_index == orders_per_route - 1
+            if not is_last_order:
+                time.sleep(0.005)
+    
+    print(f"\nDone. {published_count} orders published, {failed_count} failed.")
 
 if __name__ == "__main__":
     main()
