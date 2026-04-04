@@ -133,16 +133,32 @@ InDel uses a dual-layer approach for pricing and fraud detection, combining XGBo
 - **Anomaly Detection (Isolation Forest)**: Provides unsupervised fraud detection by identifying claims that deviate significantly from regional economic baselines.
 - **State Clustering (DBSCAN)**: Identifies coordinated suspicious activity among worker cohorts to prevent multi-node spoofing.
 
-#### Risk Modeling Formulas
-The platform utilizes a weighted risk-scoring heuristic for real-time premium calculation:
+#### 📊 Risk Assessment Formulas
+To ensure transparency and operational robustness, InDel utilizes a tiered mathematical model for risk and pricing.
 
-- **Weighted Risk Score ($R$):**
-  $$R = (V_o \cdot 0.24) + (V_e \cdot 0.22) + (D_r \cdot 0.2) + (W_{rain} \cdot 0.12) + (W_{aqi} \cdot 0.1) + (W_{temp} \cdot 0.12)$$
-  *Where $V_o$ is Order Volatility, $V_e$ is Earnings Volatility, and $D_r$ is the Disruption Rate.*
+**1. Weighted Risk Score ($R$)**
+The primary indicator for regional disruption probability, derived from live telemetry and historical volatility:
 
-- **Dynamic Premium Calculation ($P$):**
-  $$P = (E_{avg} \cdot 0.0375) \times (0.72 + R) \times VF$$
-  *Where $E_{avg}$ is average daily earnings and $VF$ is the Vehicle Risk Factor.*
+$$
+R = (V_o \cdot 0.24) + (V_e \cdot 0.22) + (D_r \cdot 0.20) + (S_{weather} \cdot 0.34)
+$$
+
+| Variable | Definition | Impact Weight |
+| :--- | :--- | :--- |
+| $V_o$ | **Order Volatility** (Regional demand variance) | 24% |
+| $V_e$ | **Earnings Volatility** (Worker-side income variance) | 22% |
+| $D_r$ | **Disruption Rate** (Historical zone events) | 20% |
+| $S_{weather}$ | **Aggregated Weather Signal** (Rain/AQI/Temp) | 34% |
+
+**2. Dynamic Premium Calculation ($P$)**
+Individual weekly premiums are calculated against the worker's average daily earnings ($E_{avg}$), weighted by their current Risk Score ($R$) and a Vehicle Factor ($VF$):
+
+$$
+P = (E_{avg} \cdot 0.0375) \times (0.72 + R) \times VF
+$$
+
+> [!TIP]
+> The **Vehicle Factor ($VF$)** ranges from **1.04 to 1.08** based on the vehicle class (EVs vs Internal Combustion) to reward sustainable delivery methods.
 
 ---
 ## Platform Dashboard
