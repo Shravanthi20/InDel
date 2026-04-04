@@ -48,7 +48,10 @@ func Onboard(c *gin.Context) {
 		if parseErr == nil {
 			zoneLevel := bodyString(body, "zone_level", "")
 			zoneName := bodyString(body, "zone_name", "")
-			zoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName)
+			zoneID := bodyUint(body, "zone_id", 0)
+			if zoneID == 0 {
+				zoneID = ensureZoneIDByLevelAndName(zoneLevel, zoneName)
+			}
 			if zoneID != 0 {
 				name := bodyString(body, "name", "New Worker")
 				vehicleType := bodyString(body, "vehicle_type", "bike")
@@ -124,9 +127,9 @@ func GetProfile(c *gin.Context) {
 				Where("u.id = ?", workerIDUint).
 				Scan(&row).Error
 			if err == nil && row.WorkerID != 0 {
-				zone := strings.TrimSpace(fmt.Sprintf("%s, %s", row.ZoneName, row.City))
-				if zone == "," || zone == "" {
-					zone = strings.TrimSpace(row.ZoneName)
+				zone := strings.TrimSpace(row.ZoneName)
+				if zone == "" {
+					zone = strings.TrimSpace(row.City)
 				}
 				c.JSON(200, gin.H{"worker": gin.H{
 					"worker_id":       fmt.Sprintf("%d", row.WorkerID),
@@ -173,15 +176,24 @@ func UpdateProfile(c *gin.Context) {
 		if parseErr == nil {
 			var profile models.WorkerProfile
 			err := workerDB.Where("worker_id = ?", workerIDUint).First(&profile).Error
+			if err == gorm.ErrRecordNotFound {
+				profile = models.WorkerProfile{WorkerID: workerIDUint}
+				err = nil
+			}
 			if err == nil {
 				if name := bodyString(body, "name", ""); name != "" {
 					profile.Name = name
 				}
-				zoneLevel := bodyString(body, "zone_level", "")
-				zoneName := bodyString(body, "zone_name", "")
-				if zoneLevel != "" && zoneName != "" {
-					if zoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName); zoneID != 0 {
-						profile.ZoneID = zoneID
+				zoneID := bodyUint(body, "zone_id", 0)
+				if zoneID != 0 {
+					profile.ZoneID = zoneID
+				} else {
+					zoneLevel := bodyString(body, "zone_level", "")
+					zoneName := bodyString(body, "zone_name", "")
+					if zoneLevel != "" && zoneName != "" {
+						if ensuredZoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName); ensuredZoneID != 0 {
+							profile.ZoneID = ensuredZoneID
+						}
 					}
 				}
 				if vehicle := bodyString(body, "vehicle_type", ""); vehicle != "" {
@@ -190,7 +202,11 @@ func UpdateProfile(c *gin.Context) {
 				if upi := bodyString(body, "upi_id", ""); upi != "" {
 					profile.UPIId = upi
 				}
-				_ = workerDB.Save(&profile).Error
+				if profile.ID == 0 {
+					_ = workerDB.Create(&profile).Error
+				} else {
+					_ = workerDB.Save(&profile).Error
+				}
 			}
 		}
 	}

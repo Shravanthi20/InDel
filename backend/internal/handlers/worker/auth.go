@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
 	"github.com/gin-gonic/gin"
@@ -87,7 +88,9 @@ func VerifyOTP(c *gin.Context) {
 			"worker_id":       workerID,
 			"name":            "New Worker",
 			"phone":           phone,
-			"zone":            "Tambaram, Chennai",
+			"zone":            "",
+			"zone_level":      "",
+			"zone_name":       "",
 			"vehicle_type":    "bike",
 			"upi_id":          "new@upi",
 			"coverage_status": "inactive",
@@ -110,6 +113,8 @@ func Register(c *gin.Context) {
 	phone := bodyString(body, "phone", "")
 	email := bodyString(body, "email", "")
 	password := bodyString(body, "password", "")
+	zoneLevel := bodyString(body, "zone_level", "")
+	zoneName := bodyString(body, "zone_name", "")
 
 	if username == "" || phone == "" || email == "" || password == "" {
 		c.JSON(400, gin.H{"error": "username_phone_email_password_required"})
@@ -117,6 +122,7 @@ func Register(c *gin.Context) {
 	}
 
 	workerID := fmt.Sprintf("worker-%s", phone)
+	workerIDUint := uint(0)
 	if hasDB() {
 		var existing models.User
 		err := workerDB.Where("phone = ?", phone).First(&existing).Error
@@ -128,6 +134,35 @@ func Register(c *gin.Context) {
 		}
 		if existing.ID != 0 {
 			workerID = fmt.Sprintf("%d", existing.ID)
+			workerIDUint = existing.ID
+		}
+	}
+
+	if hasDB() && workerIDUint != 0 {
+		var profile models.WorkerProfile
+		err := workerDB.Where("worker_id = ?", workerIDUint).First(&profile).Error
+		if err == gorm.ErrRecordNotFound {
+			profile = models.WorkerProfile{
+				WorkerID:    workerIDUint,
+				Name:        username,
+				VehicleType: "bike",
+				UPIId:       "new@upi",
+			}
+		}
+		if err == nil || err == gorm.ErrRecordNotFound {
+			if profile.Name == "" {
+				profile.Name = username
+			}
+			if zoneLevel != "" && zoneName != "" {
+				if zoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName); zoneID != 0 {
+					profile.ZoneID = zoneID
+				}
+			}
+			if profile.ID == 0 {
+				_ = workerDB.Create(&profile).Error
+			} else {
+				_ = workerDB.Save(&profile).Error
+			}
 		}
 	}
 
@@ -139,17 +174,36 @@ func Register(c *gin.Context) {
 	demoAuthPasswordsByPhone[phone] = password
 	demoAuthPhoneByEmail[email] = phone
 	store.data.TokenToWorkerID[token] = workerID
+	zoneDisplay := strings.TrimSpace(zoneName)
+	if zoneDisplay == "" {
+		zoneDisplay = strings.TrimSpace(zoneLevel)
+	}
 
 	if _, exists := store.data.WorkerProfiles[workerID]; !exists {
 		store.data.WorkerProfiles[workerID] = map[string]any{
 			"worker_id":       workerID,
 			"name":            username,
 			"phone":           phone,
-			"zone":            "Tambaram, Chennai",
+			"zone":            zoneDisplay,
+			"zone_level":      zoneLevel,
+			"zone_name":       zoneName,
 			"vehicle_type":    "bike",
 			"upi_id":          "new@upi",
 			"coverage_status": "inactive",
 			"enrolled":        false,
+		}
+	} else {
+		profile := store.data.WorkerProfiles[workerID]
+		if profile != nil {
+			if zoneDisplay != "" {
+				profile["zone"] = zoneDisplay
+			}
+			if zoneLevel != "" {
+				profile["zone_level"] = zoneLevel
+			}
+			if zoneName != "" {
+				profile["zone_name"] = zoneName
+			}
 		}
 	}
 

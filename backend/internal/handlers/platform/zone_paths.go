@@ -10,6 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const zonePathLimit = 10
+
 // CityState is a struct for city/state pairs
 var cityStateList = []struct {
 	City  string
@@ -43,9 +45,15 @@ func GetZonePaths(c *gin.Context) {
 		var data interface{}
 		if err := json.NewDecoder(f).Decode(&data); err == nil {
 			if typeParam == "a" {
+				if cities, ok := data.([]any); ok && len(cities) > zonePathLimit {
+					data = cities[:zonePathLimit]
+				}
 				c.JSON(http.StatusOK, gin.H{"cities": data})
 				return
 			} else {
+				if pairs, ok := data.([]any); ok && len(pairs) > zonePathLimit {
+					data = pairs[:zonePathLimit]
+				}
 				c.JSON(http.StatusOK, gin.H{"city_pairs": data})
 				return
 			}
@@ -58,6 +66,9 @@ func GetZonePaths(c *gin.Context) {
 			cities = append(cities, cs.City)
 		}
 		sort.Strings(cities)
+		if len(cities) > zonePathLimit {
+			cities = cities[:zonePathLimit]
+		}
 		c.JSON(http.StatusOK, gin.H{"cities": cities})
 		return
 	}
@@ -70,6 +81,9 @@ func GetZonePaths(c *gin.Context) {
 				}
 			}
 		}
+		if len(pairs) > zonePathLimit {
+			pairs = pairs[:zonePathLimit]
+		}
 		c.JSON(http.StatusOK, gin.H{"city_pairs": pairs})
 		return
 	}
@@ -81,6 +95,9 @@ func GetZonePaths(c *gin.Context) {
 					pairs = append(pairs, gin.H{"from": c1.City, "to": c2.City, "from_state": c1.State, "to_state": c2.State})
 				}
 			}
+		}
+		if len(pairs) > zonePathLimit {
+			pairs = pairs[:zonePathLimit]
 		}
 		c.JSON(http.StatusOK, gin.H{"city_pairs": pairs})
 		return
