@@ -184,9 +184,16 @@ func Register(c *gin.Context) {
 
 		// 3. Set Earnings Baseline.
 		_ = workerDB.Exec(
-			`INSERT INTO earnings_baseline (worker_id, baseline_amount)
+			`INSERT INTO earnings_baselines (worker_id, baseline_amount)
 			 VALUES (?, 4080)
 			 ON CONFLICT (worker_id) DO NOTHING`,
+			workerIDUint,
+		)
+
+		// 3.5 Set Active Policy (Required for automated claims generation)
+		_ = workerDB.Exec(
+			`INSERT INTO policies (worker_id, status, premium_amount, created_at, updated_at)
+			 VALUES (?, 'active', 65.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 			workerIDUint,
 		)
 
