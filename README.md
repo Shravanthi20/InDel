@@ -9,6 +9,8 @@
 
 > **Note:** Specific values such as premium amounts, payout figures, coverage ratios, and trigger thresholds are illustrative estimates for design and modelling purposes only. Final figures will be refined during development in collaboration with relevant stakeholders. API integrations and third-party service references are subject to change.
 
+> **Run Guide:** For local startup commands, health checks, and God Mode dashboard routes, see `docs/RUNNING.md`.
+
 ---
 
 ## Table of Contents
