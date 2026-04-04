@@ -202,3 +202,12 @@ type SyntheticGenerationRun struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
+
+type Notification struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	WorkerID  uint           `gorm:"index" json:"worker_id"`
+	Type      string         `gorm:"size:50" json:"type"`
+	Message   string         `gorm:"type:text" json:"message"`
+	ReadAt    *time.Time     `json:"read_at"`
+	CreatedAt time.Time      `json:"created_at"`
+}

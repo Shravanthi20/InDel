@@ -42,7 +42,8 @@ func Migrate(db *gorm.DB) error {
 		&models.SyntheticGenerationRun{},
 		&models.ClaimFraudScore{},
 		&models.ClaimAuditLog{},
-		&models.MaintenanceCheck{},
 		&models.AuthToken{},
+		&models.MaintenanceCheck{},
+		&models.Notification{},
 	)
 }
