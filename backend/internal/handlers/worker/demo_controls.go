@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -48,6 +49,10 @@ type zoneCPair struct {
 	ToLon      float64 `json:"to_lon"`
 }
 
+type zoneAEntry struct {
+	City string `json:"city"`
+}
+
 type zoneIDRow struct {
 	ID uint `gorm:"column:id"`
 }
@@ -62,9 +67,19 @@ func readFirstExistingFile(paths []string) ([]byte, string, error) {
 	return nil, "", fmt.Errorf("none of the candidate files exist: %v", paths)
 }
 
-// loadZonePairs loads pairs directly from zone_b.json and zone_c.json.
+// loadZonePairs loads zone A, B, and C pairs so the demo can generate all batch levels.
 func loadZonePairs() ([]ZonePair, error) {
 	var pairs []ZonePair
+
+	zoneABytes, zoneAPath, err := readFirstExistingFile([]string{
+		"/root/zone_a.json",
+		"/app/zone_a.json",
+		"../zone_a.json",
+		"zone_a.json",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load zone_a.json: %w", err)
+	}
 
 	zoneBBytes, zoneBPath, err := readFirstExistingFile([]string{
 		"/root/zone_b.json",
@@ -84,6 +99,36 @@ func loadZonePairs() ([]ZonePair, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load zone_c.json: %w", err)
+	}
+
+	var aEntries []string
+	if err := json.Unmarshal(zoneABytes, &aEntries); err != nil {
+		var fallbackEntries []zoneAEntry
+		if fallbackErr := json.Unmarshal(zoneABytes, &fallbackEntries); fallbackErr == nil {
+			for _, entry := range fallbackEntries {
+				if strings.TrimSpace(entry.City) != "" {
+					aEntries = append(aEntries, entry.City)
+				}
+			}
+		} else {
+			return nil, fmt.Errorf("failed to parse %s: %w", zoneAPath, err)
+		}
+	}
+
+	for _, city := range aEntries {
+		city = strings.TrimSpace(city)
+		if city == "" {
+			continue
+		}
+		pairs = append(pairs, ZonePair{
+			ID:         uint(len(pairs) + 1),
+			FromCity:   city,
+			ToCity:     city,
+			FromState:  "",
+			ToState:    "",
+			Distance:   1.0,
+			DistanceKm: 1.0,
+		})
 	}
 
 	var bPairs []zoneBPair
@@ -135,10 +180,10 @@ func loadZonePairs() ([]ZonePair, error) {
 	}
 
 	if len(pairs) == 0 {
-		return nil, fmt.Errorf("no usable zone pairs found in %s and %s", zoneBPath, zoneCPath)
+		return nil, fmt.Errorf("no usable zone pairs found in %s, %s, and %s", zoneAPath, zoneBPath, zoneCPath)
 	}
 
-	log.Printf("loadZonePairs: loaded %d pairs from %s and %s", len(pairs), zoneBPath, zoneCPath)
+	log.Printf("loadZonePairs: loaded %d pairs from %s, %s, and %s", len(pairs), zoneAPath, zoneBPath, zoneCPath)
 
 	return pairs, nil
 }
@@ -231,6 +276,18 @@ func seedDemoOrdersForZones(workerIDUint uint, zoneIDs []uint, count int) {
 			continue
 		}
 		log.Printf("seedDemoOrdersForZones: order %d -> zone %d %s → %s | %.1f km | ₹%.2f\n", i+1, zoneID, pair.FromCity, pair.ToCity, pair.DistanceKm, deliveryFee)
+		scheduleBatchMaterialization(availableBatchCacheScope, map[string]any{
+			"from_city":  pair.FromCity,
+			"to_city":    pair.ToCity,
+			"from_state": pair.FromState,
+			"to_state":   pair.ToState,
+		})
+		scheduleBatchMaterialization(fmt.Sprintf("%d", workerIDUint), map[string]any{
+			"from_city":  pair.FromCity,
+			"to_city":    pair.ToCity,
+			"from_state": pair.FromState,
+			"to_state":   pair.ToState,
+		})
 	}
 	log.Printf("seedDemoOrdersForZones: successfully seeded %d orders across %d zones for worker %d\n", count, len(zoneIDs), workerIDUint)
 }
@@ -287,62 +344,54 @@ func seedDemoOrdersWithFallback(workerIDUint, zoneID uint, count int) {
 
 		if err != nil {
 			log.Printf("seedDemoOrdersWithFallback: Failed to insert order %d: %v\n", i+1, err)
+			continue
 		}
+		scheduleBatchMaterialization(fmt.Sprintf("%d", workerIDUint), map[string]any{
+			"from_city":  pickupAreas[pickupIdx],
+			"to_city":    dropAreas[dropIdx],
+			"from_state": "",
+			"to_state":   "",
+		})
+		scheduleBatchMaterialization(availableBatchCacheScope, map[string]any{
+			"from_city":  pickupAreas[pickupIdx],
+			"to_city":    dropAreas[dropIdx],
+			"from_state": "",
+			"to_state":   "",
+		})
 	}
 }
 
-// DemoReset resets all in-memory demo state and reseeds orders.
+// DemoReset resets all in-memory demo state and clears orders/batches (no auth required for demo).
 func DemoReset(c *gin.Context) {
-	workerID, ok := requireAuth(c)
-	if !ok {
-		return
-	}
-
 	var resetLog []string
-	resetLog = append(resetLog, fmt.Sprintf("DemoReset initiated for worker: %s", workerID))
+	resetLog = append(resetLog, "DemoReset initiated")
+
+	clearBatchMaterializationTimers()
+	store.batchMu.Lock()
+	store.batchCache = map[string]map[string]gin.H{}
+	store.batchMu.Unlock()
+
+	store.mu.Lock()
+	store.data.Orders = []map[string]any{}
+	store.mu.Unlock()
+	resetLog = append(resetLog, "Cleared in-memory orders and batches")
 
 	if hasDB() {
-		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
-			// Clean up notifications
-			result1 := workerDB.Exec("DELETE FROM notifications WHERE worker_id = ?", workerIDUint)
-			if result1.Error != nil {
-				log.Printf("DemoReset: Error deleting notifications: %v\n", result1.Error)
-			} else {
-				resetLog = append(resetLog, fmt.Sprintf("Deleted %d notifications", result1.RowsAffected))
-			}
+		result1 := workerDB.Exec("DELETE FROM notifications")
+		if result1.Error == nil {
+			resetLog = append(resetLog, fmt.Sprintf("Deleted %d notifications", result1.RowsAffected))
+		}
 
-			// Clean up auth tokens
-			result2 := workerDB.Exec("DELETE FROM auth_tokens WHERE user_id = ?", workerIDUint)
-			if result2.Error != nil {
-				log.Printf("DemoReset: Error deleting auth_tokens: %v\n", result2.Error)
-			} else {
-				resetLog = append(resetLog, fmt.Sprintf("Deleted %d auth_tokens", result2.RowsAffected))
-			}
+		result2 := workerDB.Exec("DELETE FROM auth_tokens")
+		if result2.Error == nil {
+			resetLog = append(resetLog, fmt.Sprintf("Deleted %d auth_tokens", result2.RowsAffected))
+		}
 
-			// Reset existing orders
-			result3 := workerDB.Exec("UPDATE orders SET status='assigned', accepted_at=NULL, picked_up_at=NULL, delivered_at=NULL, updated_at=CURRENT_TIMESTAMP WHERE worker_id = ?", workerIDUint)
-			if result3.Error != nil {
-				log.Printf("DemoReset: Error resetting orders: %v\n", result3.Error)
-			} else {
-				resetLog = append(resetLog, fmt.Sprintf("Reset %d existing orders to assigned", result3.RowsAffected))
-			}
-
-			zoneIDs, zoneErr := loadZoneIDs()
-			if zoneErr != nil {
-				log.Printf("DemoReset: Failed to load zones for seeding: %v\n", zoneErr)
-				resetLog = append(resetLog, "Zone load failed, falling back to current worker zone")
-				seedDemoOrdersForWorker(workerIDUint, 3)
-			} else {
-				log.Printf("DemoReset: About to seed demo orders across %d zones for worker %d\n", len(zoneIDs), workerIDUint)
-				seedDemoOrdersForZones(workerIDUint, zoneIDs, len(zoneIDs)*2)
-				resetLog = append(resetLog, fmt.Sprintf("Seeded %d new demo orders across %d zones", len(zoneIDs)*2, len(zoneIDs)))
-			}
+		result3 := workerDB.Exec("DELETE FROM orders")
+		if result3.Error == nil {
+			resetLog = append(resetLog, fmt.Sprintf("Deleted %d orders", result3.RowsAffected))
 		}
 	}
-
-	// Reset in-memory store
-	store.reset()
-	resetLog = append(resetLog, "In-memory store reset")
 
 	log.Println("DemoReset: " + fmt.Sprint(resetLog))
 	c.JSON(200, gin.H{
@@ -489,3 +538,4 @@ func DemoResetZone(c *gin.Context) {
 
 	c.JSON(200, gin.H{"message": "zone_reset", "time": nowISO()})
 }
+

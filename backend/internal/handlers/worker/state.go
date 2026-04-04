@@ -24,11 +24,18 @@ type appData struct {
 }
 
 type stateStore struct {
-	mu   sync.RWMutex
-	data *appData
+	mu          sync.RWMutex
+	data        *appData
+	batchMu     sync.Mutex
+	batchTimers map[string]*time.Timer
+	batchCache  map[string]map[string]gin.H
 }
 
-var store = &stateStore{data: newDefaultAppData()}
+var store = &stateStore{
+	data:        newDefaultAppData(),
+	batchTimers: map[string]*time.Timer{},
+	batchCache:  map[string]map[string]gin.H{},
+}
 
 func newDefaultAppData() *appData {
 	return &appData{
@@ -153,6 +160,15 @@ func (s *stateStore) reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data = newDefaultAppData()
+	s.batchMu.Lock()
+	for _, timer := range s.batchTimers {
+		if timer != nil {
+			timer.Stop()
+		}
+	}
+	s.batchTimers = map[string]*time.Timer{}
+	s.batchCache = map[string]map[string]gin.H{}
+	s.batchMu.Unlock()
 }
 
 func nextID(prefix string, current int) string {

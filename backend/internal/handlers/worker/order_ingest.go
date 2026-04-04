@@ -115,6 +115,7 @@ func IngestDemoOrder(c *gin.Context) {
 	allowedZones := bodyString(body, "allowed_zones", "")
 	deliveryFeeInr := bodyFloat(body, "delivery_fee_inr", float64(computeZoneRouteDeliveryFee(zoneRoutePath)))
 	status := bodyString(body, "status", "assigned")
+	workerID := bodyUint(body, "worker_id", 0)
 
 	if customerContact == "" {
 		c.JSON(400, gin.H{"error": "customer_contact_number_required"})
@@ -122,7 +123,6 @@ func IngestDemoOrder(c *gin.Context) {
 	}
 
 	if hasDB() {
-		workerID := bodyUint(body, "worker_id", 0)
 		if workerID == 0 {
 			type firstUserRow struct {
 				ID uint `gorm:"column:id"`
@@ -191,6 +191,9 @@ func IngestDemoOrder(c *gin.Context) {
 		"assigned_at":             bodyString(body, "assigned_at", nowISO()),
 		"source":                  bodyString(body, "source", "fake-publisher"),
 	}
+	if workerID != 0 {
+		order["worker_id"] = fmt.Sprintf("%d", workerID)
+	}
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -204,6 +207,10 @@ func IngestDemoOrder(c *gin.Context) {
 	}
 
 	store.data.Orders = append([]map[string]any{order}, store.data.Orders...)
+	scheduleBatchMaterialization(availableBatchCacheScope, order)
+	if workerID != 0 {
+		scheduleBatchMaterialization(fmt.Sprintf("%d", workerID), order)
+	}
 	store.data.Notifications = append([]map[string]any{{
 		"id":         nextID("ntf", len(store.data.Notifications)),
 		"type":       "order_ingested",

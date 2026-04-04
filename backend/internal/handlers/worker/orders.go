@@ -368,6 +368,9 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 			var r row
 			err := workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, status, created_at::text, updated_at::text FROM orders WHERE id = ? AND worker_id = ?", orderNumID, workerIDUint).Scan(&r).Error
 			if err == nil && r.ID != 0 {
+				mirrorStoredOrderStatus(orderID, fmt.Sprintf("%d", workerIDUint), r.Status)
+				refreshBatchSnapshotForOrderID(availableBatchCacheScope, orderID)
+				refreshBatchSnapshotForOrderID(fmt.Sprintf("%d", workerIDUint), orderID)
 				c.JSON(200, gin.H{"message": message, "order": gin.H{
 					"order_id":    fmt.Sprintf("ord-%03d", r.ID),
 					"pickup_area": "Tambaram",
@@ -388,7 +391,7 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 	}
 
 	store.mu.Lock()
-	defer store.mu.Unlock()
+	var responseOrder map[string]any
 
 	for _, order := range store.data.Orders {
 		if order["order_id"] != orderID {
@@ -420,8 +423,15 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 				"read":       false,
 			}}, store.data.Notifications...)
 		}
+		responseOrder = order
+		break
+	}
+	store.mu.Unlock()
 
-		c.JSON(200, gin.H{"message": message, "order": order})
+	if responseOrder != nil {
+		refreshBatchSnapshotForOrder(availableBatchCacheScope, responseOrder)
+		refreshBatchSnapshotForOrder(workerID, responseOrder)
+		c.JSON(200, gin.H{"message": message, "order": responseOrder})
 		return
 	}
 
