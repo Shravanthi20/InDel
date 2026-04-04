@@ -29,7 +29,7 @@ fun getHostIpAddress(): String {
     return "10.0.2.2" // Ultimate fallback for official emulator
 }
 
-val apiBaseUrl = listOf("../.env", "worker-app/.env", ".env")
+val apiBaseUrl = listOf("worker-app/.env", ".env", "../.env")
     .map { rootProject.file(it) }
     .filter { it.exists() }
     .firstNotNullOfOrNull { file ->
