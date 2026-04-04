@@ -11,6 +11,7 @@ func SetupPlatformRoutes(router *gin.Engine) {
 	v1.GET("/workers", platform.GetWorkers)
 	v1.GET("/zones", platform.GetZones)
 	v1.GET("/zone-paths", platform.GetZonePaths)
+	v1.POST("/demo/trigger-disruption", platform.TriggerDemoDisruption)
 	v1.POST("/webhooks/order/assigned", platform.OrderAssignedWebhook)
 	v1.POST("/webhooks/order/completed", platform.OrderCompletedWebhook)
 	v1.POST("/webhooks/order/cancelled", platform.OrderCancelledWebhook)
