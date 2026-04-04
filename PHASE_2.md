@@ -154,5 +154,170 @@ Integrated directly into the Platform Dashboard, the Chaos Engine provides a pra
 - **Theme**: Enterprise High-Precision (Slate/Orange).
 - **Communication**: 2-second polling interval for real-time telemetry updates.
 
+---
+## Local Development Setup
+
+This guide explains how to run the InDel platform locally, including backend services, web dashboards, and the mobile application.
+
+---
+
+### 1. Prerequisites
+
+Ensure the following tools are installed:
+
+- Docker and Docker Compose  
+- Node.js (v18 or higher recommended)  
+- npm or yarn  
+- Android Studio (for mobile application)
+
+---
+
+### 2. Determine Local IP Address
+
+You may need your local IP address when running the mobile app on a physical device.
+
+**macOS**
+```bash
+ipconfig getifaddr en0
+```
+
+**Windows**
+```bash
+ipconfig
+```
+
+**Linux**
+```bash
+hostname -I
+```
+
+---
+
+### 3. Environment Configuration
+
+Create a `.env` file in the root directory.
+
+You can copy from `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+---
+
+### 4. Start Backend and ML Services
+
+Run all backend services (PostgreSQL, Kafka, APIs, ML models) using Docker.
+
+**Demo Environment (recommended)**
+```bash
+COMPOSE_PARALLEL_LIMIT=1 docker compose -f docker-compose.demo.yml up --build -d
+```
+
+**Production Environment**
+```bash
+COMPOSE_PARALLEL_LIMIT=1 docker compose up --build -d
+```
+
+---
+
+### 5. Run Web Dashboards
+
+Open two terminals:
+
+**Platform Dashboard**
+```bash
+cd platform-dashboard
+npm install
+npm run dev
+```
+
+**Insurer Dashboard**
+```bash
+cd insurer-dashboard
+npm install
+npm run dev
+```
+
+---
+
+### 6. Run Mobile Application
+
+1. Open `worker-app` in Android Studio  
+2. Wait for Gradle sync  
+3. Select emulator or physical device  
+4. Run the app  
+
+**Important:**
+- If using a physical device, replace `127.0.0.1` in `.env` with your local IP (e.g., `192.168.x.x`)  
+- Ensure both laptop and mobile device are connected to the same network  
+
+---
+
+### 7. Verification
+
+- Backend services running via Docker  
+- Dashboards accessible in browser  
+- Mobile app connected to backend  
+
+---
+
+### 8. Troubleshooting
+
+- **Connection issues**: Check `.env` IP configuration  
+- **Docker issues**: Use `COMPOSE_PARALLEL_LIMIT=1`  
+- **Mobile not connecting**: Ensure same Wi-Fi network 
+
+---
+
+## Environment Variables Template
+
+Create a `.env.example` file:
+
+```env
+# InDel — Master Environment File (Template)
+
+# PostgreSQL
+POSTGRES_USER=your_db_user
+POSTGRES_PASSWORD=your_db_password
+POSTGRES_DB=your_db_name
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_NAME=your_db_name
+
+# Network
+HOST_IP=127.0.0.1
+API_BASE_URL=http://127.0.0.1:8001/
+API_BASE_URL1=http://127.0.0.1:8003/
+
+# ML Services
+PREMIUM_ML_URL=http://127.0.0.1:9001
+FRAUD_ML_URL=http://127.0.0.1:9002
+FORECAST_ML_URL=http://127.0.0.1:9003
+
+# External APIs
+OPENWEATHERMAP_API_KEY=your_openweathermap_api_key
+OPENAQ_API_KEY=your_openaq_api_key
+
+# Firebase
+FIREBASE_API_KEY=your_firebase_api_key
+FIREBASE_PROJECT_ID=your_project_id
+FIREBASE_PROJECT_NUMBER=your_project_number
+FIREBASE_STORAGE_BUCKET=your_storage_bucket
+FIREBASE_APP_ID=your_app_id
+FIREBASE_SERVER_KEY=your_server_key
+
+# Kafka
+KAFKA_BROKERS=kafka:9092
+
+# Frontend APIs
+VITE_INSURER_API_URL=http://127.0.0.1:8002
+VITE_CORE_API_URL=http://127.0.0.1:8000
+VITE_PLATFORM_API_URL=http://127.0.0.1:8003
+```
+
+---
+
+
 > [!NOTE]
 > All automated systems are idempotent, ensuring that mass disruption events do not cause duplicate claim generation or payout errors.
