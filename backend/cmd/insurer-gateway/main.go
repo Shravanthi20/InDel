@@ -23,7 +23,11 @@ func main() {
 
 	// Create Gin router
 	router := gin.Default()
-	router.Use(cors.Default())
+	
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "Authorization")
+	router.Use(cors.New(corsConfig))
 
 	// Optional DB wiring for live aggregate metrics.
 	cfg := config.Load()

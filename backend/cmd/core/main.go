@@ -62,7 +62,11 @@ func main() {
 	// ────────────────────────────────────────────────────────────────────
 
 	router := gin.Default()
-	router.Use(cors.Default())
+	
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "Authorization")
+	router.Use(cors.New(corsConfig))
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "triggers": "active"})
