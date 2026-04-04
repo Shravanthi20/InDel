@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
 	"github.com/gin-gonic/gin"
@@ -19,11 +20,74 @@ type planConfig struct {
 	Description   string
 }
 
+func clampInt(value, min, max int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
+func applyDynamicPlanPremiums(planConfigs map[string]planConfig, mlPremium int, zoneLevel string) map[string]planConfig {
+	normalized := strings.ToUpper(strings.TrimSpace(zoneLevel))
+	zoneOffset := 0
+	switch normalized {
+	case "A":
+		mlPremium = clampInt(int(float64(mlPremium)*0.96), 20, 50)
+		zoneOffset = -2
+	case "B":
+		mlPremium = clampInt(mlPremium, 20, 50)
+	case "C":
+		mlPremium = clampInt(int(float64(mlPremium)*1.08), 20, 50)
+		zoneOffset = 4
+	default: // B or unknown
+		mlPremium = clampInt(mlPremium, 20, 50)
+	}
+
+	mlPremium = clampInt(mlPremium+zoneOffset, 20, 50)
+
+	seedMid := clampInt(mlPremium-6, 20, 50)
+	scaleMid := clampInt(mlPremium, 20, 50)
+	soarMid := clampInt(mlPremium+6, 20, 50)
+
+	seedMin := clampInt(seedMid-3, 20, 50)
+	seedMax := clampInt(seedMid+3, seedMin, 50)
+
+	scaleMin := clampInt(scaleMid-3, seedMax+1, 50)
+	scaleMax := clampInt(scaleMid+3, scaleMin, 50)
+
+	soarMin := clampInt(soarMid-3, scaleMax+1, 50)
+	soarMax := 50
+	if soarMin > soarMax {
+		soarMin = soarMax
+	}
+
+	if p, ok := planConfigs["plan-starter"]; ok {
+		p.PremiumMinINR = seedMin
+		p.PremiumMaxINR = seedMax
+		planConfigs[p.PlanID] = p
+	}
+	if p, ok := planConfigs["plan-growth"]; ok {
+		p.PremiumMinINR = scaleMin
+		p.PremiumMaxINR = scaleMax
+		planConfigs[p.PlanID] = p
+	}
+	if p, ok := planConfigs["plan-premium"]; ok {
+		p.PremiumMinINR = soarMin
+		p.PremiumMaxINR = soarMax
+		planConfigs[p.PlanID] = p
+	}
+
+	return planConfigs
+}
+
 func getPlanConfigs() map[string]planConfig {
 	return map[string]planConfig{
 		"plan-starter": {
 			PlanID:        "plan-starter",
-			PlanName:      "Range-01: Starter",
+			PlanName:      "Seed",
 			RangeStart:    10,
 			RangeEnd:      15,
 			PremiumMinINR: 12,
@@ -34,7 +98,7 @@ func getPlanConfigs() map[string]planConfig {
 		},
 		"plan-growth": {
 			PlanID:        "plan-growth",
-			PlanName:      "Range-02: Growth",
+			PlanName:      "Scale",
 			RangeStart:    15,
 			RangeEnd:      20,
 			PremiumMinINR: 19,
@@ -45,7 +109,7 @@ func getPlanConfigs() map[string]planConfig {
 		},
 		"plan-premium": {
 			PlanID:        "plan-premium",
-			PlanName:      "Range-03: Premium",
+			PlanName:      "Soar",
 			RangeStart:    20,
 			RangeEnd:      25,
 			PremiumMinINR: 27,
@@ -88,7 +152,30 @@ func bodyBool(body map[string]any, key string, fallback bool) bool {
 
 // GetPlans returns available delivery plans based on order ranges
 func GetPlans(c *gin.Context) {
+	workerID, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+
 	planConfigs := getPlanConfigs()
+
+	store.mu.RLock()
+	profile := store.data.WorkerProfiles[workerID]
+	store.mu.RUnlock()
+	if profile == nil {
+		profile = getPremiumProfileFromDB(workerID)
+	}
+	if profile != nil {
+		zoneLevel := bodyString(profile, "zone_level", "")
+		if zoneIDRaw, ok := profile["zone_id"]; ok {
+			if zoneIDFloat, ok := zoneIDRaw.(float64); ok {
+				enrichPremiumProfileWithZoneGeo(profile, uint(zoneIDFloat))
+			}
+		}
+		mlPremium, _ := getPremiumEstimate(workerID, profile)
+		planConfigs = applyDynamicPlanPremiums(planConfigs, mlPremium, zoneLevel)
+	}
+
 	plans := make([]gin.H, 0, len(planConfigs))
 	for _, p := range planConfigs {
 		plans = append(plans, gin.H{

@@ -10,11 +10,11 @@ import (
 func inferPlanFromPremium(premium int) (string, string, int, int) {
 	switch {
 	case premium >= 12 && premium <= 18:
-		return "plan-starter", "Range-01: Starter", 10, 15
+		return "plan-starter", "Seed", 10, 15
 	case premium >= 19 && premium <= 26:
-		return "plan-growth", "Range-02: Growth", 15, 20
+		return "plan-growth", "Scale", 15, 20
 	case premium >= 27 && premium <= 35:
-		return "plan-premium", "Range-03: Premium", 20, 25
+		return "plan-premium", "Soar", 20, 25
 	default:
 		return "", "", 0, 0
 	}
