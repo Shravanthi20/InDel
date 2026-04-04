@@ -84,7 +84,16 @@ fun HomeScreen(
             ) {
                 when (val state = uiState) {
                     is HomeUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    is HomeUiState.Success -> HomeContent(state.worker, state.policy, state.earnings, isOnline, navController, viewModel)
+                    is HomeUiState.Success -> HomeContent(
+                        worker = state.worker,
+                        policy = state.policy,
+                        earnings = state.earnings,
+                        hasDisruptionAlert = state.hasDisruptionAlert,
+                        disruptionMessage = state.disruptionMessage,
+                        isOnline = isOnline,
+                        navController = navController,
+                        viewModel = viewModel
+                    )
                     is HomeUiState.Error -> ErrorState(state.message) { viewModel.loadDashboard() }
                 }
             }
@@ -97,6 +106,8 @@ fun HomeContent(
     worker: WorkerProfile,
     policy: Policy,
     earnings: Earnings,
+    hasDisruptionAlert: Boolean,
+    disruptionMessage: String?,
     isOnline: Boolean,
     navController: NavController,
     viewModel: HomeViewModel
@@ -168,8 +179,8 @@ fun HomeContent(
         }
 
         // 4. Disruption Banner (Conditional)
-        if (worker.coverageStatus == "at_risk") {
-            DisruptionBanner()
+        if (hasDisruptionAlert) {
+            DisruptionBanner(disruptionMessage)
         }
 
         // 5. Quick Navigation Grid
@@ -283,7 +294,7 @@ fun DashboardCard(
 }
 
 @Composable
-fun DisruptionBanner() {
+fun DisruptionBanner(message: String?) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -299,7 +310,7 @@ fun DisruptionBanner() {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text("Heavy Rain Alert - Tambaram", color = Color.White, fontWeight = FontWeight.Bold)
-                    Text("Your income is protected. Stay safe.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                    Text(message ?: "Disruption detected in your zone", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

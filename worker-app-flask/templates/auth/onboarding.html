@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Onboarding{% endblock %}
+{% block page_title %}Worker Onboarding{% endblock %}
+{% block page_subtitle %}Complete your profile to start delivering{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:0 auto;">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Profile Setup</div>
+      <span class="chip chip-blue">Step 2 of 2</span>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('auth.onboarding') }}" id="onboarding-form">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input id="name" name="name" type="text" placeholder="e.g. Ravi Kumar"
+               value="{{ form_data.name }}" required>
+      </div>
+
+      <div class="form-group">
+        <label for="vehicle_type">Vehicle Type</label>
+        <select id="vehicle_type" name="vehicle_type" required>
+          <option value="">Select vehicle type</option>
+          {% for option in vehicle_type_options %}
+          <option value="{{ option }}" {% if form_data.vehicle_type == option %}selected{% endif %}>{{ option|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="vehicle_name_option">Vehicle Name</label>
+        <select id="vehicle_name_option" name="vehicle_name_option" required disabled>
+          <option value="">Select transport means</option>
+          {% for option in common_transport_means %}
+          <option value="{{ option }}" {% if form_data.vehicle_name == option %}selected{% endif %}>{{ option|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" id="vehicle_name_custom_group" style="display:none;">
+        <label for="vehicle_name_custom">Type Vehicle Name</label>
+        <input id="vehicle_name_custom" type="text" placeholder="Enter vehicle name">
+      </div>
+
+      <input type="hidden" id="vehicle_name" name="vehicle_name" value="{{ form_data.vehicle_name }}">
+
+      <div class="form-group">
+        <label for="upi_id">UPI ID (for payouts)</label>
+        <input id="upi_id" name="upi_id" type="text" value="{{ form_data.upi_id }}"
+               placeholder="yourname@bankid" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block btn-lg" id="onboard-btn">
+        Complete Setup
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+const vehicleTypeSelect = document.getElementById('vehicle_type');
+const vehicleNameOption = document.getElementById('vehicle_name_option');
+const vehicleNameHidden = document.getElementById('vehicle_name');
+const vehicleNameCustomGroup = document.getElementById('vehicle_name_custom_group');
+const vehicleNameCustom = document.getElementById('vehicle_name_custom');
+
+function syncVehicleName() {
+  const type = vehicleTypeSelect.value;
+  const selectedOption = vehicleNameOption.value;
+  vehicleNameOption.disabled = !type;
+
+  if (!type) {
+    vehicleNameOption.value = '';
+    vehicleNameHidden.value = '';
+    vehicleNameCustomGroup.style.display = 'none';
+    vehicleNameCustom.value = '';
+    return;
+  }
+
+  if (selectedOption === 'other') {
+    vehicleNameCustomGroup.style.display = 'block';
+    vehicleNameHidden.value = vehicleNameCustom.value.trim();
+  } else {
+    vehicleNameCustomGroup.style.display = 'none';
+    vehicleNameHidden.value = selectedOption;
+    vehicleNameCustom.value = '';
+  }
+}
+
+vehicleTypeSelect.addEventListener('change', syncVehicleName);
+vehicleNameOption.addEventListener('change', syncVehicleName);
+vehicleNameCustom.addEventListener('input', syncVehicleName);
+document.addEventListener('DOMContentLoaded', function () {
+  if (vehicleNameHidden.value) {
+    const current = vehicleNameHidden.value;
+    const hasOption = Array.from(vehicleNameOption.options).some(option => option.value === current);
+    if (hasOption) {
+      vehicleNameOption.value = current;
+    } else {
+      vehicleNameOption.value = 'other';
+      vehicleNameCustomGroup.style.display = 'block';
+      vehicleNameCustom.value = current;
+    }
+  }
+  syncVehicleName();
+});
+</script>
+{% endblock %}

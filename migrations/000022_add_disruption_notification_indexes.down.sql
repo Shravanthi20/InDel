@@ -1,0 +1,4 @@
+DROP INDEX IF EXISTS idx_notifications_type_created_at_desc;
+DROP INDEX IF EXISTS idx_notifications_worker_type_created_at_desc;
+DROP INDEX IF EXISTS idx_disruptions_zone_created_at_desc;
+DROP INDEX IF EXISTS idx_disruptions_created_at_desc;

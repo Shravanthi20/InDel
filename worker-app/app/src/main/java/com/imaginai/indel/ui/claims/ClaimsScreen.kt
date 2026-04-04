@@ -172,6 +172,20 @@ fun ClaimCard(claim: Claim, onClick: () -> Unit) {
                 color = TextSecondary,
                 modifier = Modifier.padding(top = 8.dp)
             )
+
+            claim.claimReason?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(it, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+            }
+
+            if (!claim.mainCause.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Main cause: ${claim.mainCause}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary
+                )
+            }
         }
     }
 }

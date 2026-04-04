@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,11 +26,37 @@ func GetPremium(c *gin.Context) {
 
 	// Try to get ML-based premium with fallback to defaults
 	premium, explainability := getPremiumEstimate(workerID, profile)
+	now := time.Now().UTC()
+	paymentState := paymentScheduleState{
+		PaymentStatus:      "Eligible",
+		DaysSinceLastPay:   0,
+		NextPaymentEnabled: true,
+		CoverageStatus:     "Expired",
+	}
+
+	if hasDB() {
+		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			if state, err := getOrBootstrapPaymentSchedule(workerIDUint, now); err == nil {
+				paymentState = state
+			}
+		}
+	} else {
+		store.mu.RLock()
+		paymentState = paymentStateFromInMemoryPolicy(store.data.Policy, now)
+		store.mu.RUnlock()
+	}
 
 	resp := gin.H{
-		"weekly_premium_inr": premium,
-		"currency":           "INR",
-		"shap_breakdown":     explainability,
+		"weekly_premium_inr":      premium,
+		"currency":                "INR",
+		"shap_breakdown":          explainability,
+		"payment_status":          paymentState.PaymentStatus,
+		"days_since_last_payment": paymentState.DaysSinceLastPay,
+		"next_payment_enabled":    paymentState.NextPaymentEnabled,
+		"coverage_status":         paymentState.CoverageStatus,
+	}
+	if paymentState.LastPaymentRecorded != nil {
+		resp["last_payment_timestamp"] = paymentState.LastPaymentRecorded.UTC().Format(time.RFC3339)
 	}
 
 	c.JSON(200, resp)
@@ -229,6 +256,7 @@ func PayPremium(c *gin.Context) {
 		return
 	}
 	body := parseBody(c)
+	now := time.Now().UTC()
 
 	store.mu.RLock()
 	defaultAmount, _ := store.data.Policy["weekly_premium_inr"].(int)
@@ -241,24 +269,72 @@ func PayPremium(c *gin.Context) {
 
 	if hasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			state, err := getOrBootstrapPaymentSchedule(workerIDUint, now)
+			if err == nil && state.PaymentStatus == "Locked" {
+				c.JSON(409, gin.H{
+					"error":                   "payment_locked",
+					"message":                 paymentLockError(state),
+					"payment_status":          state.PaymentStatus,
+					"days_since_last_payment": state.DaysSinceLastPay,
+					"next_payment_enabled":    state.NextPaymentEnabled,
+					"coverage_status":         state.CoverageStatus,
+				})
+				return
+			}
+
 			_ = workerDB.Exec(
 				"INSERT INTO premium_payments (worker_id, policy_id, amount, status, payment_date) VALUES (?, (SELECT id FROM policies WHERE worker_id = ? ORDER BY id DESC LIMIT 1), ?, 'completed', CURRENT_TIMESTAMP)",
 				workerIDUint, workerIDUint, amount,
 			).Error
+			_ = upsertPaymentSchedule(workerIDUint, now, false, "Active")
+			_ = workerDB.Exec("UPDATE policies SET status='active', updated_at=CURRENT_TIMESTAMP WHERE worker_id = ?", workerIDUint).Error
 			c.JSON(200, gin.H{
-				"message":    "payment_successful",
-				"amount":     amount,
-				"currency":   "INR",
-				"payment_id": fmt.Sprintf("db-payment-%d", workerIDUint),
+				"message":                 "payment_successful",
+				"amount":                  amount,
+				"currency":                "INR",
+				"payment_id":              fmt.Sprintf("db-payment-%d", workerIDUint),
+				"payment_status":          "Locked",
+				"days_since_last_payment": 0,
+				"next_payment_enabled":    false,
+				"coverage_status":         "Active",
+				"last_payment_timestamp":  now.Format(time.RFC3339),
 			})
 			return
 		}
 	}
 
+	store.mu.Lock()
+	state := paymentStateFromInMemoryPolicy(store.data.Policy, now)
+	if state.PaymentStatus == "Locked" {
+		store.mu.Unlock()
+		c.JSON(409, gin.H{
+			"error":                   "payment_locked",
+			"message":                 paymentLockError(state),
+			"payment_status":          state.PaymentStatus,
+			"days_since_last_payment": state.DaysSinceLastPay,
+			"next_payment_enabled":    state.NextPaymentEnabled,
+			"coverage_status":         state.CoverageStatus,
+		})
+		return
+	}
+	store.data.Policy["last_payment_timestamp"] = now.Format(time.RFC3339)
+	store.data.Policy["next_payment_enabled"] = false
+	store.data.Policy["coverage_status"] = "Active"
+	store.data.Policy["payment_status"] = "Locked"
+	if profile, exists := store.data.WorkerProfiles[workerID]; exists {
+		profile["coverage_status"] = "active"
+	}
+	store.mu.Unlock()
+
 	c.JSON(200, gin.H{
-		"message":    "payment_successful",
-		"amount":     amount,
-		"currency":   "INR",
-		"payment_id": "mock-payment-001",
+		"message":                 "payment_successful",
+		"amount":                  amount,
+		"currency":                "INR",
+		"payment_id":              "mock-payment-001",
+		"payment_status":          "Locked",
+		"days_since_last_payment": 0,
+		"next_payment_enabled":    false,
+		"coverage_status":         "Active",
+		"last_payment_timestamp":  now.Format(time.RFC3339),
 	})
 }

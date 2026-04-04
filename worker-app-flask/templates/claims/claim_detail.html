@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Claim Detail{% endblock %}
+{% block page_title %}Claim Detail{% endblock %}
+{% block page_subtitle %}Full breakdown of income disruption claim{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
+{% if claim %}
+<div style="max-width:640px;margin:0 auto;">
+
+  <!-- Header card -->
+  <div class="card mb-16">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Claim</div>
+        <code style="font-size:.85rem;">{{ claim.claim_id }}</code>
+      </div>
+      <span class="chip
+        {% if claim.status == 'approved' %}chip-success
+        {% elif claim.status == 'pending' %}chip-warning
+        {% else %}chip-muted{% endif %}">
+        {{ claim.status|upper }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Disruption window -->
+  {% if claim.disruption_window %}
+  <div class="card mb-16">
+    <div class="card-title mb-12">Disruption Window</div>
+    <div class="gradient-banner" style="margin:0;">
+      <span class="banner-icon">⚡</span>
+      <div>
+        <h3>{{ claim.disruption_type }}</h3>
+        <p>{{ claim.disruption_window.start }} → {{ claim.disruption_window.end }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Loss & payout -->
+  <div class="card mb-16">
+    <div class="card-title mb-12">Financial Breakdown</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <div class="text-xs text-secondary fw-600">Income Loss</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--error);">₹{{ claim.income_loss }}</div>
+      </div>
+      <div>
+        <div class="text-xs text-secondary fw-600">Payout Amount</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--success);">₹{{ claim.payout_amount }}</div>
+      </div>
+    </div>
+    {% if claim.calculation %}
+    <div class="text-sm text-secondary mt-12">{{ claim.calculation }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Fraud verdict -->
+  <div class="card mb-16">
+    <div class="card-title mb-12">Fraud Assessment</div>
+    <div class="d-flex align-center gap-12">
+      <span class="chip
+        {% if claim.fraud_verdict|lower == 'clean' %}chip-success
+        {% elif claim.fraud_verdict|lower == 'suspicious' %}chip-warning
+        {% else %}chip-error{% endif %}"
+        style="font-size:.9rem;padding:6px 14px;">
+        {{ claim.fraud_verdict }}
+      </span>
+      {% if claim.fraud_score is not none %}
+      <span class="text-sm text-secondary">Score: {{ '%.3f'|format(claim.fraud_score) }}</span>
+      {% endif %}
+    </div>
+    {% if claim.main_cause %}
+    <p class="text-sm text-secondary mt-8">{{ claim.main_cause }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Factors -->
+  {% if claim.factors %}
+  <div class="card mb-16">
+    <div class="card-title mb-12">Claim Factors</div>
+    {% for factor in claim.factors %}
+    <div style="margin-bottom:10px;">
+      <div class="d-flex justify-between mb-4">
+        <span class="text-sm fw-600">{{ factor.name }}</span>
+        <span class="text-sm text-secondary">{{ '%.3f'|format(factor.impact) }}</span>
+      </div>
+      <div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden;">
+        <div style="height:100%;background:var(--brand-blue);border-radius:4px;"
+             data-shap-bar="{{ factor.impact|abs }}"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <a href="{{ url_for('worker.claims') }}" class="btn btn-ghost">← Back to Claims</a>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">⊗</div>
+  <h3>Claim not found</h3>
+  <a href="{{ url_for('worker.claims') }}" class="btn btn-ghost mt-16" style="display:inline-flex;">← Back</a>
+</div>
+{% endif %}
+{% endblock %}

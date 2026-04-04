@@ -245,7 +245,7 @@ func packRowsIntoBatches(rows []batchOrderRow) [][]batchOrderRow {
 	})
 
 	type packedBatch struct {
-		rows       []batchOrderRow
+		rows        []batchOrderRow
 		totalWeight float64
 	}
 
@@ -370,24 +370,24 @@ func rowsToBatches(rows []batchOrderRow, status string) []gin.H {
 			}
 
 			batches = append(batches, gin.H{
-				"batchId":       batchID,
-				"batchKey":      fmt.Sprintf("%s#%02d", key, batchIndex+1),
-				"batchGroupKey": key,
-				"batchIndex":    batchIndex + 1,
-				"zoneLevel":     g.ZoneLevel,
-				"fromCity":      fromCity,
-				"toCity":        toCity,
-				"totalWeight":   totalWeight,
-				"targetWeight":  targetBatchWeightKg,
-				"maxWeight":     maxBatchWeightKg,
-				"orderCount":    len(orders),
-				"status":        batchStatusFromRows(batchRows, status),
-				"pickupCode":    pickupCodeFromBatchID(batchID),
-				"deliveryCode":  deliveryCodeFromBatchID(batchID),
-				"pickupTime":    pickupTime,
-				"deliveryTime":  deliveryTime,
+				"batchId":         batchID,
+				"batchKey":        fmt.Sprintf("%s#%02d", key, batchIndex+1),
+				"batchGroupKey":   key,
+				"batchIndex":      batchIndex + 1,
+				"zoneLevel":       g.ZoneLevel,
+				"fromCity":        fromCity,
+				"toCity":          toCity,
+				"totalWeight":     totalWeight,
+				"targetWeight":    targetBatchWeightKg,
+				"maxWeight":       maxBatchWeightKg,
+				"orderCount":      len(orders),
+				"status":          batchStatusFromRows(batchRows, status),
+				"pickupCode":      pickupCodeFromBatchID(batchID),
+				"deliveryCode":    deliveryCodeFromBatchID(batchID),
+				"pickupTime":      pickupTime,
+				"deliveryTime":    deliveryTime,
 				"batchEarningInr": totalEarning,
-				"orders":        orders,
+				"orders":          orders,
 			})
 		}
 	}
@@ -736,11 +736,11 @@ func DeliverBatch(c *gin.Context) {
 		refreshBatchCache(workerID)
 		if zoneAPartialProgress {
 			c.JSON(200, gin.H{
-				"message":        "order_delivered_in_batch",
-				"batchId":        batchID,
-				"orderId":        deliveredOrderID,
+				"message":         "order_delivered_in_batch",
+				"batchId":         batchID,
+				"orderId":         deliveredOrderID,
 				"remainingOrders": remainingOrders,
-				"batchCompleted": false,
+				"batchCompleted":  false,
 			})
 			return
 		}
@@ -772,7 +772,13 @@ func DeliverBatch(c *gin.Context) {
 		if err := tx.Raw(`SELECT batch_id, pickup_user_id, zone_level, status, batch_earning_inr, earnings_posted FROM batches WHERE batch_id = ? LIMIT 1`, batchID).Scan(&batch).Error; err != nil {
 			return err
 		}
-		if batch.BatchID == "" || batch.PickupUserID == nil || *batch.PickupUserID != workerIDUint {
+		if batch.BatchID == "" {
+			return fmt.Errorf("batch_not_found_or_not_assignable")
+		}
+		if strings.EqualFold(strings.TrimSpace(batch.Status), "assigned") {
+			return fmt.Errorf("batch_not_picked_up")
+		}
+		if batch.PickupUserID == nil || *batch.PickupUserID != workerIDUint {
 			return fmt.Errorf("batch_not_found_or_not_assignable")
 		}
 
@@ -835,13 +841,21 @@ func DeliverBatch(c *gin.Context) {
 				SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
 				WHERE id = ?
 				  AND worker_id = ?
-				  AND status = 'picked_up'
+				  AND LOWER(TRIM(COALESCE(status, ''))) IN ('picked_up', 'accepted')
 			`, orderNumID, workerIDUint)
 			if orderUpdate.Error != nil {
 				return orderUpdate.Error
 			}
 			if orderUpdate.RowsAffected == 0 {
 				return fmt.Errorf("order_already_delivered")
+			}
+
+			var deliveredTipINR float64
+			if err := tx.Raw(`SELECT COALESCE(tip_inr, 0) FROM orders WHERE id = ? AND worker_id = ?`, orderNumID, workerIDUint).Scan(&deliveredTipINR).Error; err != nil {
+				return err
+			}
+			if err := applyWorkerEarningsIncrement(tx, workerIDUint, float64(totalDeliveryEarningINR(deliveredTipINR))); err != nil {
+				return err
 			}
 
 			if err := tx.Exec(`
@@ -883,7 +897,7 @@ func DeliverBatch(c *gin.Context) {
 			WHERE bo.order_id = CONCAT('ord-', orders.id)
 			  AND bo.batch_id = ?
 			  AND orders.worker_id = ?
-			  AND orders.status = 'picked_up'
+			  AND LOWER(TRIM(COALESCE(orders.status, ''))) IN ('picked_up', 'accepted')
 		`, batchID, workerIDUint).Error; err != nil {
 			return err
 		}
@@ -897,31 +911,16 @@ func DeliverBatch(c *gin.Context) {
 		}
 
 		if batch.EarningsPosted {
+			batchCompleted = true
 			return nil
 		}
 
-		if err := tx.Exec(`
-			UPDATE worker_profiles
-			SET total_earnings_lifetime = COALESCE(total_earnings_lifetime, 0) + ?, updated_at = CURRENT_TIMESTAMP
-			WHERE worker_id = ?
-		`, batch.BatchEarningINR, workerIDUint).Error; err != nil {
-			return err
+		if isZoneA {
+			batchCompleted = true
+			return nil
 		}
 
-		if err := tx.Exec(`
-			INSERT INTO weekly_earnings_summary (worker_id, week_start, week_end, total_earnings, claim_eligible)
-			VALUES (
-				?,
-				DATE_TRUNC('week', CURRENT_DATE)::date,
-				(DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '6 days')::date,
-				?,
-				FALSE
-			)
-			ON CONFLICT (worker_id, week_start) DO UPDATE SET
-				total_earnings = weekly_earnings_summary.total_earnings + EXCLUDED.total_earnings,
-				week_end = EXCLUDED.week_end,
-				updated_at = CURRENT_TIMESTAMP
-		`, workerIDUint, batch.BatchEarningINR).Error; err != nil {
+		if err := applyWorkerEarningsIncrement(tx, workerIDUint, batch.BatchEarningINR); err != nil {
 			return err
 		}
 
@@ -941,6 +940,10 @@ func DeliverBatch(c *gin.Context) {
 			c.JSON(409, gin.H{"error": "batch_already_delivered"})
 			return
 		}
+		if strings.Contains(err.Error(), "batch_not_picked_up") {
+			c.JSON(409, gin.H{"error": "batch_not_picked_up"})
+			return
+		}
 		if strings.Contains(err.Error(), "batch_not_found_or_not_assignable") {
 			c.JSON(404, gin.H{"error": "batch_not_found_or_not_assignable"})
 			return
@@ -953,16 +956,118 @@ func DeliverBatch(c *gin.Context) {
 	refreshBatchCache(availableBatchCacheScope)
 	if zoneAPartialProgress {
 		c.JSON(200, gin.H{
-			"message":        "order_delivered_in_batch",
-			"batchId":        batchID,
-			"orderId":        deliveredOrderID,
+			"message":         "order_delivered_in_batch",
+			"batchId":         batchID,
+			"orderId":         deliveredOrderID,
 			"remainingOrders": remainingOrders,
-			"batchCompleted": false,
+			"batchCompleted":  false,
 		})
 		return
 	}
 
 	c.JSON(200, gin.H{"message": "batch_delivered", "batchId": batchID, "batchCompleted": batchCompleted})
+}
+
+func applyWorkerEarningsIncrement(tx *gorm.DB, workerID uint, amount float64) error {
+	if amount <= 0 {
+		return nil
+	}
+
+	if err := tx.Exec(`
+		UPDATE worker_profiles
+		SET total_earnings_lifetime = COALESCE(total_earnings_lifetime, 0) + ?, updated_at = CURRENT_TIMESTAMP
+		WHERE worker_id = ?
+	`, amount, workerID).Error; err != nil {
+		return err
+	}
+
+	if err := tx.Exec(`
+		INSERT INTO weekly_earnings_summary (worker_id, week_start, week_end, total_earnings, claim_eligible)
+		VALUES (
+			?,
+			DATE_TRUNC('week', CURRENT_DATE)::date,
+			(DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '6 days')::date,
+			?,
+			FALSE
+		)
+		ON CONFLICT (worker_id, week_start) DO UPDATE SET
+			total_earnings = weekly_earnings_summary.total_earnings + EXCLUDED.total_earnings,
+			week_end = EXCLUDED.week_end,
+			updated_at = CURRENT_TIMESTAMP
+	`, workerID, amount).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func snapshotFieldString(snapshot gin.H, field string) string {
+	if snapshot == nil {
+		return ""
+	}
+	value, _ := snapshot[field].(string)
+	return strings.TrimSpace(value)
+}
+
+func sameZoneRoute(fromCity, toCity string) bool {
+	return strings.EqualFold(strings.TrimSpace(fromCity), strings.TrimSpace(toCity))
+}
+
+func matchesWorkerFromZone(scope workerOrderScope, fromCity string) bool {
+	fromLower := strings.ToLower(strings.TrimSpace(fromCity))
+	if fromLower == "" {
+		return false
+	}
+
+	zoneNameLower := strings.ToLower(strings.TrimSpace(scope.ZoneName))
+	zoneCityLower := strings.ToLower(strings.TrimSpace(scope.ZoneCity))
+	if zoneNameLower == "" && zoneCityLower == "" {
+		return true
+	}
+
+	return (zoneNameLower != "" && fromLower == zoneNameLower) || (zoneCityLower != "" && fromLower == zoneCityLower)
+}
+
+func filterAssignedBatchesForScope(batches []gin.H, scope workerOrderScope) []gin.H {
+	if len(batches) == 0 {
+		return []gin.H{}
+	}
+
+	filtered := make([]gin.H, 0, len(batches))
+	for _, batch := range batches {
+		fromCity := snapshotFieldString(batch, "fromCity")
+		toCity := snapshotFieldString(batch, "toCity")
+		if !sameZoneRoute(fromCity, toCity) {
+			continue
+		}
+		if !matchesWorkerFromZone(scope, fromCity) {
+			continue
+		}
+		filtered = append(filtered, batch)
+	}
+
+	return filtered
+}
+
+func filterAvailableBatchesForScope(batches []gin.H, scope workerOrderScope) []gin.H {
+	if len(batches) == 0 {
+		return []gin.H{}
+	}
+
+	filtered := make([]gin.H, 0, len(batches))
+	for _, batch := range batches {
+		fromCity := snapshotFieldString(batch, "fromCity")
+		toCity := snapshotFieldString(batch, "toCity")
+		if sameZoneRoute(fromCity, toCity) {
+			continue
+		}
+		if !matchesWorkerFromZone(scope, fromCity) {
+			continue
+		}
+		filtered = append(filtered, batch)
+	}
+
+	return filtered
 }
 
 func GetAssignedBatches(c *gin.Context) {
@@ -971,6 +1076,12 @@ func GetAssignedBatches(c *gin.Context) {
 		return
 	}
 	batches := listCachedSnapshotsByStatus(workerID, batchStatusAllowedForAssigned)
+	if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+		scope := getWorkerOrderScope(workerIDUint)
+		batches = filterAssignedBatchesForScope(batches, scope)
+	} else {
+		batches = filterAssignedBatchesForScope(batches, workerOrderScope{})
+	}
 	c.JSON(200, gin.H{"batches": batches})
 }
 
@@ -985,6 +1096,14 @@ func GetAvailableBatches(c *gin.Context) {
 	}
 
 	batches := listCachedSnapshotsByStatus(availableBatchCacheScope, batchStatusAllowedForAvailable)
+	if workerID, ok := optionalAuthWorkerID(c); ok {
+		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			scope := getWorkerOrderScope(workerIDUint)
+			batches = filterAvailableBatchesForScope(batches, scope)
+		} else {
+			batches = filterAvailableBatchesForScope(batches, workerOrderScope{})
+		}
+	}
 	if len(batches) > limit {
 		batches = batches[:limit]
 	}
@@ -1002,7 +1121,3 @@ func GetDeliveredBatches(c *gin.Context) {
 	batches := listCachedSnapshotsByStatus(workerID, batchStatusAllowedForDelivered)
 	c.JSON(200, gin.H{"batches": batches})
 }
-
-
-
-

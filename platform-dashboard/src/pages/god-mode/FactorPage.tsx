@@ -26,6 +26,10 @@ export default function FactorPage({ factorKey }: { factorKey: keyof EnvInputs }
     policyInputs,
     setManualInput,
     setPolicyInput,
+    addingDisruption,
+    addDisruption,
+    scopeLabel,
+    lastDisruptionSignal,
     result,
   } = useGodMode()
 
@@ -74,6 +78,25 @@ export default function FactorPage({ factorKey }: { factorKey: keyof EnvInputs }
               <span>{meta.min}</span>
               <span>{meta.max}</span>
             </div>
+            <button
+              type="button"
+              onClick={addDisruption}
+              disabled={addingDisruption}
+              className="mt-3 w-full rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {addingDisruption ? 'Adding disruption...' : `Add disruption (all factors, ${scopeLabel})`}
+            </button>
+            {lastDisruptionSignal?.sent ? (
+              <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                <div className="font-semibold uppercase tracking-[0.2em]">Signal sent</div>
+                <div className="mt-1">
+                  Last trigger: {new Date(lastDisruptionSignal.sentAt).toLocaleString()} | Scope: {lastDisruptionSignal.scopeLabel}
+                </div>
+                <div className="mt-1">
+                  Zones: {lastDisruptionSignal.zonesCount}, Requests: {lastDisruptionSignal.successfulRequests}, Claims: {lastDisruptionSignal.claimsCreated}, Notifications: {lastDisruptionSignal.notificationsCreated}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">

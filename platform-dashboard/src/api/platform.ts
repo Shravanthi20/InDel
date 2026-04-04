@@ -34,7 +34,19 @@ export const postIngestDemoOrder = (data: {
   status: string
   source: string
 }) => client.post('/api/v1/demo/orders/ingest', data)
-export const postTriggerDemo = (data: { zone_id: number; force_order_drop: boolean; external_signal: string }) =>
+export const postTriggerDemo = (data: {
+  zone_id: number
+  force_order_drop: boolean
+  external_signal: string
+  generate_claims?: boolean
+  aqi?: number
+  rain?: number
+  traffic?: number
+  temperature?: number
+  max_payout_inr?: number
+  max_payout_per_day?: number
+  coverage_ratio?: number
+}) =>
   client.post('/api/v1/platform/demo/trigger-disruption', data)
 export const generateClaimsForDisruption = (disruptionId: number) =>
   client.post(`/api/v1/internal/claims/generate-for-disruption/${disruptionId}`)

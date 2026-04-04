@@ -102,6 +102,37 @@ fun ClaimDetailContent(claim: Claim) {
                         Text(claim.disruptionType.replace("_", " "), fontWeight = FontWeight.Bold)
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                claim.claimReason?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                }
+            }
+        }
+
+        Text("Why this claim exists", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                BreakdownRow("Fraud score", claim.fraudScore?.let { String.format("%.2f", it) } ?: "N/A")
+                BreakdownRow("Main cause", claim.mainCause ?: "N/A")
+                BreakdownRow("Calculation", claim.calculation ?: "N/A")
+
+                if (claim.factors.isNotEmpty()) {
+                    HorizontalDivider(color = BackgroundWarmWhite)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Contributing factors", fontWeight = FontWeight.Bold)
+                        claim.factors.forEach { factor ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(factor.name.replace("_", " "), color = TextSecondary)
+                                Text(String.format("%.2f", factor.impact), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
         }
 

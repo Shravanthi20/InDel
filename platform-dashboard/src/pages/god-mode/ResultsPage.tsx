@@ -8,7 +8,7 @@ function statusBadge(status: string) {
 }
 
 export default function ResultsPage() {
-  const { result, endpointStatus, error } = useGodMode()
+  const { result, endpointStatus, error, addDisruption, addingDisruption, loading } = useGodMode()
 
   const statusTone = result.status === 'Severe'
     ? 'text-rose-800 border-rose-200 bg-rose-50'
@@ -84,6 +84,14 @@ export default function ResultsPage() {
           <EndpointCard label="GET /api/v1/worker/batches" status={endpointStatus.availableBatches} />
           <EndpointCard label="GET /api/v1/worker/batches/assigned" status={endpointStatus.assignedBatches} />
         </div>
+        <button
+          type="button"
+          onClick={addDisruption}
+          disabled={addingDisruption || loading}
+          className="mt-4 inline-flex items-center justify-center rounded-full border border-rose-300 bg-rose-50 px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {addingDisruption ? 'Triggering all-zone disruption...' : 'Trigger disruption (all factors, all zones)'}
+        </button>
       </div>
     </section>
   )

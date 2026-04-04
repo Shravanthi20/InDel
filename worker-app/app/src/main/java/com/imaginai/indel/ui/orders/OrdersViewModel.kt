@@ -26,6 +26,7 @@ class OrdersViewModel @Inject constructor(
         val success: Boolean,
         val batchCompleted: Boolean,
         val remainingOrders: Int? = null,
+        val errorMessage: String? = null,
     )
 
     companion object {
@@ -101,7 +102,6 @@ class OrdersViewModel @Inject constructor(
             val availableBatches = dedupeByBatchId(availableRaw)
                 .filter { normalizeBatchStatus(it.status) == "Assigned" }
                 .filter { it.batchId !in usedOwnedIds }
-                .filter { isReachableFromWorkerLocation(it, workerCity) }
 
             Log.d(
                 TAG,
@@ -181,20 +181,49 @@ class OrdersViewModel @Inject constructor(
             val response = workerRepository.deliverBatch(batch.batchId, deliveryCode)
             if (response.isSuccessful) {
                 val responseBody = response.body()
-                fetchOrders()
+                runCatching { fetchOrders() }
+                    .onFailure { refreshErr ->
+                        Log.w(TAG, "deliverBatch refresh failed batchId=${batch.batchId}", refreshErr)
+                    }
                 BatchDeliveryResult(
                     success = true,
                     batchCompleted = responseBody?.batchCompleted ?: true,
                     remainingOrders = responseBody?.remainingOrders,
                 )
             } else {
-                Log.w(TAG, "deliverBatch failed code=${response.code()} batchId=${batch.batchId}")
-                BatchDeliveryResult(success = false, batchCompleted = false)
+                val apiError = extractApiError(response.errorBody()?.string())
+                val message = when {
+                    response.code() == 401 || response.code() == 403 -> "Session expired. Please login again."
+                    apiError == "incorrect_delivery_code" -> "Incorrect delivery code"
+                    apiError == "order_already_delivered" -> "Order already delivered"
+                    apiError == "batch_already_delivered" -> "Batch already delivered"
+                    apiError == "batch_not_picked_up" -> "Pick up the batch first, then deliver."
+                    apiError == "batch_not_found_or_not_assignable" -> "Batch is not assignable anymore. Refresh and try again."
+                    !apiError.isNullOrBlank() -> apiError.replace("_", " ")
+                    else -> "Delivery failed (${response.code()})"
+                }
+                Log.w(TAG, "deliverBatch failed code=${response.code()} batchId=${batch.batchId} error=$apiError")
+                BatchDeliveryResult(success = false, batchCompleted = false, errorMessage = message)
             }
         } catch (e: Exception) {
             Log.e(TAG, "deliverBatch exception", e)
-            BatchDeliveryResult(success = false, batchCompleted = false)
+            BatchDeliveryResult(success = false, batchCompleted = false, errorMessage = e.message ?: "Unable to complete delivery right now.")
         }
+    }
+
+    private fun extractApiError(rawBody: String?): String? {
+        val body = rawBody?.trim().orEmpty()
+        if (body.isBlank()) return null
+        val marker = "\"error\""
+        val markerIndex = body.indexOf(marker)
+        if (markerIndex < 0) return null
+        val colonIndex = body.indexOf(':', markerIndex)
+        if (colonIndex < 0) return null
+        val valueStart = body.indexOf('"', colonIndex + 1)
+        if (valueStart < 0) return null
+        val valueEnd = body.indexOf('"', valueStart + 1)
+        if (valueEnd <= valueStart) return null
+        return body.substring(valueStart + 1, valueEnd)
     }
 
     fun pickedUpOrder(orderId: String) {
@@ -363,21 +392,6 @@ class OrdersViewModel @Inject constructor(
         return ""
     }
 
-    private fun isReachableFromWorkerLocation(batch: DeliveryBatch, workerCityRaw: String): Boolean {
-        val workerCity = workerCityRaw.trim()
-        if (workerCity.isBlank()) return false
-
-        val fromCity = batch.fromCity.trim()
-        val toCity = batch.toCity.trim()
-        val zoneLevel = batch.zoneLevel.trim().uppercase(Locale.ROOT)
-
-        return when (zoneLevel) {
-            "A" -> fromCity.equals(workerCity, ignoreCase = true) && toCity.equals(workerCity, ignoreCase = true)
-            "B", "C" -> fromCity.equals(workerCity, ignoreCase = true)
-            else -> false
-        }
-    }
-
     fun pickupCodeForBatch(batchId: String): String {
         val normalized = batchId.trim().uppercase(Locale.ROOT)
         var seed = 0
@@ -406,8 +420,7 @@ class OrdersViewModel @Inject constructor(
     }
 
     fun isZoneASingleStop(batch: DeliveryBatch): Boolean {
-        if (!batch.zoneLevel.equals("A", ignoreCase = true)) return false
-        return batch.fromCity.trim().equals(batch.toCity.trim(), ignoreCase = true)
+        return batch.zoneLevel.equals("A", ignoreCase = true)
     }
 
     private fun DeliveryBatchDto.toUiModel(): DeliveryBatch {
@@ -425,7 +438,7 @@ class OrdersViewModel @Inject constructor(
             deliveryTime = deliveryTime,
             batchEarningInr = batchEarningInr,
             orders = orders.map {
-                val zoneASingleStop = zoneLevel.equals("A", ignoreCase = true) && fromCity.trim().equals(toCity.trim(), ignoreCase = true)
+                val zoneAFlow = zoneLevel.equals("A", ignoreCase = true)
                 BatchOrder(
                     orderId = it.orderId,
                     deliveryAddress = it.deliveryAddress,
@@ -434,7 +447,7 @@ class OrdersViewModel @Inject constructor(
                     weight = it.weight,
                     pickupArea = it.pickupArea,
                     dropArea = it.dropArea,
-                    deliveryCode = if (zoneASingleStop) {
+                    deliveryCode = if (zoneAFlow) {
                         it.deliveryCode ?: deliveryCodeForOrder(it.orderId)
                     } else {
                         null

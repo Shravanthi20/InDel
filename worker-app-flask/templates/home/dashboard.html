@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Home Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Income & protection overview{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
+<!-- Worker status card -->
+<div class="card mb-16">
+  <div class="d-flex align-center gap-12">
+    <div style="width:48px;height:48px;background:var(--blue-soft);border-radius:50%;
+                display:flex;align-items:center;justify-content:center;
+                font-weight:700;font-size:1.1rem;color:var(--brand-blue);">
+      {{ (profile.name or 'W')[0]|upper }}
+    </div>
+    <div style="flex:1;">
+      <div style="font-weight:700;">{{ profile.name or 'Unknown Worker' }}</div>
+      <div class="text-sm text-secondary">
+        Zone {{ profile.zone_level|upper if profile.zone_level else '' }}
+        {{ '— ' + profile.zone_name if profile.zone_name else '' }}
+        {{ '• ' + profile.city if profile.city else '' }}
+      </div>
+    </div>
+    <span class="chip {% if profile.coverage_status == 'active' %}chip-success{% else %}chip-warning{% endif %}">
+      {{ profile.coverage_status or 'Uncovered' }}
+    </span>
+  </div>
+</div>
+
+<!-- Disruption banner -->
+{% if has_disruption %}
+<div class="gradient-banner mb-16">
+  <span class="banner-icon">!</span>
+  <div>
+    <h3>Disruption Detected</h3>
+    <p>Your zone has an active disruption event. A claim may be triggered automatically.</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="stats-grid mb-24">
+  <a href="{{ url_for('worker.earnings') }}" class="card" style="text-decoration:none;cursor:pointer;">
+    <div class="card-header">
+      <div class="card-title">Earnings</div>
+      <div class="card-icon">₹</div>
+    </div>
+    <div class="card-value">{{ earnings.this_week_actual or 0 }}</div>
+    <div class="card-subtitle">vs {{ earnings.this_week_baseline or 0 }} baseline</div>
+  </a>
+
+  <a href="{{ url_for('worker.policy') }}" class="card" style="text-decoration:none;cursor:pointer;">
+    <div class="card-header">
+      <div class="card-title">Protection</div>
+      <div class="card-icon" style="background:{% if policy.status=='active' %}#D1FAE5{% else %}#FEF3C7{% endif %};
+                                     color:{% if policy.status=='active' %}var(--success){% else %}#B45309{% endif %};">◉</div>
+    </div>
+    <div class="card-value" style="font-size:1.25rem;
+      color:{% if policy.status=='active' %}var(--success){% else %}var(--warning){% endif %}">
+      {{ 'Protected' if policy.status == 'active' else 'Not Enrolled' }}
+    </div>
+    <div class="card-subtitle">
+      Coverage: {{ (policy.coverage_ratio * 100)|int if policy.coverage_ratio else 0 }}%
+    </div>
+  </a>
+
+  {% if policy.plan_name %}
+  <a href="{{ url_for('worker.policy') }}" class="card" style="text-decoration:none;cursor:pointer;">
+    <div class="card-header">
+      <div class="card-title">Active Plan</div>
+      <div class="card-icon">✓</div>
+    </div>
+    <div class="card-value" style="font-size:1.1rem;">{{ policy.plan_name }}</div>
+    <div class="card-subtitle">
+      {{ policy.selected_deliveries or policy.range_start or 0 }}/week
+    </div>
+  </a>
+  {% endif %}
+</div>
+
+<!-- Quick nav -->
+<div style="margin-bottom:12px;font-weight:700;font-size:.9rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px;">Services</div>
+<div class="nav-grid">
+  <a href="{{ url_for('worker.orders') }}"        class="nav-box"><span class="nav-box-icon">▦</span> Orders</a>
+  <a href="{{ url_for('worker.earnings') }}"       class="nav-box"><span class="nav-box-icon">%</span> Earnings</a>
+  <a href="{{ url_for('worker.policy') }}"         class="nav-box"><span class="nav-box-icon">⚡</span> Policy</a>
+  <a href="{{ url_for('worker.claims') }}"         class="nav-box"><span class="nav-box-icon">≡</span> Claims</a>
+  <a href="{{ url_for('worker.payouts') }}"        class="nav-box"><span class="nav-box-icon">➔</span> Payouts</a>
+  <a href="{{ url_for('worker.notifications') }}"  class="nav-box"><span class="nav-box-icon">◆</span> Alerts</a>
+</div>
+{% endblock %}

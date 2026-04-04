@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Session Tracking{% endblock %}
+{% block page_title %}Session Tracking{% endblock %}
+{% block page_subtitle %}Active delivery session summary and fraud signals{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;" class="stats-grid">
+  <div class="card">
+    <div class="card-title mb-8">Session Status</div>
+    <div class="card-value" style="font-size:1.1rem;">
+      <span class="chip {% if sess.status == 'active' %}chip-success{% else %}chip-muted{% endif %}">
+        {{ sess.status or 'Unknown' }}
+      </span>
+    </div>
+    <div class="text-sm text-secondary mt-8">Start: {{ sess.start_time or '—' }}</div>
+    {% if sess.end_time %}
+    <div class="text-sm text-secondary">End: {{ sess.end_time }}</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title mb-8">Deliveries Completed</div>
+    <div class="card-value">{{ sess.deliveries_completed or 0 }}</div>
+    <div class="card-subtitle">Earnings: ₹{{ sess.earnings_in_session or 0 }}</div>
+  </div>
+</div>
+
+<!-- Deliveries in session -->
+<div class="card mb-16">
+  <div class="card-header mb-12">
+    <div class="card-title">Deliveries in This Session</div>
+    <span class="chip chip-blue">{{ deliveries|length }}</span>
+  </div>
+  {% if deliveries %}
+  {% for order in deliveries %}
+  <div class="order-card" style="margin-bottom:10px;">
+    <div class="order-route mb-4">
+      {{ order.pickup_area or '?' }} <span class="route-arrow">→</span> {{ order.drop_area or '?' }}
+    </div>
+    <div class="d-flex justify-between">
+      <span class="chip chip-{{ 'success' if order.status == 'delivered' else 'blue' }}">{{ order.status }}</span>
+      <span class="text-success fw-700">₹{{ order.earning_inr }}</span>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state" style="padding:24px;">
+     <div class="empty-icon">▦</div>
+    <p>No deliveries recorded in this session yet.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Fraud signals -->
+<div class="card mb-16">
+  <div class="card-header mb-12">
+    <div class="card-title">Fraud Signal Summary</div>
+    {% if fraud_signals %}
+    <span class="chip chip-warning">{{ fraud_signals|length }} signals</span>
+    {% else %}
+    <span class="chip chip-success">Clean</span>
+    {% endif %}
+  </div>
+  {% if fraud_signals %}
+  {% for sig in fraud_signals %}
+  <div class="signal-row">
+    <div class="signal-dot signal-dot-{{ sig.severity|lower }}"></div>
+    <div style="flex:1;">
+      <div class="text-sm fw-600">{{ sig.type }}</div>
+      <div class="text-xs text-secondary">{{ sig.timestamp }}</div>
+    </div>
+    <span class="chip
+      {% if sig.severity|lower == 'high' %}chip-error
+      {% elif sig.severity|lower == 'medium' %}chip-warning
+      {% else %}chip-success{% endif %}">
+      {{ sig.severity }}
+    </span>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="text-sm text-secondary">No fraud signals detected in this session.</p>
+  {% endif %}
+</div>
+
+<!-- End session -->
+{% if sess.status == 'active' %}
+<form method="POST" action="{{ url_for('worker.session_tracking') }}">
+  <input type="hidden" name="action" value="end">
+  <button type="submit" class="btn btn-danger"
+          data-confirm="End the current session?"
+          id="end-session-btn">
+    ⏹ End Session
+  </button>
+</form>
+{% endif %}
+{% endblock %}

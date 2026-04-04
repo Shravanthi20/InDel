@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
+{% block page_title %}Orders{% endblock %}
+{% block page_subtitle %}Available and assigned deliveries{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<!-- Assigned orders -->
+{% if assigned_orders %}
+<div class="card mb-24">
+  <div class="card-header mb-12">
+    <div class="card-title">Your Active Orders</div>
+    <span class="chip chip-success">{{ assigned_orders|length }} active</span>
+  </div>
+  {% for order in assigned_orders %}
+  <div class="order-card">
+    <div class="order-card-header">
+      <div class="order-route">
+        {{ order.pickup_area or order.from_city or '?' }}
+        <span class="route-arrow">→</span>
+        {{ order.drop_area or order.to_city or '?' }}
+      </div>
+      <span class="chip chip-{{ 'success' if order.status == 'delivered' else 'blue' }}">
+        {{ order.status }}
+      </span>
+    </div>
+    <div class="order-meta">
+      <span>DIST {{ order.distance_km }} km</span>
+      <span>WT {{ order.package_weight_kg }} kg</span>
+      {% if order.vehicle_type %}<span>VEH {{ order.vehicle_type }}</span>{% endif %}
+    </div>
+    <div class="d-flex align-center justify-between">
+      <span class="order-earning">₹{{ order.earning_inr }}</span>
+      <div style="display:flex;gap:8px;">
+        <a href="{{ url_for('worker.delivery_execution', order_id=order.order_id) }}"
+           class="btn btn-primary btn-sm">Execute →</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Available orders -->
+<div class="card">
+  <div class="card-header mb-12">
+    <div class="card-title">Available Orders</div>
+    <a href="{{ url_for('worker.orders') }}" class="btn btn-ghost btn-sm">↻ Refresh</a>
+  </div>
+
+  {% if available_orders %}
+  {% for order in available_orders %}
+  <div class="order-card">
+    <div class="order-card-header">
+      <div class="order-route">
+        {{ order.pickup_area or order.from_city or '?' }}
+        <span class="route-arrow">→</span>
+        {{ order.drop_area or order.to_city or '?' }}
+      </div>
+      <span class="order-earning">₹{{ order.earning_inr }}</span>
+    </div>
+    <div class="order-meta">
+      <span>DIST {{ order.distance_km }} km</span>
+      <span>WT {{ order.package_weight_kg }} kg</span>
+      {% if order.payment_type %}
+        <span>PAY {{ order.payment_type }}</span>
+      {% endif %}
+      {% if order.vehicle_type %}
+        <span>▲ {{ order.vehicle_type }}</span>
+      {% endif %}
+    </div>
+    <form method="POST"
+          action="{{ url_for('worker.accept_order', order_id=order.order_id) }}"
+          style="text-align:right;">
+      <button type="submit" class="btn btn-primary btn-sm" id="accept-{{ order.order_id }}">
+        Accept Order
+      </button>
+    </form>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">▦</div>
+    <h3>No active deliveries</h3>
+    <p>Orders will appear here once assigned or fetched from the backend.<br>
+       Use Dev Tools to assign orders for testing.</p>
+    <a href="{{ url_for('demo.dev_tools') }}" class="btn btn-outline mt-16" style="display:inline-flex;">
+      Go to Dev Tools
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -2,12 +2,7 @@ import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 
 const navItems = [
-  { to: '/god-mode/temperature', label: 'Temperature' },
-  { to: '/god-mode/rain', label: 'Rain' },
-  { to: '/god-mode/aqi', label: 'AQI' },
-  { to: '/god-mode/traffic', label: 'Traffic' },
-  { to: '/god-mode/results', label: 'Results' },
-  { to: '/god-mode/batches', label: 'Batches' },
+  { to: '/god-mode', label: 'God Mode' },
 ]
 
 export default function Sidebar({ children }: { children: ReactNode }) {
