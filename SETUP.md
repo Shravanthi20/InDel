@@ -76,7 +76,7 @@ Notes:
 
 ---
 
-### 4.1 Payment Integration — Demo Mode (No Setup Required)
+### 4.1 Payment Integration — Demo Mode (Minimal Setup)
 
 > [!NOTE]
 > Razorpay runs in **Mock Mode** by default. No API keys are needed for evaluation.
@@ -86,7 +86,25 @@ Notes:
 - Payout IDs in dashboards will appear as `rzp_mock_...`
 - Worker wallets update in real time — identical behavior to a live environment
 
-No additional configuration needed. Just start the stack and evaluate.
+> [!IMPORTANT]
+> The backend runs fully in Mock Mode and requires no Razorpay credentials.
+> However, the Worker App uses the Razorpay Android SDK for payment UI rendering,
+> which requires a valid test key to load correctly.
+
+### Worker App — One-Time Key Setup
+
+1. Open this file in Android Studio:
+   `worker-app/app/src/main/java/com/imaginai/indel/MainActivity.kt`
+
+2. Find this line (around line 41):
+```kotlin
+   val razorpayKeyId = "rzp_test_REPLACE_WITH_YOUR_KEY"
+```
+
+3. Replace the placeholder with your Razorpay **test** key ID from the [Razorpay Dashboard](https://dashboard.razorpay.com/).
+
+> Only the payment UI rendering requires this key. All actual payout logic and
+> verification runs through the mock backend — no real money is involved.
 
 ---
 
@@ -233,7 +251,7 @@ If app APIs use localhost, replace backend host with your machine LAN IP (same W
 1. Open the **Platform Dashboard** (http://127.0.0.1:5173)
 2. Navigate to **Chaos Engine**
 3. Click **"Collapse Demand"** to simulate a drop in order volume
-4. Inject one or more disruption signals(at least one environmental signal is required):
+4. Inject one or more disruption signals (at least one environmental signal is required):
    - Rain (Weather Alert)
    - AQI Spike
    - Zone Closure / Curfew
@@ -263,7 +281,6 @@ Trigger disruptions multiple times to observe adaptive risk scoring:
 - Future premiums increase based on zone instability
 - This reflects the ML-driven premium adjustment model in action
   
----
 
 ### Verifying the Payout (What to Look For)
 
