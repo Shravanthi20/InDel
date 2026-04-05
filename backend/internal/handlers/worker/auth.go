@@ -184,16 +184,16 @@ func Register(c *gin.Context) {
 
 		// 3. Set Earnings Baseline.
 		_ = workerDB.Exec(
-			`INSERT INTO earnings_baselines (worker_id, baseline_amount)
+			`INSERT INTO earnings_baseline (worker_id, baseline_amount)
 			 VALUES (?, 4080)
 			 ON CONFLICT (worker_id) DO NOTHING`,
 			workerIDUint,
 		)
 
-		// 3.5 Set Active Policy (Required for automated claims generation)
+		// 3.5 Set Active Policy (Initial baseline seeded at 35 INR)
 		_ = workerDB.Exec(
 			`INSERT INTO policies (worker_id, status, premium_amount, created_at, updated_at)
-			 VALUES (?, 'active', 65.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+			 VALUES (?, 'active', 35.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 			workerIDUint,
 		)
 
@@ -202,15 +202,10 @@ func Register(c *gin.Context) {
 			pickup := fmt.Sprintf("Pickup Area %d", i)
 			drop := fmt.Sprintf("Drop Area %d", i+50)
 			dist := 1.5 + (float64(i) * 0.1)
-			fee := 60.0 + (float64(i%5) * 5.0)
-			tip := 0.0
-			if i%7 == 0 {
-				tip = 15.0
-			}
 			_ = workerDB.Exec(
-				`INSERT INTO orders (zone_id, status, pickup_area, drop_area, distance_km, order_value, delivery_fee_inr, tip_inr, created_at, updated_at)
-				 VALUES (?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-				zone.ID, pickup, drop, dist, 250.0, fee, tip,
+				`INSERT INTO orders (zone_id, status, pickup_area, drop_area, distance_km, order_value, created_at, updated_at)
+				 VALUES (?, 'assigned', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+				zone.ID, pickup, drop, dist, 250.0,
 			)
 		}
 
@@ -290,15 +285,10 @@ func Login(c *gin.Context) {
 			pickup := fmt.Sprintf("Pickup Area %d", i)
 			drop := fmt.Sprintf("Drop Area %d", i+50)
 			dist := 1.5 + (float64(i) * 0.1)
-			fee := 60.0 + (float64(i%8) * 4.0)
-			tip := 0.0
-			if i%5 == 0 {
-				tip = 12.0
-			}
 			_ = workerDB.Exec(
-				`INSERT INTO orders (zone_id, status, pickup_area, drop_area, distance_km, order_value, delivery_fee_inr, tip_inr, created_at, updated_at)
-				 VALUES (?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-				zoneID, pickup, drop, dist, 250.0, fee, tip,
+				`INSERT INTO orders (zone_id, status, pickup_area, drop_area, distance_km, order_value, created_at, updated_at)
+				 VALUES (?, 'assigned', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+				zoneID, pickup, drop, dist, 250.0,
 			)
 		}
 	}

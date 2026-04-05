@@ -39,30 +39,32 @@ class PremiumPayViewModel @Inject constructor(
         }
     }
 
-    fun pay() {
+    fun setLoading(isLoading: Boolean) {
+        if (isLoading) {
+            _uiState.value = PayUiState.Loading
+        } else {
+            _uiState.value = PayUiState.Idle
+        }
+    }
+
+    fun setPaymentError(error: String) {
+        _uiState.value = PayUiState.Error(error)
+    }
+
+    fun recordPaymentSuccess(paymentId: String?) {
         viewModelScope.launch {
             _uiState.value = PayUiState.Loading  
             try {
+                // We call the backend to record that Razorpay succeeded
                 val response = policyRepository.payPremium(_amount.value.toIntOrNull())
                 if (response.isSuccessful) {
-                    val body = response.body()
-                    val summary = buildString {
-                        append(body?.message ?: "Payment Successful")
-                        if (body?.paymentId != null) {
-                            append(" | ")
-                            append(body.paymentId)
-                        }
-                        if (body?.paymentStatus != null) {
-                            append(" | ")
-                            append(body.paymentStatus)
-                        }
-                    }
+                    val summary = "Payment Successful via Razorpay | ID: $paymentId"
                     _uiState.value = PayUiState.Success(summary)
                 } else {
-                    _uiState.value = PayUiState.Error("Payment failed")
+                    _uiState.value = PayUiState.Error("Failed to sync backend")
                 }
             } catch (e: Exception) {
-                _uiState.value = PayUiState.Error(e.message ?: "Unknown error")
+                _uiState.value = PayUiState.Error(e.message ?: "Unknown backend error")
             }
         }
     }

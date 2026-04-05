@@ -17,7 +17,7 @@ type OrderDropPoller struct {
 func (p *OrderDropPoller) Start() {
 	go func() {
 		p.poll()
-		ticker := time.NewTicker(15 * time.Minute)
+		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			p.poll()
@@ -82,7 +82,7 @@ func (p *OrderDropPoller) fireDisruption(zone models.Zone, dropRatio float64, no
 	var existing models.Disruption
 	err := p.DB.Where(
 		"zone_id = ? AND type = ? AND created_at >= ?",
-		zone.ID, "demand_drop", now.Add(-2*time.Hour),
+		zone.ID, "demand_drop", now.Add(-10*time.Second),
 	).First(&existing).Error
 	if err == nil {
 		return

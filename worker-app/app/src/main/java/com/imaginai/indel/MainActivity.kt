@@ -10,11 +10,19 @@ import androidx.compose.ui.Modifier
 import com.imaginai.indel.ui.navigation.NavGraph
 import com.imaginai.indel.ui.theme.InDelTheme
 import dagger.hilt.android.AndroidEntryPoint
+import com.razorpay.Checkout
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
+import org.json.JSONObject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
+    
+    var razorpayCallback: ((success: Boolean, paymentId: String?, error: String?) -> Unit)? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Checkout.preload(applicationContext)
         setContent {
             InDelTheme {
                 Surface(
@@ -25,5 +33,38 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+    
+    fun startRazorpayCheckout(amountInPaise: Int, contactNumber: String, callback: (Boolean, String?, String?) -> Unit) {
+        this.razorpayCallback = callback
+        val checkout = Checkout()
+        // DYNAMIC CONFIG: Evaluators can replace this with their own test key if desired.
+        // For Phase 2 demo, this can stay as a placeholder to avoid leaking sensitive keys.
+        val razorpayKeyId = "rzp_test_REPLACE_WITH_YOUR_KEY" 
+        checkout.setKeyID(razorpayKeyId) 
+
+        try {
+            val options = JSONObject()
+            options.put("name", "InDel Coverage")
+            options.put("description", "Weekly Disruption Insurance Premium")
+            options.put("currency", "INR")
+            options.put("amount", amountInPaise)
+            
+            val prefill = JSONObject()
+            prefill.put("contact", contactNumber)
+            options.put("prefill", prefill)
+            
+            checkout.open(this, options)
+        } catch (e: Exception) {
+            callback.invoke(false, null, "Error launching Razorpay: ${e.message}")
+        }
+    }
+
+    override fun onPaymentSuccess(razorpayPaymentID: String?, paymentData: PaymentData?) {
+        razorpayCallback?.invoke(true, razorpayPaymentID, null)
+    }
+
+    override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
+        razorpayCallback?.invoke(false, null, response)
     }
 }

@@ -1,9 +1,11 @@
 package platform
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -134,6 +136,7 @@ func OrderAssignedWebhook(c *gin.Context) {
 
 // OrderCompletedWebhook marks order delivered and updates worker earnings.
 func OrderCompletedWebhook(c *gin.Context) {
+	fmt.Printf("\n📢 [WEBHOOK RECEIVED] OrderCompletedWebhook hit at %s\n", time.Now().Format(time.Kitchen))
 	var req orderCompletedRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_payload"})

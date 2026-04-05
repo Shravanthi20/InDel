@@ -135,21 +135,26 @@ func GetProfile(c *gin.Context) {
 				if city == "" {
 					city = "Chennai"
 				}
-				zone := strings.TrimSpace(fmt.Sprintf("%s, %s", zoneName, city))
 				
 				var ordersCompleted int64
 				_ = workerDB.Model(&models.Order{}).Where("worker_id = ? AND status = 'delivered'", row.WorkerID).Count(&ordersCompleted).Error
+
+				var todayEarnings float64
+				_ = workerDB.Raw("SELECT COALESCE(SUM(amount_earned), 0) FROM earnings_records WHERE worker_id = ? AND date = CURRENT_DATE", row.WorkerID).Scan(&todayEarnings).Error
 
 				c.JSON(200, gin.H{"worker": gin.H{
 					"worker_id":        fmt.Sprintf("%d", row.WorkerID),
 					"name":             name,
 					"phone":            row.Phone,
-					"zone":             zone,
+					"zone":             fmt.Sprintf("%s, %s", zoneName, city),
+					"zone_level":       city,
+					"zone_name":        zoneName,
 					"vehicle_type":     row.VehicleType,
 					"upi_id":           row.UPIId,
 					"coverage_status":  "active",
 					"enrolled":         true,
 					"orders_completed": ordersCompleted,
+					"today_earnings":   int(todayEarnings),
 				}})
 				return
 			}

@@ -24,14 +24,11 @@ func GetPolicy(c *gin.Context) {
 			if err == nil {
 				quote, _ := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC())
 				premiumAmount := int(p.PremiumAmount)
-				breakdown := []gin.H{
-					{"feature": "rain_risk", "impact": 0.42},
-					{"feature": "order_drop_volatility", "impact": 0.31},
-					{"feature": "historical_disruptions", "impact": 0.27},
-				}
 				source := "stored_policy"
 				riskScore := 0.0
 				modelVersion := "fallback_rule_v2"
+				var breakdown []gin.H
+
 				if quote != nil {
 					premiumAmount = int(quote.WeeklyPremiumINR)
 					source = quote.Source
@@ -40,6 +37,13 @@ func GetPolicy(c *gin.Context) {
 					breakdown = make([]gin.H, 0, len(quote.Explainability))
 					for _, item := range quote.Explainability {
 						breakdown = append(breakdown, gin.H{"feature": item.Feature, "impact": item.Impact})
+					}
+				} else {
+					// Fallback static breakdown for historical UI context
+					breakdown = []gin.H{
+						{"feature": "rain_risk", "impact": 0.42},
+						{"feature": "order_drop_volatility", "impact": 0.31},
+						{"feature": "historical_disruptions", "impact": 0.27},
 					}
 				}
 				// Dynamic calculations for "Real Data"
@@ -51,10 +55,14 @@ func GetPolicy(c *gin.Context) {
 				}
 
 				dueDate := p.CreatedAt.AddDate(0, 0, 7).Format("2006-01-02")
-				if p.Status == "active" {
-					// If already past, show next week
+				var lastPaymentDate time.Time
+				if err := workerDB.Table("premium_payments").Select("payment_date").Where("policy_id = ?", p.ID).Order("payment_date DESC").Limit(1).Scan(&lastPaymentDate).Error; err == nil && !lastPaymentDate.IsZero() {
+					// If they made a payment, due date is exactly 7 days after their last payment
+					dueDate = lastPaymentDate.AddDate(0, 0, 7).Format("2006-01-02")
+				} else if p.Status == "active" {
+					// Fallback if no payment recorded but active
 					if p.CreatedAt.AddDate(0, 0, 7).Before(time.Now()) {
-						dueDate = time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+						dueDate = time.Now().AddDate(0, 0, 7).Format("2006-01-02")
 					}
 				}
 
