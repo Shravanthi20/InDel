@@ -43,9 +43,22 @@ func defaultSSLMode(host string) string {
 }
 
 func Migrate(db *gorm.DB) error {
-	// AutoMigrate is necessary for tests using in-memory SQLite
-	// But it is causing 'insufficient arguments' crash on this Postgres version.
-	// Since we use db-migrate, we can safely skip this in the demo environment.
-	log.Println("⚠️ Skipping AutoMigrate to prevent crash. Ensure db-migrate has run.")
+	// We avoid GORM AutoMigrate due to prior compatibility issues on this Postgres setup.
+	// Keep these idempotent guards so production can recover from partial/legacy schemas.
+	stmts := []string{
+		"ALTER TABLE disruptions ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP",
+		"ALTER TABLE payouts ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMP",
+		"ALTER TABLE payouts ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP",
+		"CREATE INDEX IF NOT EXISTS idx_disruptions_status_processed_at ON disruptions(status, processed_at)",
+		"CREATE INDEX IF NOT EXISTS idx_payouts_status_next_retry_at ON payouts(status, next_retry_at)",
+	}
+
+	for _, stmt := range stmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			return err
+		}
+	}
+
+	log.Println("✅ Schema compatibility checks applied")
 	return nil
 }
