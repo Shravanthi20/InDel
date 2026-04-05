@@ -76,6 +76,20 @@ Notes:
 
 ---
 
+### 4.1 Payment Integration — Demo Mode (No Setup Required)
+
+> [!NOTE]
+> Razorpay runs in **Mock Mode** by default. No API keys are needed for evaluation.
+
+- All financial transactions are automatically simulated
+- The system detects missing keys and switches to mock mode seamlessly
+- Payout IDs in dashboards will appear as `rzp_mock_...`
+- Worker wallets update in real time — identical behavior to a live environment
+
+No additional configuration needed. Just start the stack and evaluate.
+
+---
+
 ## 5. Start Full Backend Stack (Recommended for Evaluation)
 
 From repository root (`InDel/`), run:
@@ -204,11 +218,71 @@ If app APIs use localhost, replace backend host with your machine LAN IP (same W
 3. Open Platform Dashboard and verify operations pages load.
 4. Open Insurer Dashboard and verify risk/claims pages load.
 5. Run Worker App and verify it can hit backend APIs.
-6. Trigger a disruption flow from platform/admin endpoints and observe claim/payout pipeline updates.
+6. Trigger a disruption using the Chaos Engine — see Section 11 below.
 
 ---
 
-## 11. Common Issues and Fixes
+## 11. Simulating a Disruption (Chaos Engine — Must Do)
+
+> [!IMPORTANT]
+> Nothing happens automatically. A disruption must be manually triggered
+> to activate the full claims → fraud check → payout pipeline.
+
+### Steps
+
+1. Open the **Platform Dashboard** (http://127.0.0.1:5173)
+2. Navigate to **Chaos Engine**
+3. Click **"Collapse Demand"** to simulate a drop in order volume
+4. Inject one or more disruption signals(at least one environmental signal is required):
+   - Rain (Weather Alert)
+   - AQI Spike
+   - Zone Closure / Curfew
+
+### What Happens Next
+
+The system validates the disruption using multi-signal logic:
+
+- Disruption is **confirmed** only when:
+  - An environmental signal is present **AND**
+  - Order volume drops significantly
+
+Once confirmed, the automated pipeline kicks in:
+
+1. Claims are generated
+2. Fraud check runs
+3. Payout is processed via Kafka
+4. Worker wallet is updated in real time
+
+You can verify each stage on the **Insurer Dashboard** and in the **Worker App**.
+
+### Bonus: Dynamic Premium Behavior
+
+Trigger disruptions multiple times to observe adaptive risk scoring:
+
+- Risk score updates after each disruption
+- Future premiums increase based on zone instability
+- This reflects the ML-driven premium adjustment model in action
+  
+---
+
+### Verifying the Payout (What to Look For)
+
+After the pipeline runs, confirm end-to-end by checking:
+
+1. **Insurer Dashboard** → Claims — the auto-generated claim should show status `Paid`
+2. **Worker App** → Wallet / Payouts — a credit entry with a mock transaction ID (`rzp_mock_...`) will appear
+3. **Backend logs** — you should see:
+   - `Razorpay client initialized (Mock Mode: true)`
+   - `Payout processed for worker...`
+
+To check logs:
+```bash
+docker compose -f docker-compose.demo.yml logs -f core
+```
+
+---
+
+## 12. Common Issues and Fixes
 
 ### Docker build/start fails
 
@@ -237,7 +311,7 @@ docker compose -f docker-compose.demo.yml up --build -d
 
 ---
 
-## 12. One-Command Quick Start (Evaluator Friendly)
+## 13. One-Command Quick Start (Evaluator Friendly)
 
 From `InDel/`:
 
@@ -253,7 +327,7 @@ Then run:
 
 ---
 
-## 13. Scope Note
+## 14. Scope Note
 
 This guide is focused on **Phase 2 implementation evaluation**. It prioritizes reproducible local execution and validation over production deployment concerns.
 
