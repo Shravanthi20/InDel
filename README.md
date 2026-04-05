@@ -286,6 +286,73 @@ COMPOSE_PARALLEL_LIMIT=1 docker compose -f docker-compose.demo.yml up --build -d
 
 ---
 
+With reliable event processing in place, the next critical layer is how money actually moves.
+
+## Payment Integration — Razorpay
+
+InDel moves money automatically — collecting premiums from workers and disbursing payouts the moment income is disrupted. No forms. No approvals. No waiting. Just automated rails powered by Razorpay.
+
+---
+
+### Premium Collection — Worker → Razorpay
+
+Workers pay their weekly premium directly from the Android app.
+
+When a worker taps **Pay Now**, the app:
+- Fetches the AI-computed premium  
+- Launches Razorpay’s native Android Checkout SDK (amount in paise)  
+- On success, sends the Razorpay Payment ID to the backend for verification and recording  
+
+Failed or cancelled payments are surfaced clearly — nothing silently drops.
+
+**Files involved:**  
+`PremiumPayScreen.kt` · `PremiumPayViewModel.kt` · `MainActivity.kt`
+
+---
+
+### Disruption Payouts — Backend → Worker's UPI
+
+When a disruption is confirmed and a claim is auto-approved, payouts are executed automatically — no user action required.
+
+1. **Claim generated** — income loss calculated and recorded (`approved`)  
+2. **Payout queued** — stored with status `queued`  
+3. **Razorpay Payouts API** — backend calls `POST /v1/payouts` with worker UPI + amount  
+4. **Retry logic** — transient failures retried up to 5 times (exponential backoff)  
+5. **Idempotency** — unique key (`pay_clm_<claim_id>`) guarantees no duplicate payouts  
+6. **Status sync** — success → `processed`, failure → `failed` for review  
+
+A **10-second heartbeat goroutine** (`core/main.go`) continuously drains the payout queue.  
+Workers receive money within seconds of disruption confirmation — not hours, not the next business day.
+
+**Files involved:**  
+`backend/pkg/razorpay/razorpay.go` (`CreatePayout`, `CheckPayoutStatus`, `IsTransientError`)  
+`backend/internal/services/core_ops_service.go` (`ProcessQueuedPayouts`, `QueueClaimPayout`)  
+`backend/cmd/core/main.go`
+
+---
+
+### Mock Mode — Full Demo Without Live Credentials
+
+InDel runs end-to-end even without Razorpay credentials.
+
+- Missing API keys → automatic Mock Mode  
+- `CreatePayout()` returns deterministic mock IDs  
+- `CheckPayoutStatus()` always returns `processed`  
+
+The full disruption → claim → payout pipeline remains fully demonstrable in a hackathon environment.
+
+---
+
+### Configuration
+
+```env
+# Razorpay — leave blank to use Mock Mode
+RAZORPAY_API_KEY=rzp_test_XXXXXXXXXXXX
+RAZORPAY_API_SECRET=your_api_secret
+RAZORPAY_MODE=test
+```
+---
+
 ## Claims Management & Fraud Defense
 
 A claim lifecycle runs entirely within InDel — auto-generated, fraud-scored, routed, paid, and logged without external tools or manual data entry.
