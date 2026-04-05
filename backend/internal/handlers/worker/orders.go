@@ -119,10 +119,10 @@ func GetAssignedOrders(c *gin.Context) {
 				CreatedAt      string  `gorm:"column:created_at"`
 			}
 			rows := make([]orderRow, 0)
-			_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Pickup Location') AS pickup_area, COALESCE(drop_area, 'Drop Location') AS drop_area, COALESCE(distance_km, 0) AS distance_km, created_at::text FROM orders WHERE worker_id = ? ORDER BY created_at DESC LIMIT 20", workerIDUint).Scan(&rows).Error
+			_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Velachery') AS pickup_area, COALESCE(drop_area, 'Adyar') AS drop_area, COALESCE(distance_km, 3.2) AS distance_km, created_at::text FROM orders WHERE worker_id = ? ORDER BY created_at DESC LIMIT 20", workerIDUint).Scan(&rows).Error
 			if len(rows) == 0 {
 				// Demo fallback: expose unclaimed assigned orders when worker has none.
-				_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Pickup Location') AS pickup_area, COALESCE(drop_area, 'Drop Location') AS drop_area, COALESCE(distance_km, 0) AS distance_km, created_at::text FROM orders WHERE status = 'assigned' ORDER BY created_at DESC LIMIT 20").Scan(&rows).Error
+				_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Chromepet') AS pickup_area, COALESCE(drop_area, 'Tambaram') AS drop_area, COALESCE(distance_km, 2.5) AS distance_km, created_at::text FROM orders WHERE status = 'assigned' ORDER BY created_at DESC LIMIT 20").Scan(&rows).Error
 			}
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
@@ -184,10 +184,11 @@ func GetOrders(c *gin.Context) {
 				CreatedAt      string  `gorm:"column:created_at"`
 			}
 			rows := make([]orderRow, 0)
-			_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Pickup Location') AS pickup_area, COALESCE(drop_area, 'Drop Location') AS drop_area, COALESCE(distance_km, 0) AS distance_km, created_at::text FROM orders WHERE worker_id = ? ORDER BY created_at DESC LIMIT 50", workerIDUint).Scan(&rows).Error
-			if len(rows) == 0 {
-				// Demo fallback: return assigned pool so the app always has order cards to render.
-				_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Pickup Location') AS pickup_area, COALESCE(drop_area, 'Drop Location') AS drop_area, COALESCE(distance_km, 0) AS distance_km, created_at::text FROM orders WHERE status = 'assigned' ORDER BY created_at DESC LIMIT 50").Scan(&rows).Error
+			_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Selaiyur') AS pickup_area, COALESCE(drop_area, 'Sholinganallur') AS drop_area, COALESCE(distance_km, 5.1) AS distance_km, created_at::text FROM orders WHERE worker_id = ? ORDER BY created_at DESC LIMIT 50", workerIDUint).Scan(&rows).Error
+			if len(rows) < 5 { // If worker has few orders, always show a pool of available ones
+				var extraRows []orderRow
+				_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Guindy') AS pickup_area, COALESCE(drop_area, 'T.Nagar') AS drop_area, COALESCE(distance_km, 4.3) AS distance_km, created_at::text FROM orders WHERE status = 'assigned' ORDER BY created_at DESC LIMIT 10").Scan(&extraRows).Error
+				rows = append(rows, extraRows...)
 			}
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
@@ -433,8 +434,12 @@ func GetAvailableOrders(c *gin.Context) {
 				if defaultUser == 0 {
 					defaultUser = 1
 				}
+				pickupOptions := []string{"Anna Nagar", "Mylapore", "Nungambakkam", "Besant Nagar", "Egmore"}
+				dropOptions := []string{"Selaiyur", "Medavakkam", "Perungudi", "Kottivakkam", "Chemmancherry"}
 				for i := 0; i < 5; i++ {
-					_ = workerDB.Exec("INSERT INTO orders (worker_id, order_value, tip_inr, delivery_fee_inr, zone_id, status, pickup_area, drop_area, distance_km) VALUES (?, ?, ?, ?, ?, 'assigned', 'Fast Food Outlet', 'Residential Block', ?)", defaultUser, 50+i*10, 0, 30, zoneToUse, 2.5+float64(i)*0.5).Error
+					p := pickupOptions[i%len(pickupOptions)]
+					d := dropOptions[i%len(dropOptions)]
+					_ = workerDB.Exec("INSERT INTO orders (worker_id, order_value, tip_inr, delivery_fee_inr, zone_id, status, pickup_area, drop_area, distance_km) VALUES (?, ?, ?, ?, ?, 'assigned', ?, ?, ?)", defaultUser, 50+i*10, 0, 30, zoneToUse, p, d, 2.5+float64(i)*0.5).Error
 				}
 				_ = workerDB.Raw(query, args...).Scan(&rows).Error
 			}

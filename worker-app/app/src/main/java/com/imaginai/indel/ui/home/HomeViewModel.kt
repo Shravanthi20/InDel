@@ -61,6 +61,7 @@ class HomeViewModel @Inject constructor(
                 val earnings = Earnings(
                     thisWeekActual = summary.thisWeekActual.toDouble(),
                     thisWeekBaseline = summary.thisWeekBaseline.toDouble(),
+                    todayEarnings = (summary.todayEarnings ?: 0).toDouble(),
                     protectedIncome = summary.protectedIncome.toDouble(),
                     history = summary.history.map { EarningRecord(it.week, it.actual.toDouble()) }
                 )

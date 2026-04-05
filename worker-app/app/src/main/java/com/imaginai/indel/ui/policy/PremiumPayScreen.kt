@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +27,7 @@ fun PremiumPayScreen(
 ) {
     val amount by viewModel.amount.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -78,7 +80,18 @@ fun PremiumPayScreen(
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
-                onClick = { viewModel.pay() },
+                onClick = { 
+                    val mainActivity = context as? com.imaginai.indel.MainActivity
+                    val amountInPaise = (amount.toIntOrNull() ?: 0) * 100
+                    viewModel.setLoading(true)
+                    mainActivity?.startRazorpayCheckout(amountInPaise, "9876543210") { success, paymentId, error ->
+                        if (success) {
+                            viewModel.recordPaymentSuccess(paymentId)
+                        } else {
+                            viewModel.setPaymentError(error ?: "Payment Failed or Cancelled")
+                        }
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),

@@ -5,6 +5,7 @@ import com.google.gson.annotations.SerializedName
 data class Earnings(
     @SerializedName("this_week_actual") val thisWeekActual: Double,
     @SerializedName("this_week_baseline") val thisWeekBaseline: Double,
+    @SerializedName("today_earnings") val todayEarnings: Double = 0.0,
     @SerializedName("protected_income") val protectedIncome: Double,
     @SerializedName("insight") val insight: String? = null,
     val history: List<EarningRecord> = emptyList()
