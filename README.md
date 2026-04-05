@@ -1,6 +1,8 @@
 # InDel — Implementation Phase 2
 
 This document provides a technical and execution-focused overview of the InDel platform as implemented in Phase 2.
+> [!NOTE]
+> Refer to the SETUP.md for instructions on how to run the project locally.
 
 ## Functional Architecture
 
