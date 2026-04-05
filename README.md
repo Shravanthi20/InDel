@@ -11,13 +11,17 @@
   <img src="https://img.shields.io/badge/ML-XGBoost%20%7C%20SHAP%20%7C%20Prophet-purple?style=flat-square" />
 </p>
 
+---
+
+## Get Started in Minutes
+
 <p align="center">
   <a href="https://www.youtube.com/watch?v=R1_1X-f7-MM">
-    <img src="https://img.shields.io/badge/▶%20Watch%20Demo-2%20min%20walkthrough-red?style=for-the-badge" />
+    <img src="https://img.shields.io/badge/🎥%20Quick%20Demo-2%20Min%20Walkthrough-red?style=for-the-badge" />
   </a>
-  &nbsp;
+  &nbsp;&nbsp;
   <a href="./SETUP.md">
-    <img src="https://img.shields.io/badge/⚙%20Setup%20Guide-SETUP.md-grey?style=for-the-badge" />
+    <img src="https://img.shields.io/badge/🛠️%20Setup%20Guide-Run%20Locally-grey?style=for-the-badge" />
   </a>
 </p>
 
