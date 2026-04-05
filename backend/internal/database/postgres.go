@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"gorm.io/driver/postgres"
@@ -10,8 +11,16 @@ import (
 )
 
 func InitDB(cfg *config.Config) (*gorm.DB, error) {
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
+	dsn := cfg.DatabaseURL
+	if dsn == "" {
+		sslMode := cfg.DBSSLMode
+		if sslMode == "" {
+			sslMode = defaultSSLMode(cfg.DBHost)
+		}
+
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, sslMode)
+	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -19,6 +28,18 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	}
 
 	return db, nil
+}
+
+func defaultSSLMode(host string) string {
+	h := strings.ToLower(strings.TrimSpace(host))
+
+	// Local and docker-compose hosts generally run without TLS.
+	switch h {
+	case "", "localhost", "127.0.0.1", "::1", "postgres":
+		return "disable"
+	default:
+		return "require"
+	}
 }
 
 func Migrate(db *gorm.DB) error {
