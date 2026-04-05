@@ -391,12 +391,17 @@ Premium pool health, loss ratio by zone and city, fraud-flagged claims queue, 7-
 
 Coverage status, this week's premium, earnings vs protected income, active disruption alerts, claim history, continuity reward progress, and Maintenance Check — one screen. Payment via Razorpay UPI.
 
+<br><br>
+
 <img width="1050" height="2000" alt="image" src="https://github.com/user-attachments/assets/a1e568dd-b9c8-4ee2-9795-3a2e42ae6486" />
+
+<br><br>
 
 ![Worker App](https://github.com/user-attachments/assets/6952f34b-4d44-4733-95a2-7124743cfd17)
 
-![Worker Payment via Razorpay](https://github.com/user-attachments/assets/a28daa4a-dde4-4113-b9ac-5976bab20440)
+<br><br>
 
+![Worker Payment via Razorpay](https://github.com/user-attachments/assets/a28daa4a-dde4-4113-b9ac-5976bab20440)
 ---
 
 ## ML Under the Hood
