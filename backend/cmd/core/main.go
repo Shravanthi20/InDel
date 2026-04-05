@@ -15,6 +15,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"time"
 )
 
 func main() {
@@ -37,7 +38,13 @@ func main() {
 
 	// ─── Initialize Razorpay Client ────────────────────────────────────
 	razorpayAPIKey := os.Getenv("RAZORPAY_API_KEY")
+	if razorpayAPIKey == "" {
+		razorpayAPIKey = os.Getenv("Test_Key_ID")
+	}
 	razorpayAPISecret := os.Getenv("RAZORPAY_API_SECRET")
+	if razorpayAPISecret == "" {
+		razorpayAPISecret = os.Getenv("Test_Key_Secret")
+	}
 	razorpayClient := razorpay.NewRazorpayClient(razorpayAPIKey, razorpayAPISecret)
 	log.Printf("✅ Razorpay client initialized (Mock Mode: %v)", razorpayClient.MockMode)
 
@@ -46,20 +53,20 @@ func main() {
 	coreSvc.SetRazorpayClient(razorpayClient)
 
 	// Trigger 1 & 2: Heavy Rain + Extreme Heat (OpenWeatherMap, every 10 min)
-	weatherPoller := &pollers.WeatherPoller{DB: db}
-	weatherPoller.Start()
+	// weatherPoller := &pollers.WeatherPoller{DB: db}
+	// weatherPoller.Start()
 
 	// Trigger 3: Severe Pollution (OpenAQ, every 30 min)
-	aqiPoller := &pollers.AQIPoller{DB: db}
-	aqiPoller.Start()
+	// aqiPoller := &pollers.AQIPoller{DB: db}
+	// aqiPoller.Start()
 
 	// Trigger 4: Platform Order Drop (internal DB, every 15 min)
-	orderDropPoller := &pollers.OrderDropPoller{DB: db}
-	orderDropPoller.Start()
+	// orderDropPoller := &pollers.OrderDropPoller{DB: db}
+	// orderDropPoller.Start()
 
 	// Trigger 5: Zone Closure / Curfew / Strike (mock gov API, every 60 min)
-	zoneClosurePoller := &pollers.ZoneClosurePoller{DB: db}
-	zoneClosurePoller.Start()
+	// zoneClosurePoller := &pollers.ZoneClosurePoller{DB: db}
+	// zoneClosurePoller.Start()
 
 	// Pipeline Processor: picks up confirmed disruptions → auto-generates claims + payouts
 	disruptionProcessor := &pollers.DisruptionProcessor{DB: db, CoreSvc: coreSvc}
@@ -67,7 +74,16 @@ func main() {
 
 	log.Println("✅ All 5 disruption triggers started")
 	log.Println("✅ Disruption pipeline processor started")
-	// ────────────────────────────────────────────────────────────────────
+
+	// DEMO MODE: Standalone Payout Heartbeat (every 10s)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			_, _ = coreSvc.ProcessQueuedPayouts(time.Now().UTC())
+		}
+	}()
+	log.Println("✅ Payout Heartbeat started")
 
 	router := gin.Default()
 

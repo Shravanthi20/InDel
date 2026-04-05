@@ -120,15 +120,15 @@ func calculateZoneStats(state *ZoneSignalState) (int, float64, float64, string) 
 	now := time.Now()
 	
 	// 1. Data Availability Guardrail (Warm-up)
-	// System remains "Healthy" until it has seen at least 11 orders total (Master-class logic)
-	if state.TotalOrdersEver <= 10 {
+	// System remains "Healthy" until it has seen at least 3 orders total (Reduced for demo)
+	if state.TotalOrdersEver <= 3 {
 		return len(state.RecentOrders), state.BaselineOrders, 0.0, "healthy"
 	}
 
-	// 2. Window Filtering (20s Real-time Window for UI)
+	// 2. Window Filtering (30s window to capture drop orders better)
 	var currentWindow []time.Time
 	for _, t := range state.RecentOrders {
-		if now.Sub(t) <= 20*time.Second {
+		if now.Sub(t) <= 30*time.Second {
 			currentWindow = append(currentWindow, t)
 		}
 	}
@@ -207,7 +207,9 @@ func evaluateDisruption(zoneID uint, state *ZoneSignalState) {
 	// 3. Multi-Signal Validation
 	hasExternalSignals := len(state.ActiveSignals) > 0
 
-	if orderDrop > 0.30 && hasExternalSignals {
+	if orderDrop > 0.40 { // Lower threshold for demo - auto-trigger even without signal
+		createDisruptionRecord(zoneID, orderDrop, state.ActiveSignals)
+	} else if orderDrop > 0.30 && hasExternalSignals {
 		createDisruptionRecord(zoneID, orderDrop, state.ActiveSignals)
 	}
 }
@@ -217,10 +219,10 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 		return
 	}
 
-	// DUPLICATE PREVENTION: Check if a disruption exists in the last 10 minutes
+	// DEMO MODE: Reduced lock to 60 seconds (prevents double clicking UI)
 	var existing int64
-	tenMinsAgo := time.Now().Add(-10 * time.Minute)
-	platformDB.Model(&models.Disruption{}).Where("zone_id = ? AND created_at > ?", zoneID, tenMinsAgo).Count(&existing)
+	cooldown := time.Now().Add(-60 * time.Second)
+	platformDB.Model(&models.Disruption{}).Where("zone_id = ? AND created_at > ?", zoneID, cooldown).Count(&existing)
 	if existing > 0 {
 		return // Still active
 	}
@@ -263,6 +265,10 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 		log.Printf("Failed to create disruption: %v", err)
 		return
 	}
+
+	// DYNAMIC PREMIUM: Bump the risk rating of the zone to increase future premiums
+	_ = platformDB.Exec("UPDATE zones SET risk_rating = LEAST(risk_rating + 0.25, 1.0) WHERE id = ?", zoneID).Error
+	log.Printf("[DYNAMIC PREMIUM] Zone %d risk_rating increased by 0.25", zoneID)
 
 	if platformCoreOps != nil {
 		if result, err := platformCoreOps.AutoProcessDisruption(disruption.ID, now.UTC()); err != nil {

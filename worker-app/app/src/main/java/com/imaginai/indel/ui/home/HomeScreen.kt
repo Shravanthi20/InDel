@@ -109,7 +109,7 @@ fun HomeContent(
         // 2. Earnings Today Card
         DashboardCard(
             title = "Earnings Today",
-            value = "₹${earnings.thisWeekActual.toInt()}",
+            value = "₹${earnings.todayEarnings.toInt()}",
             subtitle = "Completed: ${worker.ordersCompleted ?: 0} Orders",
             icon = Icons.Default.CurrencyRupee,
             onClick = { navController.navigate(Screen.Earnings.route) }

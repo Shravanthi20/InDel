@@ -18,25 +18,27 @@ func GetPremium(c *gin.Context) {
 	if hasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			quote, _ := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC())
-			amount := 22
+			amount := 65.0 // Mid-level default if no quote exists
 			source := "fallback"
 			riskScore := 0.0
 			modelVersion := "fallback_rule_v2"
-			breakdown := []gin.H{
-				{"feature": "rain_risk", "impact": 0.42},
-				{"feature": "order_drop_volatility", "impact": 0.31},
-				{"feature": "historical_disruptions", "impact": 0.27},
-			}
+			var breakdown []gin.H
+
 			if quote != nil {
-				if quote.Source == "premium-ml" {
-					amount = int(quote.WeeklyPremiumINR)
-				}
+				amount = quote.WeeklyPremiumINR
 				source = quote.Source
 				riskScore = quote.RiskScore
 				modelVersion = quote.ModelVersion
 				breakdown = make([]gin.H, 0, len(quote.Explainability))
 				for _, item := range quote.Explainability {
 					breakdown = append(breakdown, gin.H{"feature": item.Feature, "impact": item.Impact})
+				}
+			} else {
+				// Static breakdown if no quote available
+				breakdown = []gin.H{
+					{"feature": "rain_risk", "impact": 0.42},
+					{"feature": "order_drop_volatility", "impact": 0.31},
+					{"feature": "historical_disruptions", "impact": 0.27},
 				}
 			}
 			c.JSON(200, gin.H{

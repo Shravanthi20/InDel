@@ -226,7 +226,7 @@ func loadPremiumContext(db *gorm.DB, workerID uint, now time.Time) (PremiumConte
 			COALESCE(wp.zone_id, 1) AS zone_id,
 			COALESCE(z.city, 'Chennai') AS city,
 			COALESCE(z.state, 'Tamil Nadu') AS state,
-			COALESCE(z.level, 'A') AS zone_level,
+			'A' AS zone_level,
 			COALESCE(z.risk_rating, 0.45) AS zone_risk,
 			COALESCE(wp.vehicle_type, 'two_wheeler') AS vehicle_type,
 			COALESCE(u.created_at, CURRENT_TIMESTAMP) AS created_at,
@@ -253,8 +253,8 @@ func loadPremiumContext(db *gorm.DB, workerID uint, now time.Time) (PremiumConte
 		`, weekStart, weekStart.AddDate(0, 0, -28), now.UTC().AddDate(0, 0, -30)).
 		Joins("LEFT JOIN zones z ON z.id = wp.zone_id").
 		Joins("LEFT JOIN users u ON u.id = wp.worker_id").
-		Joins("LEFT JOIN earnings_baselines eb ON eb.worker_id = wp.worker_id").
-		Joins("LEFT JOIN weekly_earnings_summaries wes ON wes.worker_id = wp.worker_id AND wes.week_start = ?", weekStart).
+		Joins("LEFT JOIN earnings_baseline eb ON eb.worker_id = wp.worker_id").
+		Joins("LEFT JOIN weekly_earnings_summary wes ON wes.worker_id = wp.worker_id AND wes.week_start = ?", weekStart).
 		Where("wp.worker_id = ?", workerID).
 		Scan(&data).Error
 	if err != nil {
@@ -310,8 +310,9 @@ func fallbackPremiumQuote(context PremiumContext) *PremiumQuote {
 		0.95,
 	)
 
-	base := context.AvgDailyEarnings * 0.0375
-	premium := clamp(base*(0.72+riskScore)*vehicleFactor, 10, 40)
+	base := context.AvgDailyEarnings * 0.055
+	premium := base * (0.65 + 1.1*riskScore) * vehicleFactor
+	premium = clamp(premium, 20, 250) // High visibility for dynamic demo flows
 
 	explainability := []PremiumExplainItem{
 		{Feature: "order_volatility", Impact: roundTo(context.OrderVolatility*0.34, 3)},

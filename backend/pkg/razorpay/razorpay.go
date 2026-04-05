@@ -45,7 +45,7 @@ type CreatePayoutResponse struct {
 
 // NewRazorpayClient creates a new Razorpay client
 func NewRazorpayClient(apiKey, apiSecret string) *RazorpayClient {
-	mockMode := apiKey == "" || apiSecret == ""
+	mockMode := apiKey == "" || apiSecret == "" || strings.Contains(strings.ToLower(apiKey), "test")
 
 	client := &RazorpayClient{
 		APIKey:     apiKey,

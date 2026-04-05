@@ -20,7 +20,7 @@ type DisruptionProcessor struct {
 func (p *DisruptionProcessor) Start() {
 	go func() {
 		p.process()
-		ticker := time.NewTicker(2 * time.Minute)
+		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			p.process()
@@ -33,12 +33,11 @@ func (p *DisruptionProcessor) process() {
 		return
 	}
 
-	// Find disruptions confirmed in the last 10 minutes that haven't been processed yet
-	cutoff := time.Now().UTC().Add(-10 * time.Minute)
+	// DEMO MODE: Removing cutoff to handle clock drift between DB and Core container
 	var disruptions []models.Disruption
 	err := p.DB.Where(
-		"status = ? AND confirmed_at >= ? AND processed_at IS NULL",
-		"confirmed", cutoff,
+		"status = ? AND processed_at IS NULL",
+		"confirmed",
 	).Find(&disruptions).Error
 
 	if err != nil {

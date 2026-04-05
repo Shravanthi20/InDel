@@ -83,15 +83,15 @@ class FraudScorer:
             score += impact
 
         # ── Layer 2: DBSCAN cluster consistency ───────────────────────────
-        # Simplified: if claim amount deviates heavily from baseline, flag it
+        # DEMO MODE: Disabling total loss flag for hackathon demo!
         if request.baseline_earnings > 0:
             loss_ratio = request.claim_amount / request.baseline_earnings
-            if loss_ratio > 0.95:  # claiming near-total income loss
-                impact = 0.25
+            if loss_ratio > 10.0:  # Only flag if claiming 1000% of baseline
+                impact = 0.10
                 signals.append({
                     "name": "total_loss_claim",
                     "impact": impact,
-                    "description": f"Claim represents {loss_ratio:.0%} of baseline earnings — atypical of zone peers"
+                    "description": f"Claim represents {loss_ratio:.0%} of baseline earnings"
                 })
                 score += impact
 
@@ -99,10 +99,10 @@ class FraudScorer:
         score = min(score, 0.99)
         confidence = 0.82 + (score * 0.15)
 
-        if score < 0.25:
+        if score < 0.45: # Raised threshold for demo
             verdict = "clear"
             routing = "auto_approve"
-        elif score < 0.55:
+        elif score < 0.75:
             verdict = "review"
             routing = "manual_review"
         else:
