@@ -88,3 +88,41 @@ ALTER TABLE premium_payments
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_premium_payments_idempotency_key ON premium_payments(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_premium_payments_policy_cycle_id ON premium_payments(policy_cycle_id);
+
+-- 6b) payouts: align with runtime model fields for payout processing
+ALTER TABLE payouts
+    ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_error TEXT,
+    ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS razorpay_id VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS razorpay_status VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_idempotency_key ON payouts(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_payouts_status_next_retry_at ON payouts(status, next_retry_at);
+
+-- 7) earnings_baseline compatibility: model/runtime may look for plural table name
+ALTER TABLE earnings_baseline
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE earnings_baseline
+SET updated_at = COALESCE(last_updated_at, created_at, CURRENT_TIMESTAMP)
+WHERE updated_at IS NULL;
+
+DROP VIEW IF EXISTS earnings_baselines;
+CREATE VIEW earnings_baselines AS
+SELECT * FROM earnings_baseline;
+
+-- 8) weekly_earnings_summary compatibility: model/runtime may look for plural table name
+ALTER TABLE weekly_earnings_summary
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE weekly_earnings_summary
+SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+WHERE updated_at IS NULL;
+
+DROP VIEW IF EXISTS weekly_earnings_summaries;
+CREATE VIEW weekly_earnings_summaries AS
+SELECT * FROM weekly_earnings_summary;
