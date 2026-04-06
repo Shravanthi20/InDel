@@ -291,11 +291,11 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 			// If only ConfirmedAt is present, let's assume it lasts 4 hours.
 			durationHours = 4.0
 		}
-		
+
 		hourlyBaseline := worker.BaselineAmount / 40.0
 		expectedEarnings := hourlyBaseline * durationHours
 		loss := math.Max(expectedEarnings-worker.ActualEarnings, 0)
-		
+
 		if loss <= 0 {
 			skipped++
 			continue
@@ -512,7 +512,7 @@ func (s *CoreOpsService) processPayoutsByID(payoutIDs []uint, now time.Time) (*P
 
 			// Update claim status to paid
 			_ = s.DB.Model(&models.Claim{}).Where("id = ?", payout.ClaimID).Updates(map[string]interface{}{"status": "paid", "updated_at": processedAt}).Error
-			
+
 			s.DB.Create(&attempt)
 			s.DB.Save(&payout)
 			continue
@@ -1004,8 +1004,46 @@ func cycleIDForDate(weekStart time.Time) string {
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
 
 func truncateSyntheticTables(db *gorm.DB) error {
-	tableNames := []string{"payout_attempts", "payouts", "claim_fraud_scores", "claim_audit_logs", "claims", "disruptions", "premium_payments", "weekly_earnings_summary", "earnings_baseline", "policies", "worker_profiles", "users", "weekly_policy_cycles", "synthetic_generation_runs", "zones"}
+	// Delete in child-to-parent order to avoid FK violations during local resets.
+	tableNames := []string{
+		"payout_attempts",
+		"claim_audit_logs",
+		"maintenance_check",
+		"payouts",
+		"claim_fraud_scores",
+		"claims",
+		"disruption_eligibility",
+		"disruption_signals",
+		"disruptions",
+		"premium_payments",
+		"weekly_earnings_summary",
+		"earnings_records",
+		"earnings_baseline",
+		"orders",
+		"policies",
+		"worker_zone_history",
+		"worker_profiles",
+		"auth_tokens",
+		"fcm_tokens",
+		"notifications",
+		"api_request_logs",
+		"kafka_event_logs",
+		"idempotency_keys",
+		"users",
+		"weekly_policy_cycles",
+		"synthetic_generation_runs",
+		"zones",
+	}
+
 	for _, name := range tableNames {
+		var relation string
+		if err := db.Raw("SELECT to_regclass(?)", name).Scan(&relation).Error; err != nil {
+			return err
+		}
+		if relation == "" {
+			continue
+		}
+
 		if err := db.Exec("DELETE FROM " + name).Error; err != nil {
 			return err
 		}
