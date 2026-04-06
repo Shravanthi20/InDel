@@ -22,7 +22,12 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, sslMode)
 	}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// Optional simple protocol mode avoids prepared-statement cache conflicts
+	// in pooled Postgres environments (for example, Supabase pooler).
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: cfg.DBPreferSimpleProtocol,
+	}), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}

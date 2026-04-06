@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         val checkout = Checkout()
         // DYNAMIC CONFIG: Evaluators can replace this with their own test key if desired.
         // For Phase 2 demo, this can stay as a placeholder to avoid leaking sensitive keys.
-        val razorpayKeyId = "rzp_test_REPLACE_WITH_YOUR_KEY" 
+        val razorpayKeyId = "rzp_test_SZOyjDFEtgTID4"
         checkout.setKeyID(razorpayKeyId) 
 
         try {
