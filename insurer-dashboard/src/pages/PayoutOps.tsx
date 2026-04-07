@@ -1,15 +1,29 @@
 import { useState } from 'react'
-import { generateClaimsForDisruption, processQueuedPayouts, queuePayoutForClaim } from '../api/operations'
+import { autoProcessDisruption, generateClaimsForDisruption, processQueuedPayouts, queuePayoutForClaim } from '../api/operations'
 import { PageShell, Panel, ResultBox, StatCard } from './OperationsShared'
 
 export default function PayoutOps() {
   const [disruptionId, setDisruptionId] = useState('')
   const [claimId, setClaimId] = useState('')
+  const [autoResult, setAutoResult] = useState<any>(null)
   const [claimsResult, setClaimsResult] = useState<any>(null)
   const [queueResult, setQueueResult] = useState<any>(null)
   const [processResult, setProcessResult] = useState<any>(null)
   const [error, setError] = useState('')
   const [loadingAction, setLoadingAction] = useState('')
+
+  async function handleAutoProcess() {
+    setLoadingAction('auto')
+    setError('')
+    try {
+      const response = await autoProcessDisruption(disruptionId.trim())
+      setAutoResult(response.data.data)
+    } catch (err: any) {
+      setError(err?.response?.data?.error?.message || 'Automatic payout run failed.')
+    } finally {
+      setLoadingAction('')
+    }
+  }
 
   async function handleGenerateClaims() {
     setLoadingAction('claims')
@@ -54,10 +68,30 @@ export default function PayoutOps() {
     <PageShell
       eyebrow="Operations"
       title="Claims and Payout Orchestration"
-      description="Drive the Part 4 claims-to-payout path: generate claims for a confirmed disruption, queue individual payouts, and process the payout backlog with retry visibility."
+      description="Operate the automated disruption-to-payout engine, or replay individual stages for debugging and insurer review."
     >
       <div className="grid gap-6 xl:grid-cols-2">
-        <Panel title="Generate Claims for Disruption" subtitle="Use a seeded or real disruption id from the backend. Numeric ids work best, for example `1`.">
+        <Panel title="Automatic Disruption Payout Run" subtitle="One click to notify workers, generate claims, queue approved payouts, and process them immediately for a confirmed disruption.">
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={disruptionId}
+              onChange={(e) => setDisruptionId(e.target.value)}
+              placeholder="disruption id"
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-orange-400"
+            />
+            <button
+              type="button"
+              onClick={handleAutoProcess}
+              disabled={loadingAction === 'auto' || !disruptionId.trim()}
+              className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingAction === 'auto' ? 'Running...' : 'Run Automatic Payout Flow'}
+            </button>
+          </div>
+        </Panel>
+
+        <Panel title="Generate Claims Only" subtitle="Use a seeded or real disruption id from the backend. Numeric ids work best, for example `1`.">
           <div className="space-y-4">
             <input
               type="text"
@@ -123,7 +157,20 @@ export default function PayoutOps() {
         </Panel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid gap-6 xl:grid-cols-4">
+        <Panel title="Automatic Run Result">
+          {autoResult ? (
+            <div className="grid gap-4">
+              <StatCard label="Workers Notified" value={String(autoResult.workers_notified)} />
+              <StatCard label="Claims Generated" value={String(autoResult.claims_generated)} tone="warm" />
+              <StatCard label="Payouts Succeeded" value={String(autoResult.payouts_succeeded)} />
+              <StatCard label="Manual Review" value={String(autoResult.manual_review_claims)} tone={autoResult.manual_review_claims ? 'alert' : 'default'} />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No automatic disruption run yet.</p>
+          )}
+        </Panel>
+
         <Panel title="Claim Generation Result">
           {claimsResult ? (
             <ResultBox>

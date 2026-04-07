@@ -18,11 +18,13 @@ CREATE INDEX idx_claims_fraud_verdict ON claims(fraud_verdict);
 CREATE TABLE claim_fraud_scores (
     id SERIAL PRIMARY KEY,
     claim_id INTEGER NOT NULL UNIQUE REFERENCES claims(id),
+    score DECIMAL(5, 3),
     isolation_forest_score DECIMAL(5, 3),
     dbscan_score DECIMAL(5, 3),
     rule_violations JSONB,
     final_verdict VARCHAR(50) NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE maintenance_check (
@@ -40,11 +42,18 @@ CREATE TABLE payouts (
     worker_id INTEGER NOT NULL REFERENCES users(id),
     amount DECIMAL(8, 2) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'queued',
+    idempotency_key VARCHAR(100) UNIQUE,
+    retry_count INTEGER DEFAULT 0,
+    last_error TEXT,
+    next_retry_at TIMESTAMP,
+    processed_at TIMESTAMP,
     razorpay_id VARCHAR(100),
     razorpay_status VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_payouts_idempotency_key ON payouts(idempotency_key);
 
 CREATE INDEX idx_payouts_worker_id_status ON payouts(worker_id, status);
 CREATE INDEX idx_payouts_razorpay_id ON payouts(razorpay_id);

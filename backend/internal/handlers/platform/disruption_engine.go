@@ -3,7 +3,6 @@ package platform
 import (
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -24,41 +23,10 @@ type ZoneSignalState struct {
 	TotalOrdersEver    uint64    // Added for data-driven warm-up
 }
 
-type ProgressivePayoutState struct {
-	mu            sync.Mutex
-	LastRiskScore float64
-	LastPayout    float64
-	LastUpdatedAt time.Time
-}
-
-type ProgressivePayoutInputs struct {
-	AQI           float64
-	Temperature   float64
-	Rain          float64
-	Traffic       float64
-	MaxPayoutDay  float64
-	CoverageRatio float64
-}
-
-type ProgressivePayoutResult struct {
-	CurrentRiskScore  float64
-	IncrementalRisk   float64
-	NewPayout         float64
-	FinalPayout       float64
-	RemainingCoverage float64
-	TotalPayoutSoFar  float64
-	TriggerStatus     string
-	AQIScore          float64
-	TempScore         float64
-	RainScore         float64
-	TrafficScore      float64
-}
-
 // Global engine state
 var (
-	zoneSignals      = make(map[uint]*ZoneSignalState)
-	zonePayoutStates = make(map[uint]*ProgressivePayoutState)
-	engineMu         sync.Mutex
+	zoneSignals = make(map[uint]*ZoneSignalState)
+	engineMu    sync.Mutex
 
 	// Idempotency cache
 	processedOrderIds = make(map[string]time.Time)
@@ -69,9 +37,8 @@ var (
 func ResetEngineForTests() {
 	engineMu.Lock()
 	zoneSignals = make(map[uint]*ZoneSignalState)
-	zonePayoutStates = make(map[uint]*ProgressivePayoutState)
 	engineMu.Unlock()
-
+	
 	idCacheMu.Lock()
 	processedOrderIds = make(map[string]time.Time)
 	idCacheMu.Unlock()
@@ -91,115 +58,6 @@ func getOrCreateZoneState(zoneID uint) *ZoneSignalState {
 	}
 	zoneSignals[zoneID] = newState
 	return newState
-}
-
-func getOrCreateProgressivePayoutState(zoneID uint) *ProgressivePayoutState {
-	engineMu.Lock()
-	defer engineMu.Unlock()
-	if state, exists := zonePayoutStates[zoneID]; exists {
-		return state
-	}
-	newState := &ProgressivePayoutState{}
-	zonePayoutStates[zoneID] = newState
-	return newState
-}
-
-func resolveFloatInput(value *float64, fallback float64) float64 {
-	if value == nil {
-		return fallback
-	}
-	return *value
-}
-
-func clampRiskScore(value float64) float64 {
-	if value < 0 {
-		return 0
-	}
-	if value > 1 {
-		return 1
-	}
-	return value
-}
-
-func calculateProgressiveRisk(inputs ProgressivePayoutInputs) ProgressivePayoutResult {
-	aqiScore := clampRiskScore((inputs.AQI - 200) / 100)
-	tempScore := clampRiskScore((inputs.Temperature - 35) / 10)
-	rainScore := clampRiskScore(inputs.Rain / 15)
-	trafficScore := clampRiskScore((inputs.Traffic - 60) / 25)
-
-	riskScore := (0.30 * rainScore) + (0.25 * tempScore) + (0.25 * aqiScore) + (0.20 * trafficScore)
-	if riskScore < 0 {
-		riskScore = 0
-	}
-	if riskScore > 1 {
-		riskScore = 1
-	}
-
-	maxCoverage := inputs.MaxPayoutDay * clampRiskScore(inputs.CoverageRatio)
-	if maxCoverage < 0 {
-		maxCoverage = 0
-	}
-
-	return ProgressivePayoutResult{
-		CurrentRiskScore:  riskScore,
-		RemainingCoverage: maxCoverage,
-		AQIScore:          aqiScore,
-		TempScore:         tempScore,
-		RainScore:         rainScore,
-		TrafficScore:      trafficScore,
-	}
-}
-
-func applyProgressivePayout(zoneID uint, inputs ProgressivePayoutInputs) ProgressivePayoutResult {
-	state := getOrCreateProgressivePayoutState(zoneID)
-	state.mu.Lock()
-	defer state.mu.Unlock()
-
-	result := calculateProgressiveRisk(inputs)
-	lastRisk := state.LastRiskScore
-	lastPayout := state.LastPayout
-	maxCoverage := result.RemainingCoverage
-	remainingCoverage := maxCoverage - lastPayout
-	if remainingCoverage < 0 {
-		remainingCoverage = 0
-	}
-
-	result.RemainingCoverage = remainingCoverage
-	result.TotalPayoutSoFar = lastPayout
-
-	if result.CurrentRiskScore <= lastRisk {
-		result.TriggerStatus = "No payout"
-		state.LastUpdatedAt = time.Now().UTC()
-		return result
-	}
-
-	result.IncrementalRisk = result.CurrentRiskScore - lastRisk
-	result.NewPayout = maxCoverage * result.IncrementalRisk
-	result.FinalPayout = math.Min(result.NewPayout, remainingCoverage)
-
-	if remainingCoverage <= 0 || result.FinalPayout <= 0 {
-		result.TriggerStatus = "Max coverage reached"
-		state.LastRiskScore = result.CurrentRiskScore
-		state.LastUpdatedAt = time.Now().UTC()
-		return result
-	}
-
-	if result.FinalPayout < result.NewPayout {
-		result.TriggerStatus = "Max coverage reached"
-	} else {
-		result.TriggerStatus = "Incremental payout"
-	}
-
-	state.LastRiskScore = result.CurrentRiskScore
-	state.LastPayout = math.Round((lastPayout+result.FinalPayout)*100) / 100
-	state.LastUpdatedAt = time.Now().UTC()
-	result.TotalPayoutSoFar = state.LastPayout
-	result.RemainingCoverage = math.Round((maxCoverage-state.LastPayout)*100) / 100
-	if result.RemainingCoverage < 0 {
-		result.RemainingCoverage = 0
-	}
-
-	return result
 }
 
 // checkAndCacheOrderId provides idempotency with a TTL to prevent memory leaks
@@ -260,21 +118,21 @@ func SetExternalSignal(zoneID uint, signalType string, isActive bool) {
 // calculateZoneStats provides a single-source-of-truth for health metrics
 func calculateZoneStats(state *ZoneSignalState) (int, float64, float64, string) {
 	now := time.Now()
-
+	
 	// 1. Data Availability Guardrail (Warm-up)
-	// System remains "Healthy" until it has seen at least 11 orders total (Master-class logic)
-	if state.TotalOrdersEver <= 10 {
+	// System remains "Healthy" until it has seen at least 3 orders total (Reduced for demo)
+	if state.TotalOrdersEver <= 3 {
 		return len(state.RecentOrders), state.BaselineOrders, 0.0, "healthy"
 	}
 
-	// 2. Window Filtering (20s Real-time Window for UI)
+	// 2. Window Filtering (30s window to capture drop orders better)
 	var currentWindow []time.Time
 	for _, t := range state.RecentOrders {
-		if now.Sub(t) <= 20*time.Second {
+		if now.Sub(t) <= 30*time.Second {
 			currentWindow = append(currentWindow, t)
 		}
 	}
-
+	
 	current := len(currentWindow)
 	var orderDrop float64
 	if state.BaselineOrders > 0 {
@@ -306,7 +164,7 @@ func evaluateDisruption(zoneID uint, state *ZoneSignalState) {
 	defer state.mu.Unlock()
 
 	now := time.Now()
-
+	
 	// Increment total orders (capped for safety)
 	if state.TotalOrdersEver < 1000 {
 		state.TotalOrdersEver++
@@ -340,37 +198,33 @@ func evaluateDisruption(zoneID uint, state *ZoneSignalState) {
 		orderDrop = (state.BaselineOrders - float64(current)) / state.BaselineOrders
 	}
 	// Clamp again
-	if orderDrop < 0 {
-		orderDrop = 0
-	}
-	if orderDrop > 1 {
-		orderDrop = 1
-	}
+	if orderDrop < 0 { orderDrop = 0 }
+	if orderDrop > 1 { orderDrop = 1 }
 
-	// Print to logs so we can see the exact math!
-	log.Printf("[DECISION ENGINE] Zone %d | Output: %s | Window: %d / %.0f (Drop: %.1f%%)", zoneID, strings.ToUpper(status), current, state.BaselineOrders, orderDrop*100)
+    // Print to logs so we can see the exact math!
+    log.Printf("[DECISION ENGINE] Zone %d | Output: %s | Window: %d / %.0f (Drop: %.1f%%)", zoneID, strings.ToUpper(status), current, state.BaselineOrders, orderDrop*100)
 
 	// 3. Multi-Signal Validation
 	hasExternalSignals := len(state.ActiveSignals) > 0
 
-	if orderDrop > 0.30 && hasExternalSignals {
-		createDisruptionRecord(zoneID, orderDrop, state.ActiveSignals, false)
+	if orderDrop > 0.40 { // Lower threshold for demo - auto-trigger even without signal
+		createDisruptionRecord(zoneID, orderDrop, state.ActiveSignals)
+	} else if orderDrop > 0.30 && hasExternalSignals {
+		createDisruptionRecord(zoneID, orderDrop, state.ActiveSignals)
 	}
 }
 
-func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]bool, forceInsert bool) {
+func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]bool) {
 	if !hasDB() {
 		return
 	}
 
-	if !forceInsert {
-		// DUPLICATE PREVENTION: Check if a disruption exists in the last 10 minutes
-		var existing int64
-		tenMinsAgo := time.Now().Add(-10 * time.Minute)
-		platformDB.Model(&models.Disruption{}).Where("zone_id = ? AND created_at > ?", zoneID, tenMinsAgo).Count(&existing)
-		if existing > 0 {
-			return // Still active
-		}
+	// DEMO MODE: Reduced lock to 60 seconds (prevents double clicking UI)
+	var existing int64
+	cooldown := time.Now().Add(-60 * time.Second)
+	platformDB.Model(&models.Disruption{}).Where("zone_id = ? AND created_at > ?", zoneID, cooldown).Count(&existing)
+	if existing > 0 {
+		return // Still active
 	}
 
 	var severity string
@@ -396,10 +250,10 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 	}
 
 	disruption := models.Disruption{
-		ZoneID:     zoneID,
-		Type:       triggerStr,
-		Severity:   severity,
-		Confidence: confidence, // Use calculated confidence here
+		ZoneID:          zoneID,
+		Type:            triggerStr,
+		Severity:        severity,
+		Confidence:      confidence, // Use calculated confidence here
 
 		Status:          "confirmed",
 		StartTime:       &now,
@@ -409,6 +263,28 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 
 	if err := platformDB.Create(&disruption).Error; err != nil {
 		log.Printf("Failed to create disruption: %v", err)
+		return
+	}
+
+	// DYNAMIC PREMIUM: Bump the risk rating of the zone to increase future premiums
+	_ = platformDB.Exec("UPDATE zones SET risk_rating = LEAST(risk_rating + 0.25, 1.0) WHERE id = ?", zoneID).Error
+	log.Printf("[DYNAMIC PREMIUM] Zone %d risk_rating increased by 0.25", zoneID)
+
+	if platformCoreOps != nil {
+		if result, err := platformCoreOps.AutoProcessDisruption(disruption.ID, now.UTC()); err != nil {
+			log.Printf("Failed to auto-process disruption %d: %v", disruption.ID, err)
+		} else {
+			log.Printf("[AUTOMATION] disruption=%s notified=%d claims=%d queued=%d processed=%d succeeded=%d failed=%d status=%s",
+				result.DisruptionID,
+				result.WorkersNotified,
+				result.ClaimsGenerated,
+				result.PayoutsQueued,
+				result.PayoutsProcessed,
+				result.PayoutsSucceeded,
+				result.PayoutsFailed,
+				result.Status,
+			)
+		}
 	}
 }
 
@@ -457,16 +333,35 @@ func GetDisruptions(c *gin.Context) {
 		return
 	}
 
-	var records []models.Disruption
-	oneHourAgo := time.Now().Add(-1 * time.Hour)
-	if err := platformDB.Where("created_at > ?", oneHourAgo).Order("created_at desc").Limit(20).Find(&records).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "disruptions_fetch_failed"})
-		return
+	type disruptionRow struct {
+		models.Disruption
+		ClaimsGenerated   int64   `gorm:"column:claims_generated"`
+		ClaimsInReview    int64   `gorm:"column:claims_in_review"`
+		PayoutsProcessed  int64   `gorm:"column:payouts_processed"`
+		PayoutAmountTotal float64 `gorm:"column:payout_amount_total"`
 	}
+
+	var records []disruptionRow
+	oneHourAgo := time.Now().Add(-1 * time.Hour)
+	_ = platformDB.Table("disruptions d").
+		Select(`
+			d.*,
+			COUNT(DISTINCT c.id) AS claims_generated,
+			COUNT(DISTINCT CASE WHEN c.status = 'manual_review' THEN c.id END) AS claims_in_review,
+			COUNT(DISTINCT CASE WHEN p.status IN ('processed', 'credited', 'completed') THEN p.id END) AS payouts_processed,
+			COALESCE(SUM(CASE WHEN p.status IN ('processed', 'credited', 'completed') THEN p.amount ELSE 0 END), 0) AS payout_amount_total
+		`).
+		Joins("LEFT JOIN claims c ON c.disruption_id = d.id").
+		Joins("LEFT JOIN payouts p ON p.claim_id = c.id").
+		Where("d.created_at > ?", oneHourAgo).
+		Group("d.id").
+		Order("d.created_at desc").
+		Limit(20).
+		Scan(&records).Error
 
 	results := make([]map[string]interface{}, 0, len(records))
 	for _, r := range records {
-
+		
 		// Parse triggers back into the standardized `signals` array for the API contract
 		signalsArr := make([]map[string]interface{}, 0)
 		triggerParts := strings.Split(r.Type, " + ")
@@ -482,7 +377,7 @@ func GetDisruptions(c *gin.Context) {
 				"value":  val,
 			})
 		}
-
+		
 		// Recalculate the official confidence metric (drop severity + signal weight)
 		officialConfidence := r.Confidence + (float64(len(triggerParts)-1) * 0.1)
 		if officialConfidence > 1.0 {
@@ -491,11 +386,27 @@ func GetDisruptions(c *gin.Context) {
 
 		results = append(results, map[string]interface{}{
 			"disruption_id": fmt.Sprintf("dis_%d", r.ID),
-			"zone_id":       fmt.Sprintf("zone_%d", r.ZoneID),
-			"type":          r.Type,
+			"zone_id":       fmt.Sprintf("zone_%d", r.ZoneID), 
+			"type":          r.Type, 
 			"severity":      strings.ToLower(r.Severity),
 			"confidence":    officialConfidence,
 			"status":        "confirmed",
+			"claims_generated": r.ClaimsGenerated,
+			"claims_in_review": r.ClaimsInReview,
+			"payouts_processed": r.PayoutsProcessed,
+			"payout_amount_total": r.PayoutAmountTotal,
+			"automation_status": func() string {
+				switch {
+				case r.ClaimsInReview > 0:
+					return "manual_review"
+				case r.PayoutsProcessed > 0:
+					return "paid"
+				case r.ClaimsGenerated > 0:
+					return "queued"
+				default:
+					return "detected"
+				}
+			}(),
 			"signals":       signalsArr,
 			"started_at":    r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		})
@@ -510,17 +421,9 @@ func GetDisruptions(c *gin.Context) {
 // TriggerDemoDisruption
 func TriggerDemoDisruption(c *gin.Context) {
 	var req struct {
-		ZoneID          uint     `json:"zone_id"`
-		ForceOrderDrop  bool     `json:"force_order_drop"`
-		ExternalSignal  string   `json:"external_signal"` // e.g., "weather", "aqi", "system"
-		GenerateClaims  bool     `json:"generate_claims"`
-		AQI             *float64 `json:"aqi"`
-		Rain            *float64 `json:"rain"`
-		Traffic         *float64 `json:"traffic"`
-		Temperature     *float64 `json:"temperature"`
-		MaxPayoutPerDay *float64 `json:"max_payout_per_day"`
-		MaxPayoutINR    *float64 `json:"max_payout_inr"`
-		CoverageRatio   *float64 `json:"coverage_ratio"`
+		ZoneID         uint   `json:"zone_id"`
+		ForceOrderDrop bool   `json:"force_order_drop"`
+		ExternalSignal string `json:"external_signal"` // e.g., "weather", "aqi", "system"
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -532,21 +435,22 @@ func TriggerDemoDisruption(c *gin.Context) {
 	state.mu.Lock()
 	// Set the Reset Marker
 	state.LastResetAt = time.Now()
-
+	
 	if req.ForceOrderDrop {
-		// Mock a 50% order drop
+		// Force the engine into a post-warm-up demand crash so the UI can
+		// move from healthy -> anomalous -> disrupted when external signals land.
 		state.BaselineOrders = 100.0
-		state.TotalOrdersEver = 11 // bypass warm-up guard for explicit demo trigger
 		state.RecentOrders = []time.Time{}
+		state.TotalOrdersEver = 32
 		state.LastResetAt = time.Now()
 	} else {
 		// Normal volume reset
 		state.BaselineOrders = 20.0
 		state.RecentOrders = []time.Time{}
-		state.TotalOrdersEver = 11 // keep trigger evaluable for manual demo signals
+		state.TotalOrdersEver = 0
 		state.LastResetAt = time.Now()
 	}
-
+	
 	if req.ExternalSignal != "" {
 		state.ActiveSignals[req.ExternalSignal] = true
 	} else {
@@ -557,301 +461,15 @@ func TriggerDemoDisruption(c *gin.Context) {
 
 	evaluateDisruption(req.ZoneID, state)
 
-	// Claims and notifications require an existing disruption record.
-	// Explicit manual demo triggers should always create a fresh record for reliable DB write/fetch behavior.
-	forcedDrop := 0.5
-	if req.ForceOrderDrop {
-		forcedDrop = 0.8
-	}
-	signals := map[string]bool{}
-	if req.ExternalSignal != "" {
-		signals[req.ExternalSignal] = true
-	} else {
-		signals["demo_manual_trigger"] = true
-	}
-	createDisruptionRecord(req.ZoneID, forcedDrop, signals, true)
-	disruptionID := latestDisruptionIDForZone(req.ZoneID)
-
-	maxPayoutPerDay := resolveFloatInput(req.MaxPayoutPerDay, resolveFloatInput(req.MaxPayoutINR, 2000))
-	coverageRatio := resolveFloatInput(req.CoverageRatio, 0.8)
-	if coverageRatio < 0 {
-		coverageRatio = 0
-	}
-	if coverageRatio > 1 {
-		coverageRatio = 1
-	}
-
-	payoutResult := applyProgressivePayout(req.ZoneID, ProgressivePayoutInputs{
-		AQI:           resolveFloatInput(req.AQI, 190),
-		Temperature:   resolveFloatInput(req.Temperature, 33),
-		Rain:          resolveFloatInput(req.Rain, 3),
-		Traffic:       resolveFloatInput(req.Traffic, 58),
-		MaxPayoutDay:  maxPayoutPerDay,
-		CoverageRatio: coverageRatio,
-	})
-
-	notificationsCreated := 0
-	if req.ZoneID != 0 {
-		notificationsCreated = createDisruptionNotificationsForZone(req.ZoneID, payoutResult.CurrentRiskScore, payoutResult.TotalPayoutSoFar, payoutResult.TriggerStatus)
-	}
-
-	claimsGenerated := 0
-	if req.GenerateClaims && payoutResult.FinalPayout > 0 {
-		if disruptionID != 0 {
-			claimsGenerated = createClaimsForZoneDisruption(disruptionID, req.ZoneID, payoutResult.FinalPayout)
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"message":               "Demo disruption triggered evaluated",
-			"disruption_sent":       true,
-			"sent_at":               time.Now().UTC().Format(time.RFC3339),
-			"zone_id":               req.ZoneID,
-			"claims_generated":      claimsGenerated,
-			"notifications_created": notificationsCreated,
-			"current_risk_score":    payoutResult.CurrentRiskScore,
-			"incremental_risk":      payoutResult.IncrementalRisk,
-			"new_payout":            payoutResult.NewPayout,
-			"final_payout":          payoutResult.FinalPayout,
-			"total_payout_so_far":   payoutResult.TotalPayoutSoFar,
-			"remaining_coverage":    payoutResult.RemainingCoverage,
-			"trigger_status":        payoutResult.TriggerStatus,
+			"message":          "demo_disruption_evaluated",
+			"zone_id":          req.ZoneID,
+			"force_order_drop": req.ForceOrderDrop,
+			"external_signal":  req.ExternalSignal,
 		},
 		"meta": gin.H{"timestamp": time.Now().UTC().Format(time.RFC3339)},
 	})
-}
-
-func latestDisruptionIDForZone(zoneID uint) uint {
-	if !hasDB() || zoneID == 0 {
-		return 0
-	}
-	var disruption models.Disruption
-	err := platformDB.Where("zone_id = ?", zoneID).Order("id desc").First(&disruption).Error
-	if err != nil {
-		return 0
-	}
-	return disruption.ID
-}
-
-func tempRiskMultiplier(temp float64) float64 {
-	switch {
-	case temp >= 40:
-		return 1.0
-	case temp >= 35:
-		return 0.7
-	case temp >= 30:
-		return 0.4
-	default:
-		return 0.2
-	}
-}
-
-func createClaimsAndNotificationsForZoneDisruption(disruptionID, zoneID uint, payoutAmount, currentRiskScore, totalPayoutSoFar float64, triggerStatus string) (int, int) {
-	if !hasDB() || disruptionID == 0 || zoneID == 0 {
-		return 0, 0
-	}
-
-	if payoutAmount <= 0 {
-		return 0, 0
-	}
-
-	type workerRow struct {
-		WorkerID uint `gorm:"column:worker_id"`
-	}
-	rows := make([]workerRow, 0)
-	err := platformDB.Raw(`
-		SELECT DISTINCT wp.worker_id
-		FROM worker_profiles wp
-		WHERE wp.zone_id = ?
-	`, zoneID).Scan(&rows).Error
-	if err != nil {
-		log.Printf("createClaimsAndNotificationsForZoneDisruption: failed worker lookup: %v", err)
-		return 0, 0
-	}
-
-	eligibleWorkers := make([]uint, 0, len(rows))
-	for _, row := range rows {
-		if row.WorkerID == 0 {
-			continue
-		}
-
-		var existing int64
-		_ = platformDB.Model(&models.Claim{}).
-			Where("disruption_id = ? AND worker_id = ?", disruptionID, row.WorkerID).
-			Count(&existing).Error
-		if existing > 0 {
-			continue
-		}
-
-		eligibleWorkers = append(eligibleWorkers, row.WorkerID)
-	}
-
-	if len(eligibleWorkers) == 0 {
-		return 0, 0
-	}
-
-	baseShare := math.Round((payoutAmount/float64(len(eligibleWorkers)))*100) / 100
-	claimsGenerated := 0
-	allocated := 0.0
-	for index, workerID := range eligibleWorkers {
-		share := baseShare
-		if index == len(eligibleWorkers)-1 {
-			share = math.Round((payoutAmount-allocated)*100) / 100
-		}
-		if share <= 0 {
-			continue
-		}
-		allocated += share
-
-		claim := models.Claim{
-			DisruptionID: disruptionID,
-			WorkerID:     workerID,
-			ClaimAmount:  share,
-			Status:       "pending",
-			FraudVerdict: "pending",
-			CreatedAt:    time.Now().UTC(),
-			UpdatedAt:    time.Now().UTC(),
-		}
-		if err := platformDB.Create(&claim).Error; err != nil {
-			log.Printf("createClaimsAndNotificationsForZoneDisruption: failed claim create worker=%d err=%v", workerID, err)
-			continue
-		}
-
-		if err := createClaimMadeNotification(workerID, claim.ID, share); err != nil {
-			log.Printf("createClaimsAndNotificationsForZoneDisruption: failed notification worker=%d err=%v", workerID, err)
-		}
-		claimsGenerated++
-	}
-
-	return claimsGenerated, 0
-}
-
-func createDisruptionNotificationsForZone(zoneID uint, currentRiskScore, totalPayoutSoFar float64, triggerStatus string) int {
-	if !hasDB() || zoneID == 0 {
-		return 0
-	}
-
-	type workerRow struct {
-		WorkerID uint `gorm:"column:worker_id"`
-	}
-	rows := make([]workerRow, 0)
-	err := platformDB.Raw(`
-		SELECT DISTINCT wp.worker_id
-		FROM worker_profiles wp
-		WHERE wp.zone_id = ?
-	`, zoneID).Scan(&rows).Error
-	if err != nil {
-		log.Printf("createDisruptionNotificationsForZone: failed worker lookup: %v", err)
-		return 0
-	}
-
-	created := 0
-	for _, row := range rows {
-		if row.WorkerID == 0 {
-			continue
-		}
-
-		msg := fmt.Sprintf("Disruption detected in your zone. Risk %.2f. Total payout so far INR %.0f. Status: %s", currentRiskScore, totalPayoutSoFar, triggerStatus)
-		if err := platformDB.Exec(
-			"INSERT INTO notifications (worker_id, type, message, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-			row.WorkerID,
-			"disruption_alert",
-			msg,
-		).Error; err != nil {
-			log.Printf("createDisruptionNotificationsForZone: failed notification insert worker=%d err=%v", row.WorkerID, err)
-			continue
-		}
-		created++
-	}
-
-	return created
-}
-
-func createClaimsForZoneDisruption(disruptionID, zoneID uint, payoutAmount float64) int {
-	if !hasDB() || disruptionID == 0 || zoneID == 0 || payoutAmount <= 0 {
-		return 0
-	}
-
-	type workerRow struct {
-		WorkerID uint `gorm:"column:worker_id"`
-	}
-	rows := make([]workerRow, 0)
-	err := platformDB.Raw(`
-		SELECT DISTINCT wp.worker_id
-		FROM worker_profiles wp
-		WHERE wp.zone_id = ?
-	`, zoneID).Scan(&rows).Error
-	if err != nil {
-		log.Printf("createClaimsForZoneDisruption: failed worker lookup: %v", err)
-		return 0
-	}
-
-	eligibleWorkers := make([]uint, 0, len(rows))
-	for _, row := range rows {
-		if row.WorkerID == 0 {
-			continue
-		}
-
-		var existing int64
-		_ = platformDB.Model(&models.Claim{}).
-			Where("disruption_id = ? AND worker_id = ?", disruptionID, row.WorkerID).
-			Count(&existing).Error
-		if existing > 0 {
-			continue
-		}
-
-		eligibleWorkers = append(eligibleWorkers, row.WorkerID)
-	}
-
-	if len(eligibleWorkers) == 0 {
-		return 0
-	}
-
-	baseShare := math.Round((payoutAmount/float64(len(eligibleWorkers)))*100) / 100
-	claimsGenerated := 0
-	allocated := 0.0
-	for index, workerID := range eligibleWorkers {
-		share := baseShare
-		if index == len(eligibleWorkers)-1 {
-			share = math.Round((payoutAmount-allocated)*100) / 100
-		}
-		if share <= 0 {
-			continue
-		}
-		allocated += share
-
-		claim := models.Claim{
-			DisruptionID: disruptionID,
-			WorkerID:     workerID,
-			ClaimAmount:  share,
-			Status:       "pending",
-			FraudVerdict: "pending",
-			CreatedAt:    time.Now().UTC(),
-			UpdatedAt:    time.Now().UTC(),
-		}
-		if err := platformDB.Create(&claim).Error; err != nil {
-			log.Printf("createClaimsForZoneDisruption: failed claim create worker=%d err=%v", workerID, err)
-			continue
-		}
-
-		if err := createClaimMadeNotification(workerID, claim.ID, share); err != nil {
-			log.Printf("createClaimsForZoneDisruption: failed notification worker=%d err=%v", workerID, err)
-		}
-		claimsGenerated++
-	}
-
-	return claimsGenerated
-}
-
-func createClaimMadeNotification(workerID, claimID uint, claimAmount float64) error {
-	message := fmt.Sprintf("Claim is made for claim #%d. Amount INR %.0f. Time %s.", claimID, claimAmount, time.Now().UTC().Format(time.RFC3339))
-	return platformDB.Exec(
-		"INSERT INTO notifications (worker_id, type, message, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-		workerID,
-		"claim_made",
-		message,
-	).Error
 }
 
 // ExternalSignalWebhook handles incoming third-party signals like weather alerts
@@ -868,16 +486,16 @@ func ExternalSignalWebhook(c *gin.Context) {
 	}
 
 	isActive := strings.ToLower(req.Status) == "active"
-
+	
 	if req.Source == "all_signals" {
-		// Clear all signals. True/false doesn't matter, we just clear everything.
+	    // Clear all signals. True/false doesn't matter, we just clear everything.
 		state := getOrCreateZoneState(req.ZoneID)
 		state.mu.Lock()
 		state.ActiveSignals = make(map[string]bool)
 		state.mu.Unlock()
 		evaluateDisruption(req.ZoneID, state)
 	} else {
-		SetExternalSignal(req.ZoneID, req.Source, isActive)
+	    SetExternalSignal(req.ZoneID, req.Source, isActive)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

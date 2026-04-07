@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.repository.PolicyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -20,21 +21,58 @@ class PremiumPayViewModel @Inject constructor(
     private val _amount = MutableStateFlow("")
     val amount = _amount.asStateFlow()
 
-    fun onAmountChanged(value: String) { _amount.value = value }
+    init {
+        fetchPolicyPremium()
+    }
 
-    fun pay() {
+    private fun fetchPolicyPremium() {
         viewModelScope.launch {
-            _uiState.value = PayUiState.Loading
             try {
-                val response = policyRepository.payPremium(_amount.value.toIntOrNull())
+                val response = policyRepository.getPolicy()
                 if (response.isSuccessful) {
-                    _uiState.value = PayUiState.Success(response.body()?.message ?: "Payment Successful")
-                } else {
-                    _uiState.value = PayUiState.Error("Payment failed")
+                    val premium = response.body()?.policy?.weeklyPremiumInr ?: 0
+                    _amount.value = premium.toString()
                 }
             } catch (e: Exception) {
-                _uiState.value = PayUiState.Error(e.message ?: "Unknown error")
+                // Fallback or ignore for init
             }
+        }
+    }
+
+    fun setLoading(isLoading: Boolean) {
+        if (isLoading) {
+            _uiState.value = PayUiState.Loading
+        } else {
+            _uiState.value = PayUiState.Idle
+        }
+    }
+
+    fun setPaymentError(error: String) {
+        _uiState.value = PayUiState.Error(error)
+    }
+
+    fun recordPaymentSuccess(paymentId: String?) {
+        viewModelScope.launch {
+            _uiState.value = PayUiState.Loading  
+            try {
+                // We call the backend to record that Razorpay succeeded
+                val response = policyRepository.payPremium(_amount.value.toIntOrNull())
+                if (response.isSuccessful) {
+                    val summary = "Payment Successful via Razorpay | ID: $paymentId"
+                    _uiState.value = PayUiState.Success(summary)
+                } else {
+                    _uiState.value = PayUiState.Error("Failed to sync backend")
+                }
+            } catch (e: Exception) {
+                _uiState.value = PayUiState.Error(e.message ?: "Unknown backend error")
+            }
+        }
+    }
+
+    fun reset() {
+        viewModelScope.launch {
+            delay(50)
+            _uiState.value = PayUiState.Idle
         }
     }
 }

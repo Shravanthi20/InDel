@@ -1,7 +1,6 @@
 package com.imaginai.indel.ui.policy
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,9 +13,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -80,8 +76,6 @@ fun PolicyContent(
     navController: NavController,
     viewModel: PolicyViewModel
 ) {
-    var showPlanInfo by remember { mutableStateOf(false) }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -90,21 +84,36 @@ fun PolicyContent(
         // 1. Current Plan Card
         item {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showPlanInfo = true },
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Shield, contentDescription = null, tint = SuccessGreen)
+                        Icon(
+                            Icons.Default.Shield, 
+                            contentDescription = null, 
+                            tint = when(policy.status) {
+                                "active" -> SuccessGreen
+                                "paused" -> WarningAmber
+                                else -> ErrorRed
+                            }
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (policy.status == "active") "ACTIVE PROTECTION" else "INACTIVE",
+                            text = when(policy.status) {
+                                "active" -> "ACTIVE PROTECTION"
+                                "paused" -> "PAUSED PROTECTION"
+                                "cancelled" -> "CANCELLED"
+                                else -> "INACTIVE"
+                            },
                             fontWeight = FontWeight.Bold,
-                            color = if (policy.status == "active") SuccessGreen else TextSecondary
+                            color = when(policy.status) {
+                                "active" -> SuccessGreen
+                                "paused" -> WarningAmber
+                                else -> ErrorRed
+                            }
                         )
                     }
                     
@@ -118,24 +127,13 @@ fun PolicyContent(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text("Coverage Ratio", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                            Text("${(policy.coverageRatio * 100).toInt()}%", fontWeight = FontWeight.Bold)
+                            Text("85%", fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text("Next Due Date", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                             Text(policy.nextDueDate, fontWeight = FontWeight.Bold)
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = when {
-                            policy.planStatus == "skipped" -> "Plan skipped"
-                            !policy.planName.isNullOrBlank() -> policy.planName
-                            else -> "Plan not selected"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
                 }
             }
         }
@@ -165,43 +163,43 @@ fun PolicyContent(
         // 3. Actions
         item {
             Spacer(modifier = Modifier.height(16.dp))
-            if (policy.planStatus == "skipped" || policy.planName.isNullOrBlank()) {
+            if (policy.status == "active") {
                 Button(
-                    onClick = { navController.navigate(Screen.PlanSelection.route) },
+                    onClick = { navController.navigate(Screen.PremiumPay.route) },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
                 ) {
-                    Text("Start a plan", fontWeight = FontWeight.Bold)
+                    Text("Pay Weekly Premium", fontWeight = FontWeight.Bold)
                 }
+                
                 Spacer(modifier = Modifier.height(12.dp))
-            }
-            Button(
-                onClick = { navController.navigate(Screen.PremiumPay.route) },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
-            ) {
-                Text("Pay Weekly Premium", fontWeight = FontWeight.Bold)
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = { viewModel.pause() },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Pause Plan")
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = { viewModel.pause() },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Pause Plan")
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.cancel() },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
+                    ) {
+                        Text("Cancel Plan")
+                    }
                 }
-                OutlinedButton(
-                    onClick = { viewModel.cancel() },
-                    modifier = Modifier.weight(1f).height(48.dp),
+            } else {
+                Button(
+                    onClick = { viewModel.enroll() },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
                 ) {
-                    Text("Cancel Plan")
+                    Text(if (policy.status == "paused") "Resume Protection" else "Enrol Now", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -224,38 +222,6 @@ fun PolicyContent(
                 }
             }
         }
-    }
-
-    if (showPlanInfo) {
-        val chosenPlanText = when {
-            policy.planStatus == "skipped" -> "Skipped"
-            !policy.planName.isNullOrBlank() -> policy.planName
-            else -> "Not selected"
-        }
-        val rangeText = if (policy.rangeStart != null && policy.rangeEnd != null) {
-            "${policy.rangeStart}-${policy.rangeEnd} deliveries/week"
-        } else {
-            "No delivery range selected"
-        }
-        val selectedDeliveryText = policy.selectedDeliveries?.toString() ?: "Not selected"
-
-        AlertDialog(
-            onDismissRequest = { showPlanInfo = false },
-            confirmButton = {
-                TextButton(onClick = { showPlanInfo = false }) {
-                    Text("OK")
-                }
-            },
-            title = { Text("Chosen Option") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Plan: $chosenPlanText")
-                    Text("Range: $rangeText")
-                    Text("Selected deliveries: $selectedDeliveryText")
-                    Text("Weekly premium: ₹${policy.weeklyPremiumInr}")
-                }
-            }
-        )
     }
 }
 

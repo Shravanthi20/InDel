@@ -1,0 +1,5 @@
+{
+	"zone_id": 1,
+	"force_order_drop": true,
+	"external_signal": "heavy_rain"
+}

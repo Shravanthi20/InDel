@@ -48,10 +48,7 @@ func Onboard(c *gin.Context) {
 		if parseErr == nil {
 			zoneLevel := bodyString(body, "zone_level", "")
 			zoneName := bodyString(body, "zone_name", "")
-			zoneID := bodyUint(body, "zone_id", 0)
-			if zoneID == 0 {
-				zoneID = ensureZoneIDByLevelAndName(zoneLevel, zoneName)
-			}
+			zoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName)
 			if zoneID != 0 {
 				name := bodyString(body, "name", "New Worker")
 				vehicleType := bodyString(body, "vehicle_type", "bike")
@@ -112,7 +109,6 @@ func GetProfile(c *gin.Context) {
 				WorkerID    uint
 				Phone       string
 				Name        string
-				ZoneLevel   string
 				ZoneName    string
 				City        string
 				VehicleType string
@@ -121,27 +117,44 @@ func GetProfile(c *gin.Context) {
 
 			var row profileResp
 			err := workerDB.Table("users u").
-				Select("u.id as worker_id, u.phone, wp.name, z.level as zone_level, z.name as zone_name, z.city, wp.vehicle_type, wp.upi_id").
+				Select("u.id as worker_id, u.phone, wp.name, z.name as zone_name, z.city, wp.vehicle_type, wp.upi_id").
 				Joins("LEFT JOIN worker_profiles wp ON wp.worker_id = u.id").
 				Joins("LEFT JOIN zones z ON z.id = wp.zone_id").
 				Where("u.id = ?", workerIDUint).
 				Scan(&row).Error
 			if err == nil && row.WorkerID != 0 {
-				zone := strings.TrimSpace(row.ZoneName)
-				if zone == "" {
-					zone = strings.TrimSpace(row.City)
+				name := row.Name
+				if name == "" {
+					name = "New Worker"
 				}
+				zoneName := row.ZoneName
+				if zoneName == "" {
+					zoneName = "Tambaram"
+				}
+				city := row.City
+				if city == "" {
+					city = "Chennai"
+				}
+				
+				var ordersCompleted int64
+				_ = workerDB.Model(&models.Order{}).Where("worker_id = ? AND status = 'delivered'", row.WorkerID).Count(&ordersCompleted).Error
+
+				var todayEarnings float64
+				_ = workerDB.Raw("SELECT COALESCE(SUM(amount_earned), 0) FROM earnings_records WHERE worker_id = ? AND date = CURRENT_DATE", row.WorkerID).Scan(&todayEarnings).Error
+
 				c.JSON(200, gin.H{"worker": gin.H{
-					"worker_id":       fmt.Sprintf("%d", row.WorkerID),
-					"name":            row.Name,
-					"phone":           row.Phone,
-					"zone_level":      row.ZoneLevel,
-					"zone_name":       row.ZoneName,
-					"zone":            zone,
-					"vehicle_type":    row.VehicleType,
-					"upi_id":          row.UPIId,
-					"coverage_status": "active",
-					"enrolled":        true,
+					"worker_id":        fmt.Sprintf("%d", row.WorkerID),
+					"name":             name,
+					"phone":            row.Phone,
+					"zone":             fmt.Sprintf("%s, %s", zoneName, city),
+					"zone_level":       city,
+					"zone_name":        zoneName,
+					"vehicle_type":     row.VehicleType,
+					"upi_id":           row.UPIId,
+					"coverage_status":  "active",
+					"enrolled":         true,
+					"orders_completed": ordersCompleted,
+					"today_earnings":   int(todayEarnings),
 				}})
 				return
 			}
@@ -151,14 +164,6 @@ func GetProfile(c *gin.Context) {
 	store.mu.RLock()
 	profile := store.data.WorkerProfiles[workerID]
 	store.mu.RUnlock()
-	if profile != nil {
-		if _, ok := profile["zone_level"]; !ok {
-			profile["zone_level"] = ""
-		}
-		if _, ok := profile["zone_name"]; !ok {
-			profile["zone_name"] = ""
-		}
-	}
 
 	c.JSON(200, gin.H{"worker": profile})
 }
@@ -176,24 +181,15 @@ func UpdateProfile(c *gin.Context) {
 		if parseErr == nil {
 			var profile models.WorkerProfile
 			err := workerDB.Where("worker_id = ?", workerIDUint).First(&profile).Error
-			if err == gorm.ErrRecordNotFound {
-				profile = models.WorkerProfile{WorkerID: workerIDUint}
-				err = nil
-			}
 			if err == nil {
 				if name := bodyString(body, "name", ""); name != "" {
 					profile.Name = name
 				}
-				zoneID := bodyUint(body, "zone_id", 0)
-				if zoneID != 0 {
-					profile.ZoneID = zoneID
-				} else {
-					zoneLevel := bodyString(body, "zone_level", "")
-					zoneName := bodyString(body, "zone_name", "")
-					if zoneLevel != "" && zoneName != "" {
-						if ensuredZoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName); ensuredZoneID != 0 {
-							profile.ZoneID = ensuredZoneID
-						}
+				zoneLevel := bodyString(body, "zone_level", "")
+				zoneName := bodyString(body, "zone_name", "")
+				if zoneLevel != "" && zoneName != "" {
+					if zoneID := ensureZoneIDByLevelAndName(zoneLevel, zoneName); zoneID != 0 {
+						profile.ZoneID = zoneID
 					}
 				}
 				if vehicle := bodyString(body, "vehicle_type", ""); vehicle != "" {
@@ -202,11 +198,7 @@ func UpdateProfile(c *gin.Context) {
 				if upi := bodyString(body, "upi_id", ""); upi != "" {
 					profile.UPIId = upi
 				}
-				if profile.ID == 0 {
-					_ = workerDB.Create(&profile).Error
-				} else {
-					_ = workerDB.Save(&profile).Error
-				}
+				_ = workerDB.Save(&profile).Error
 			}
 		}
 	}
@@ -222,20 +214,7 @@ func UpdateProfile(c *gin.Context) {
 	if name := bodyString(body, "name", ""); name != "" {
 		profile["name"] = name
 	}
-	zoneLevel := bodyString(body, "zone_level", "")
-	zoneName := bodyString(body, "zone_name", "")
-	if zoneLevel != "" {
-		profile["zone_level"] = zoneLevel
-	}
-	if zoneName != "" {
-		profile["zone_name"] = zoneName
-	}
-	// Reconstruct combined zone string from level and name
-	if (zoneLevel != "" || zoneName != "") && zoneName != "" {
-		// For in-memory store, we can construct a reasonable zone string
-		zone := strings.TrimSpace(zoneName)
-		profile["zone"] = zone
-	} else if zone := bodyString(body, "zone", ""); zone != "" {
+	if zone := bodyString(body, "zone", ""); zone != "" {
 		profile["zone"] = zone
 	}
 	if vehicle := bodyString(body, "vehicle_type", ""); vehicle != "" {

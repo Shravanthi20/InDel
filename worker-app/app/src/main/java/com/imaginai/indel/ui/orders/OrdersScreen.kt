@@ -1,6 +1,5 @@
 package com.imaginai.indel.ui.orders
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,9 +13,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,9 +20,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.imaginai.indel.data.model.Order
 import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,14 +61,7 @@ fun OrdersScreen(
             ) {
                 when (val state = uiState) {
                     is OrdersUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    is OrdersUiState.Success -> OrdersContent(
-                        assignedBatches = state.assignedBatches,
-                        availableBatches = state.availableBatches,
-                        pickedUpBatches = state.pickedUpBatches,
-                        deliveredBatches = state.deliveredBatches,
-                        diagnostics = state.diagnostics,
-                        navController = navController,
-                    )
+                    is OrdersUiState.Success -> OrdersContent(state.assignedOrders, state.availableOrders, viewModel, navController)
                     is OrdersUiState.Error -> ErrorState(state.message) { viewModel.loadOrders() }
                 }
             }
@@ -82,76 +71,38 @@ fun OrdersScreen(
 
 @Composable
 fun OrdersContent(
-    assignedBatches: List<DeliveryBatch>,
-    availableBatches: List<DeliveryBatch>,
-    pickedUpBatches: List<DeliveryBatch>,
-    deliveredBatches: List<DeliveryBatch>,
-    diagnostics: String,
-    navController: NavController,
+    assignedOrders: List<Order>,
+    availableOrders: List<Order>,
+    viewModel: OrdersViewModel,
+    navController: NavController
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabLabels = listOf(
-        "Assigned (${assignedBatches.size})",
-        "Available (${availableBatches.size})",
-        "Picked Up (${pickedUpBatches.size})",
-        "Delivered (${deliveredBatches.size})",
-    )
-
-    val sectionTitles = listOf(
-        "Your Assigned Batches",
-        "Available Batches Near You",
-        "In Progress",
-        "Completed Deliveries",
-    )
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            OrdersDiagnosticsCard(diagnostics)
-        }
-
-        item {
-            TabRow(selectedTabIndex = selectedTab, containerColor = Color.White, contentColor = BrandBlue) {
-                tabLabels.forEachIndexed { index, label ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { Text(label) }
-                    )
-                }
-            }
-        }
-
-        val batches = when (selectedTab) {
-            0 -> assignedBatches
-            1 -> availableBatches
-            2 -> pickedUpBatches
-            else -> deliveredBatches
-        }
-
-        if (batches.isNotEmpty()) {
+        if (assignedOrders.isNotEmpty()) {
             item {
-                Text(
-                    text = sectionTitles[selectedTab],
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Active Tasks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            items(batches) { batch ->
-                BatchCard(
-                    batch = batch,
-                    onOpenDetails = { navController.navigate(Screen.BatchDetail.createRoute(batch.batchId)) },
-                )
+            items(assignedOrders) { order ->
+                OrderCard(order, viewModel, navController)
             }
         }
 
-        if (batches.isEmpty()) {
+        if (availableOrders.isNotEmpty()) {
+            item {
+                Text("Available Near You", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            items(availableOrders) { order ->
+                OrderCard(order, viewModel, navController)
+            }
+        }
+
+        if (assignedOrders.isEmpty() && availableOrders.isEmpty()) {
             item {
                 Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No batches available at the moment", color = TextSecondary)
+                    Text("No orders available at the moment", color = TextSecondary)
                 }
             }
         }
@@ -159,42 +110,11 @@ fun OrdersContent(
 }
 
 @Composable
-fun OrdersDiagnosticsCard(diagnostics: String) {
+fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavController) {
+    val (statusBgColor, statusTextColor, statusLabel) = statusBadgeStyle(order.status)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = BlueSoft.copy(alpha = 0.55f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, BrandBlue.copy(alpha = 0.25f))
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                "Fetch diagnostics",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = BrandBlue
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                diagnostics,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
-            )
-        }
-    }
-}
-
-@Composable
-fun BatchCard(
-    batch: DeliveryBatch,
-    onOpenDetails: () -> Unit,
-) {
-    val (statusBgColor, statusTextColor, statusLabel) = statusBadgeStyle(batch.status)
-    val compactRoute = compactRouteLabel(batch.zoneLevel, batch.fromCity, batch.toCity)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onOpenDetails() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -202,16 +122,20 @@ fun BatchCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Batch ID", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                    Text(batch.batchId, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = BrandBlue)
-                    Text("Zone ${batch.zoneLevel}: $compactRoute", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Order #${order.orderId.takeLast(4)}", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text("₹${order.earningInr.toInt()}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = BrandBlue)
+                    if (order.tipInr > 0) {
+                        Text("Incl. ₹${order.tipInr.toInt()} tip", style = MaterialTheme.typography.labelSmall, color = SuccessGreen, fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("Tip: ₹0", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    }
                 }
                 Surface(
                     color = BlueSoft,
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "${formatBatchWeight(batch.totalWeight)} kg",
+                        text = "${order.distanceKm} km",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
@@ -241,31 +165,45 @@ fun BatchCard(
                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = BrandBlue, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
-                    Text("Route: $compactRoute", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    Text("${batch.orderCount} orders", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Pickup: ${order.pickupArea}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text("Drop: ${order.dropArea}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            val buttonText = when(order.status) {
+                "assigned" -> "Accept Order"
+                "accepted" -> "Complete Delivery"
+                "picked_up" -> "Complete Delivery"
+                else -> "Complete"
+            }
+
+            if (order.status != "delivered") {
+                Button(
+                    onClick = {
+                        when(order.status) {
+                            "assigned" -> viewModel.acceptOrder(order.orderId)
+                            "accepted" -> navController.navigate(Screen.DeliveryCompletion.createRoute(order.orderId))
+                            "picked_up" -> navController.navigate(Screen.DeliveryCompletion.createRoute(order.orderId))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (order.status == "assigned") BrandBlue else SuccessGreen)
+                ) {
+                    Text(buttonText)
+                }
+            } else {
+                Text(
+                    "Completed",
+                    color = SuccessGreen,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
         }
     }
-}
-
-private fun compactRouteLabel(zoneLevel: String, fromCity: String, toCity: String): String {
-    val from = fromCity.trim()
-    val to = toCity.trim()
-    if (zoneLevel.equals("A", ignoreCase = true) && from.equals(to, ignoreCase = true)) {
-        return if (from.isBlank()) "Unknown" else from
-    }
-    if (from.isBlank() && to.isBlank()) {
-        return "Unknown"
-    }
-    if (from.isBlank()) {
-        return to
-    }
-    if (to.isBlank()) {
-        return from
-    }
-    return "$from -> $to"
 }
 
 private fun statusBadgeStyle(status: String): Triple<Color, Color, String> {
@@ -276,10 +214,6 @@ private fun statusBadgeStyle(status: String): Triple<Color, Color, String> {
         "delivered" -> Triple(Color(0xFFE8F5E9), SuccessGreen, "Delivered")
         else -> Triple(Color(0xFFF1F1F1), TextSecondary, status.replace("_", " ").replaceFirstChar { it.uppercase() })
     }
-}
-
-private fun formatBatchWeight(weight: Double): String {
-    return String.format(Locale.getDefault(), "%.1f", weight)
 }
 
 @Composable

@@ -1,33 +1,85 @@
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_INSURER_API_URL || 'http://192.168.1.6:8004'
+const INSURER_API_URL = import.meta.env.VITE_INSURER_API_URL || 'http://localhost:8002'
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8000'
 
-const client = axios.create({
-  baseURL: API_URL,
+const insurerClient = axios.create({
+  baseURL: INSURER_API_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+const coreClient = axios.create({
+  baseURL: CORE_API_URL,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
 // Add JWT token to requests
-client.interceptors.request.use((config) => {
+const attachAuthToken = (config: any) => {
   const token = localStorage.getItem('token')
-  if (token) {
+  if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
-})
+}
+
+insurerClient.interceptors.request.use(attachAuthToken)
+coreClient.interceptors.request.use(attachAuthToken)
 
 // Handle token expiration
-client.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/'
-    }
+const handleUnauthorized = (
+  response: any
+) => response
+
+const rejectUnauthorized = (error: any) => {
+  if (error.response?.status === 401) {
+    localStorage.removeItem('token')
+    window.location.href = '/'
+  }
+  return Promise.reject(error)
+}
+
+// Network Debugger Interceptor
+const logNetwork = (clientName: string) => {
+  const logResponse = (response: any) => {
+    console.log(`%c[API-SUCCESS] ${clientName} %c${response.config.method?.toUpperCase()} %c${response.config.url}`, 'color: #10b981; font-weight: bold;', 'color: #f97316; font-weight: bold;', 'color: #94a3b8;', response.data);
+    return response
+  }
+  const logError = (error: any) => {
+    console.error(`%c[API-ERROR] ${clientName} %c${error.config?.method?.toUpperCase()} %c${error.config?.url}`, 'color: #f43f5e; font-weight: bold;', 'color: #f97316; font-weight: bold;', 'color: #94a3b8;', error.response?.data || error.message);
     return Promise.reject(error)
+  }
+  return { logResponse, logError }
+}
+
+const insurerLogs = logNetwork('Insurer-Gateway')
+const coreLogs = logNetwork('Core-Service')
+
+insurerClient.interceptors.response.use(
+  (response) => {
+    handleUnauthorized(response)
+    return insurerLogs.logResponse(response)
+  },
+  (error) => {
+    rejectUnauthorized(error)
+    return insurerLogs.logError(error)
   }
 )
 
-export default client
+coreClient.interceptors.response.use(
+  (response) => {
+    handleUnauthorized(response)
+    return coreLogs.logResponse(response)
+  },
+  (error) => {
+    rejectUnauthorized(error)
+    return coreLogs.logError(error)
+  }
+)
+
+export { coreClient }
+
+export default insurerClient

@@ -92,3 +92,16 @@ type ClaimAuditLog struct {
 	Reviewer  string
 	CreatedAt time.Time
 }
+
+type MaintenanceCheck struct {
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	ClaimID       uint       `json:"claim_id"`
+	InitiatedDate time.Time  `json:"initiated_date"`
+	ResponseDate  *time.Time `json:"response_date,omitempty"`
+	Findings      string     `json:"findings"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+func (MaintenanceCheck) TableName() string {
+	return "maintenance_check"
+}

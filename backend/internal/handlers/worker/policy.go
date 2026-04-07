@@ -2,25 +2,12 @@ package worker
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
+	"github.com/Shravanthi20/InDel/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
-
-func inferPlanFromPremium(premium int) (string, string, int, int) {
-	switch {
-	case premium >= 12 && premium <= 18:
-		return "plan-starter", "Seed", 10, 15
-	case premium >= 19 && premium <= 26:
-		return "plan-growth", "Scale", 15, 20
-	case premium >= 27 && premium <= 35:
-		return "plan-premium", "Soar", 20, 25
-	default:
-		return "", "", 0, 0
-	}
-}
 
 // GetPolicy returns active policy
 func GetPolicy(c *gin.Context) {
@@ -35,71 +22,61 @@ func GetPolicy(c *gin.Context) {
 			var p models.Policy
 			err := workerDB.Where("worker_id = ?", workerIDUint).Order("id DESC").First(&p).Error
 			if err == nil {
-				now := time.Now().UTC()
-				paymentState, _ := getOrBootstrapPaymentSchedule(workerIDUint, now)
-				if strings.EqualFold(paymentState.CoverageStatus, "Expired") {
-					_ = workerDB.Exec("UPDATE policies SET status='expired', updated_at=CURRENT_TIMESTAMP WHERE id = ?", p.ID).Error
-					p.Status = "expired"
-				}
-				planID, planName, rangeStart, rangeEnd := inferPlanFromPremium(int(p.PremiumAmount))
-				planStatus := "selected"
-				if p.Status == "skipped" {
-					planStatus = "skipped"
-					planID = ""
-					planName = ""
-					rangeStart = 0
-					rangeEnd = 0
-				}
+				quote, _ := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC())
+				premiumAmount := int(p.PremiumAmount)
+				source := "stored_policy"
+				riskScore := 0.0
+				modelVersion := "fallback_rule_v2"
+				var breakdown []gin.H
 
-				// Get worker's zone
-				workerZone := "Unknown"
-				type zoneRow struct {
-					ZoneName string `gorm:"column:zone_name"`
-					City     string `gorm:"column:city"`
-					State    string `gorm:"column:state"`
-				}
-				var zr zoneRow
-				if err := workerDB.Raw(`
-					SELECT z.name AS zone_name, z.city, z.state
-					FROM zones z
-					INNER JOIN worker_profiles wp ON wp.zone_id = z.id
-					WHERE wp.worker_id = ?
-					LIMIT 1
-				`, workerIDUint).Scan(&zr).Error; err == nil && zr.City != "" {
-					workerZone = fmt.Sprintf("%s, %s", zr.City, zr.State)
-				}
-
-				// Calculate next due date (7 days after last payment, or "N/A" if no payment yet)
-				nextDueDate := "N/A"
-				if paymentState.LastPaymentRecorded != nil {
-					nextDue := paymentState.LastPaymentRecorded.AddDate(0, 0, 7)
-					nextDueDate = nextDue.Format("2006-01-02")
-				}
-
-				policy := gin.H{
-					"policy_id":               fmt.Sprintf("pol-%03d", p.ID),
-					"status":                  p.Status,
-					"plan_status":             planStatus,
-					"weekly_premium_inr":      int(p.PremiumAmount),
-					"coverage_ratio":          0.8,
-					"zone":                    workerZone,
-					"next_due_date":           nextDueDate,
-					"payment_status":          paymentState.PaymentStatus,
-					"days_since_last_payment": paymentState.DaysSinceLastPay,
-					"next_payment_enabled":    paymentState.NextPaymentEnabled,
-					"coverage_status":         paymentState.CoverageStatus,
-					"plan_id":                 planID,
-					"plan_name":               planName,
-					"range_start":             rangeStart,
-					"range_end":               rangeEnd,
-					"shap_breakdown": []gin.H{
+				if quote != nil {
+					premiumAmount = int(quote.WeeklyPremiumINR)
+					source = quote.Source
+					riskScore = quote.RiskScore
+					modelVersion = quote.ModelVersion
+					breakdown = make([]gin.H, 0, len(quote.Explainability))
+					for _, item := range quote.Explainability {
+						breakdown = append(breakdown, gin.H{"feature": item.Feature, "impact": item.Impact})
+					}
+				} else {
+					// Fallback static breakdown for historical UI context
+					breakdown = []gin.H{
 						{"feature": "rain_risk", "impact": 0.42},
 						{"feature": "order_drop_volatility", "impact": 0.31},
 						{"feature": "historical_disruptions", "impact": 0.27},
-					},
+					}
 				}
-				if paymentState.LastPaymentRecorded != nil {
-					policy["last_payment_timestamp"] = paymentState.LastPaymentRecorded.UTC().Format(time.RFC3339)
+				// Dynamic calculations for "Real Data"
+				coverageRatio := 0.85
+				if riskScore > 0.7 {
+					coverageRatio = 0.75
+				} else if riskScore < 0.3 {
+					coverageRatio = 0.95
+				}
+
+				dueDate := p.CreatedAt.AddDate(0, 0, 7).Format("2006-01-02")
+				var lastPaymentDate time.Time
+				if err := workerDB.Table("premium_payments").Select("payment_date").Where("policy_id = ?", p.ID).Order("payment_date DESC").Limit(1).Scan(&lastPaymentDate).Error; err == nil && !lastPaymentDate.IsZero() {
+					// If they made a payment, due date is exactly 7 days after their last payment
+					dueDate = lastPaymentDate.AddDate(0, 0, 7).Format("2006-01-02")
+				} else if p.Status == "active" {
+					// Fallback if no payment recorded but active
+					if p.CreatedAt.AddDate(0, 0, 7).Before(time.Now()) {
+						dueDate = time.Now().AddDate(0, 0, 7).Format("2006-01-02")
+					}
+				}
+
+				policy := gin.H{
+					"policy_id":          fmt.Sprintf("pol-%03d", p.ID),
+					"status":             p.Status,
+					"weekly_premium_inr": premiumAmount,
+					"coverage_ratio":     coverageRatio,
+					"zone":               "Tambaram, Chennai",
+					"next_due_date":      dueDate,
+					"risk_score":         riskScore,
+					"pricing_source":     source,
+					"model_version":      modelVersion,
+					"shap_breakdown":     breakdown,
 				}
 				c.JSON(200, gin.H{"policy": policy})
 				return
@@ -107,18 +84,9 @@ func GetPolicy(c *gin.Context) {
 		}
 	}
 
-	store.mu.Lock()
+	store.mu.RLock()
 	policy := store.data.Policy
-	state := paymentStateFromInMemoryPolicy(policy, time.Now().UTC())
-	applyPaymentStateToPolicy(policy, state)
-	if profile, exists := store.data.WorkerProfiles[workerID]; exists {
-		if strings.EqualFold(state.CoverageStatus, "Expired") {
-			profile["coverage_status"] = "expired"
-		} else {
-			profile["coverage_status"] = "active"
-		}
-	}
-	store.mu.Unlock()
+	store.mu.RUnlock()
 
 	c.JSON(200, gin.H{"policy": policy})
 }
@@ -132,7 +100,11 @@ func EnrollPolicy(c *gin.Context) {
 
 	if hasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
-			policy := models.Policy{WorkerID: workerIDUint, Status: "active", PremiumAmount: 22}
+			premiumAmount := 22.0
+			if quote, err := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC()); err == nil && quote != nil && quote.WeeklyPremiumINR > 0 {
+				premiumAmount = quote.WeeklyPremiumINR
+			}
+			policy := models.Policy{WorkerID: workerIDUint, Status: "active", PremiumAmount: premiumAmount}
 			if err := workerDB.Create(&policy).Error; err == nil {
 				c.JSON(200, gin.H{"message": "policy_enrolled", "policy": gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", policy.ID),

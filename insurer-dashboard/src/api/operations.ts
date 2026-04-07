@@ -1,4 +1,4 @@
-import client from './client'
+import { coreClient } from './client'
 
 export type SyntheticScenario = 'normal_week' | 'mild_disruption' | 'severe_disruption' | 'fraud_burst'
 
@@ -8,18 +8,21 @@ export type SyntheticPayload = {
   output_dir?: string
 }
 
-export const runWeeklyCycle = () => client.post('/api/v1/internal/policy/weekly-cycle/run')
+export const runWeeklyCycle = () => coreClient.post('/api/v1/internal/policy/weekly-cycle/run')
 
 export const generateClaimsForDisruption = (disruptionId: string) =>
-  client.post(`/api/v1/internal/claims/generate-for-disruption/${disruptionId}`)
+  coreClient.post(`/api/v1/internal/claims/generate-for-disruption/${disruptionId}`)
+
+export const autoProcessDisruption = (disruptionId: string) =>
+  coreClient.post(`/api/v1/internal/claims/auto-process/${disruptionId}`)
 
 export const queuePayoutForClaim = (claimId: string) =>
-  client.post(`/api/v1/internal/payouts/queue/${claimId}`)
+  coreClient.post(`/api/v1/internal/payouts/queue/${claimId}`)
 
-export const processQueuedPayouts = () => client.post('/api/v1/internal/payouts/process')
+export const processQueuedPayouts = () => coreClient.post('/api/v1/internal/payouts/process')
 
 export const getPayoutReconciliation = (params: { from: string; to: string }) =>
-  client.get('/api/v1/internal/payouts/reconciliation', { params })
+  coreClient.get('/api/v1/internal/payouts/reconciliation', { params })
 
 export const generateSyntheticData = (payload: SyntheticPayload) =>
-  client.post('/api/v1/internal/data/synthetic/generate', payload)
+  coreClient.post('/api/v1/internal/data/synthetic/generate', payload)

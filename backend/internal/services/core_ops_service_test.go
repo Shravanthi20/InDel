@@ -23,9 +23,6 @@ func setupCoreOpsTestDB(t *testing.T) *gorm.DB {
 	if err := database.Migrate(db); err != nil {
 		t.Fatalf("failed to migrate db: %v", err)
 	}
-	// Service queries use singular earnings table names; expose compatibility views in sqlite tests.
-	_ = db.Exec("CREATE VIEW IF NOT EXISTS earnings_baseline AS SELECT * FROM earnings_baselines").Error
-	_ = db.Exec("CREATE VIEW IF NOT EXISTS weekly_earnings_summary AS SELECT * FROM weekly_earnings_summaries").Error
 	return db
 }
 
@@ -139,6 +136,94 @@ func TestGenerateClaimsAndQueueProcessPayouts(t *testing.T) {
 	if err != nil { t.Fatalf("second payout processing failed: %v", err) }
 	if process2.Succeeded != 1 || process2.Failed != 0 {
 		t.Fatalf("unexpected process2 result: %+v", process2)
+	}
+}
+
+func TestQueueClaimPayoutDoesNotRequeueProcessedPayout(t *testing.T) {
+	db := setupCoreOpsTestDB(t)
+	service := NewCoreOpsService(db)
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+
+	claim := models.Claim{ID: 1, WorkerID: 21, ClaimAmount: 500, Status: "paid", FraudVerdict: "clear", CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&claim).Error; err != nil {
+		t.Fatal(err)
+	}
+	processedAt := now
+	existing := models.Payout{ClaimID: claim.ID, WorkerID: claim.WorkerID, Amount: 500, Status: "processed", IdempotencyKey: "pay_clm_1", ProcessedAt: &processedAt, RazorpayStatus: "processed"}
+	if err := db.Create(&existing).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := service.QueueClaimPayout(claim.ID)
+	if err != nil {
+		t.Fatalf("queue payout should return existing processed payout: %v", err)
+	}
+	if result.Status != "processed" {
+		t.Fatalf("expected existing processed status, got %+v", result)
+	}
+
+	var payout models.Payout
+	if err := db.Where("claim_id = ?", claim.ID).First(&payout).Error; err != nil {
+		t.Fatal(err)
+	}
+	if payout.Status != "processed" {
+		t.Fatalf("processed payout was requeued: %+v", payout)
+	}
+}
+
+func TestAutoProcessDisruptionScopesProcessingToThatDisruption(t *testing.T) {
+	db := setupCoreOpsTestDB(t)
+	service := NewCoreOpsService(db)
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	weekStart, weekEnd := weekBounds(now)
+
+	zoneA := models.Zone{Name: "Tambaram", City: "Chennai", State: "Tamil Nadu", RiskRating: 0.62}
+	zoneB := models.Zone{Name: "Adyar", City: "Chennai", State: "Tamil Nadu", RiskRating: 0.55}
+	if err := db.Create(&zoneA).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&zoneB).Error; err != nil { t.Fatal(err) }
+
+	workerA := models.User{ID: 2, Phone: "+919900000002", Role: "worker"}
+	workerB := models.User{ID: 3, Phone: "+919900000003", Role: "worker"}
+	if err := db.Create(&workerA).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&workerB).Error; err != nil { t.Fatal(err) }
+
+	if err := db.Create(&models.WorkerProfile{WorkerID: workerA.ID, Name: "Worker A", ZoneID: zoneA.ID, VehicleType: "bike", UPIId: "a@upi", AQIZone: "medium", TotalEarningsLifetime: 100000}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.WorkerProfile{WorkerID: workerB.ID, Name: "Worker B", ZoneID: zoneB.ID, VehicleType: "bike", UPIId: "b@upi", AQIZone: "medium", TotalEarningsLifetime: 100000}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.Policy{WorkerID: workerA.ID, Status: "active", PremiumAmount: 22}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.Policy{WorkerID: workerB.ID, Status: "active", PremiumAmount: 22}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.EarningsBaseline{WorkerID: workerA.ID, BaselineAmount: 2000, LastUpdatedAt: now}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.EarningsBaseline{WorkerID: workerB.ID, BaselineAmount: 1800, LastUpdatedAt: now}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerA.ID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 1100, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerB.ID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 900, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
+
+	startA := now.Add(-2 * time.Hour)
+	startB := now.Add(-3 * time.Hour)
+	confirmedA := startA.Add(10 * time.Minute)
+	confirmedB := startB.Add(10 * time.Minute)
+	disruptionA := models.Disruption{ZoneID: zoneA.ID, Type: "heavy_rain", Severity: "high", Confidence: 0.88, Status: "confirmed", StartTime: &startA, ConfirmedAt: &confirmedA}
+	disruptionB := models.Disruption{ZoneID: zoneB.ID, Type: "zone_curfew", Severity: "high", Confidence: 0.91, Status: "confirmed", StartTime: &startB, ConfirmedAt: &confirmedB}
+	if err := db.Create(&disruptionA).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&disruptionB).Error; err != nil { t.Fatal(err) }
+
+	otherClaim := models.Claim{DisruptionID: disruptionB.ID, WorkerID: workerB.ID, ClaimAmount: 600, Status: "queued_for_payout", FraudVerdict: "clear", CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&otherClaim).Error; err != nil { t.Fatal(err) }
+	otherPayout := models.Payout{ClaimID: otherClaim.ID, WorkerID: workerB.ID, Amount: 600, Status: "queued", IdempotencyKey: "pay_other_claim", RazorpayStatus: "queued"}
+	if err := db.Create(&otherPayout).Error; err != nil { t.Fatal(err) }
+
+	result, err := service.AutoProcessDisruption(disruptionA.ID, now)
+	if err != nil {
+		t.Fatalf("auto process disruption failed: %v", err)
+	}
+	if result.PayoutsProcessed != 1 || result.PayoutsSucceeded != 1 {
+		t.Fatalf("expected only disruption A payout to be processed, got %+v", result)
+	}
+
+	var refreshedOtherPayout models.Payout
+	if err := db.First(&refreshedOtherPayout, otherPayout.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if refreshedOtherPayout.Status != "queued" {
+		t.Fatalf("unrelated payout should remain queued, got %+v", refreshedOtherPayout)
 	}
 }
 

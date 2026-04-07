@@ -51,6 +51,7 @@ class EarningsViewModel @Inject constructor(
                     thisWeekActual = summary.thisWeekActual.toDouble(),
                     thisWeekBaseline = summary.thisWeekBaseline.toDouble(),
                     protectedIncome = summary.protectedIncome.toDouble(),
+                    insight = summary.insight,
                     history = summary.history.map { EarningRecord(it.week, it.actual.toDouble()) }
                 )
                 _uiState.value = EarningsUiState.Success(earnings)

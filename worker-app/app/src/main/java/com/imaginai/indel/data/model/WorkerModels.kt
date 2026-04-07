@@ -17,7 +17,9 @@ data class WorkerProfile(
     @SerializedName("vehicle_name") val vehicleName: String? = null,
     @SerializedName("upi_id") val upiId: String,
     @SerializedName("coverage_status") val coverageStatus: String,
-    @SerializedName("enrolled") val enrolled: Boolean
+    @SerializedName("enrolled") val enrolled: Boolean,
+    @SerializedName("orders_completed") val ordersCompleted: Int? = 0,
+    @SerializedName("today_earnings") val todayEarnings: Int? = 0
 )
 
 data class OnboardRequest(

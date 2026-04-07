@@ -5,6 +5,9 @@
 worker-app/.env
 .env.local
 .env.*.local
+insurer-dashboard/.env
+platform-dashboard/.env
+worker-app/.env
 
 # Go
 /bin
@@ -19,6 +22,8 @@ worker-app/.env
 *.swo
 *~
 vendor/
+.gocache/
+.gocache/
 
 # Python
 __pycache__/
@@ -45,9 +50,21 @@ wheels/
 venv/
 ENV/
 
-# Node
-node_modules/
-npm-debug.log*
+# Logs
+*.log
+logs/
+
+# Temp files
+temp.txt
+zones.txt
+
+# Gradle
+.gradle/
+build/
+
+# Additional
+*.tmp
+*.bak
 yarn-debug.log*
 yarn-error.log*
 .next/
@@ -91,3 +108,18 @@ postgres_data/
 # Misc
 .cache/
 .tmp/
+
+# Additional unnecessary files
+temp.txt
+zones.txt
+*.tmp
+*.bak
+
+# Frontend / package managers
+node_modules/
+insurer-dashboard/node_modules/
+platform-dashboard/node_modules/
+
+# Local mobile secrets / generated app config
+worker-app/app/google-services.json
+worker-app/ios/Runner/GoogleService-Info.plist

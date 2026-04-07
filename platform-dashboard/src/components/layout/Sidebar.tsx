@@ -1,48 +1,86 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+import Navbar from './Navbar'
+import { LayoutDashboard, Users, Map, BarChart3, Zap, ShieldCheck } from 'lucide-react'
 
-const navItems = [
-  { to: '/god-mode', label: 'God Mode' },
+const platformNav = [
+  { to: '/', label: 'Overview', icon: LayoutDashboard },
+  { to: '/workers', label: 'Workers', icon: Users },
+  { to: '/zones', label: 'Zones', icon: Map },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
 ]
+
+const opsNav = [
+  { to: '/disruptions', label: 'Chaos Engine', icon: Zap },
+]
+
+function navClass(isActive: boolean) {
+  return [
+    'group flex items-center gap-3 px-4 py-2.5 text-sm font-medium border-l-2 transition-none',
+    isActive 
+      ? 'bg-slate-100 dark:bg-slate-800 border-orange-500 text-slate-900 dark:text-white' 
+      : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50',
+  ].join(' ')
+}
 
 export default function Sidebar({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900">
-      <aside className="sticky top-0 flex h-screen w-72 flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-sm">
-        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5 shadow-sm">
-          <div className="text-[11px] uppercase tracking-[0.4em] text-sky-700">InDel</div>
-          <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-900">Platform Dashboard</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Simulation workspace for disruption, risk, and payout testing.
-          </p>
-        </div>
+    <div className="flex min-h-screen bg-[var(--bg-main)]">
+      {/* Enterprise Sidebar */}
+      <aside className="fixed left-0 top-0 z-50 h-screen w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex h-full flex-col py-8">
+          <div className="mb-10 flex items-center gap-3 px-6">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-orange-500">
+              <ShieldCheck className="h-4 w-4 text-white" />
+            </div>
+            <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white font-['Outfit']">InDel <span className="font-light text-slate-500">Platform</span></h1>
+          </div>
 
-        <nav className="mt-6 space-y-2 text-sm font-medium">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => [
-                'block rounded-2xl border px-4 py-3 transition-all duration-200',
-                isActive
-                  ? 'border-sky-300 bg-sky-50 text-sky-800 shadow-sm'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900',
-              ].join(' ')}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+          <div className="flex-1 space-y-8 overflow-y-auto no-scrollbar">
+            <section>
+              <p className="mb-2 px-6 text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Inventory</p>
+              <nav className="flex flex-col">
+                {platformNav.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => navClass(isActive)}>
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </section>
 
-        <div className="mt-auto rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          <div className="text-[11px] uppercase tracking-[0.35em] text-slate-500">Judge tools</div>
-          <p className="mt-2 leading-6 text-slate-600">
-            Use God Mode to test environmental inputs, risk scoring, payouts, and batch behavior.
-          </p>
+            <section>
+              <p className="mb-2 px-6 text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Operations</p>
+              <nav className="flex flex-col">
+                {opsNav.map((item) => (
+                  <NavLink key={item.to} to={item.to} className={({ isActive }) => navClass(isActive)}>
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </section>
+          </div>
+
+          <div className="mt-auto px-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+             <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2 mb-1">
+                   <div className="h-1.5 w-1.5 rounded-full bg-emerald-500"></div>
+                   <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Platform Core Online</p>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-tight">Region: ap-south-1 (Mumbai)</p>
+             </div>
+          </div>
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1">{children}</main>
+      {/* Main Surface */}
+      <div className="flex-1 pl-64">
+        <Navbar />
+        <main className="min-h-screen px-12 py-12 max-w-[1400px] mx-auto">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }
