@@ -25,6 +25,7 @@ class ClaimsViewModel @Inject constructor(
 
     init {
         loadClaimsData()
+        startAutoRefresh()
     }
 
     fun loadClaimsData() {
@@ -58,6 +59,15 @@ class ClaimsViewModel @Inject constructor(
             }
         } catch (e: Exception) {
             _uiState.value = ClaimsUiState.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    private fun startAutoRefresh() {
+        viewModelScope.launch {
+            while (true) {
+                delay(12000)
+                fetchClaimsData()
+            }
         }
     }
 }

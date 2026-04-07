@@ -43,11 +43,6 @@ fun HomeScreen(
     val isOnline by viewModel.isOnline.collectAsState()
     val lastUpdated = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date()) }
 
-    // Refresh profile data when screen is displayed (enables fresh data after profile edit)
-    LaunchedEffect(Unit) {
-        viewModel.loadDashboard()
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -84,16 +79,7 @@ fun HomeScreen(
             ) {
                 when (val state = uiState) {
                     is HomeUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    is HomeUiState.Success -> HomeContent(
-                        worker = state.worker,
-                        policy = state.policy,
-                        earnings = state.earnings,
-                        hasDisruptionAlert = state.hasDisruptionAlert,
-                        disruptionMessage = state.disruptionMessage,
-                        isOnline = isOnline,
-                        navController = navController,
-                        viewModel = viewModel
-                    )
+                    is HomeUiState.Success -> HomeContent(state.worker, state.policy, state.earnings, isOnline, navController, viewModel)
                     is HomeUiState.Error -> ErrorState(state.message) { viewModel.loadDashboard() }
                 }
             }
@@ -106,8 +92,6 @@ fun HomeContent(
     worker: WorkerProfile,
     policy: Policy,
     earnings: Earnings,
-    hasDisruptionAlert: Boolean,
-    disruptionMessage: String?,
     isOnline: Boolean,
     navController: NavController,
     viewModel: HomeViewModel
@@ -125,8 +109,8 @@ fun HomeContent(
         // 2. Earnings Today Card
         DashboardCard(
             title = "Earnings Today",
-            value = "₹${earnings.thisWeekActual.toInt()}",
-            subtitle = "View earnings history",
+            value = "₹${earnings.todayEarnings.toInt()}",
+            subtitle = "Completed: ${worker.ordersCompleted ?: 0} Orders",
             icon = Icons.Default.CurrencyRupee,
             onClick = { navController.navigate(Screen.Earnings.route) }
         )
@@ -135,52 +119,27 @@ fun HomeContent(
         DashboardCard(
             title = "Protection Status",
             value = if (policy.status == "active") "Protected" else "Not Enrolled",
-            subtitle = buildString {
-                append("Coverage: ")
-                append((policy.coverageRatio * 100).toInt())
-                append('%')
-                if (!policy.planName.isNullOrBlank()) {
-                    append(" • ")
-                    append(policy.planName)
-                }
-            },
+            subtitle = "Coverage: ${(policy.coverageRatio * 100).toInt()}%",
             icon = Icons.Default.Shield,
             color = if (policy.status == "active") SuccessGreen else WarningAmber,
-            onClick = {
-                navController.navigate(Screen.Policy.route) {
-                    launchSingleTop = true
-                }
-            }
+            onClick = { navController.navigate(Screen.Policy.route) }
         )
 
-        if (!policy.planName.isNullOrBlank()) {
+        // 3.a. Protected Payouts (if any)
+        if (earnings.protectedIncome > 0) {
             DashboardCard(
-                title = "Selected Plan",
-                value = policy.planName,
-                subtitle = buildString {
-                    append("Deliveries/week: ")
-                    append(policy.selectedDeliveries ?: policy.rangeStart ?: 0)
-                    if (policy.rangeStart != null && policy.rangeEnd != null) {
-                        append(" (range ")
-                        append(policy.rangeStart)
-                        append('-')
-                        append(policy.rangeEnd)
-                        append(')')
-                    }
-                },
-                icon = Icons.Default.LocalOffer,
-                color = BrandBlue,
-                onClick = {
-                    navController.navigate(Screen.Policy.route) {
-                        launchSingleTop = true
-                    }
-                }
+                title = "Protected Payouts",
+                value = "₹${earnings.protectedIncome.toInt()}",
+                subtitle = "Auto-Processed Claims",
+                icon = Icons.Default.VerifiedUser,
+                color = SuccessGreen,
+                onClick = { navController.navigate(Screen.Claims.route) }
             )
         }
 
         // 4. Disruption Banner (Conditional)
-        if (hasDisruptionAlert) {
-            DisruptionBanner(disruptionMessage)
+        if (worker.coverageStatus == "at_risk") {
+            DisruptionBanner()
         }
 
         // 5. Quick Navigation Grid
@@ -190,11 +149,7 @@ fun HomeContent(
             NavBox("Earnings", Icons.Default.Payments, Modifier.weight(1f)) { navController.navigate(Screen.Earnings.route) }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            NavBox("Policy", Icons.Default.Description, Modifier.weight(1f)) {
-                navController.navigate(Screen.Policy.route) {
-                    launchSingleTop = true
-                }
-            }
+            NavBox("Policy", Icons.Default.Description, Modifier.weight(1f)) { navController.navigate(Screen.Policy.route) }
             NavBox("Claims", Icons.AutoMirrored.Filled.AssignmentReturn, Modifier.weight(1f)) { navController.navigate(Screen.Claims.route) }
         }
         
@@ -204,20 +159,6 @@ fun HomeContent(
 
 @Composable
 fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> Unit) {
-    val displayName = worker.name?.trim().orEmpty().ifBlank { "Unknown Worker" }
-    val zoneLevelText = worker.zoneLevel.trim()
-    val zoneNameText = worker.zoneName.trim()
-    val cityText = worker.city?.trim().orEmpty()
-    val zoneText = worker.zone?.trim().orEmpty()
-    val displayZone = when {
-        zoneLevelText.isNotBlank() && zoneNameText.isNotBlank() -> "Zone ${zoneLevelText.uppercase()} - $zoneNameText"
-        zoneNameText.isNotBlank() && cityText.isNotBlank() -> "$zoneNameText, $cityText"
-        zoneNameText.isNotBlank() -> zoneNameText
-        cityText.isNotBlank() -> cityText
-        zoneText.isNotBlank() -> zoneText
-        else -> "Zone unavailable"
-    }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -236,15 +177,15 @@ fun StatusCard(worker: WorkerProfile, isOnline: Boolean, onToggle: (Boolean) -> 
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = displayName.take(1),
+                    text = if (!worker.name.isNullOrEmpty()) worker.name!!.take(1) else "?",
                     fontWeight = FontWeight.Bold,
                     color = BrandBlue
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(displayName, fontWeight = FontWeight.Bold)
-                Text(displayZone, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(worker.name ?: "Unknown Worker", fontWeight = FontWeight.Bold)
+                Text("${worker.zoneLevel} - ${worker.zoneName}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             // Online Toggle
             Column(horizontalAlignment = Alignment.End) {
@@ -294,7 +235,7 @@ fun DashboardCard(
 }
 
 @Composable
-fun DisruptionBanner(message: String?) {
+fun DisruptionBanner() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -310,7 +251,7 @@ fun DisruptionBanner(message: String?) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text("Heavy Rain Alert - Tambaram", color = Color.White, fontWeight = FontWeight.Bold)
-                    Text(message ?: "Disruption detected in your zone", style = MaterialTheme.typography.bodySmall)
+                    Text("Your income is protected. Stay safe.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                 }
             }
         }

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { getLossRatio, getZones } from '../api/insurer'
+import { useEffect, useState } from 'react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { getLossRatio } from '../api/insurer'
+import { PageShell, Panel } from './OperationsShared'
 
 type LossRatioRow = {
   city: string
@@ -9,107 +11,105 @@ type LossRatioRow = {
   loss_ratio: number
 }
 
-type ZoneOption = {
-  zone_id: number
-  name: string
-  city: string
-}
-
 export default function LossRatio() {
-  const [zoneName, setZoneName] = useState('')
   const [rows, setRows] = useState<LossRatioRow[]>([])
-  const [zones, setZones] = useState<ZoneOption[]>([])
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    getZones().then((res) => setZones(res.data?.zones ?? [])).catch(() => setZones([]))
+    getLossRatio()
+      .then((payload) => setRows(Array.isArray(payload.data) ? payload.data : []))
+      .catch((err) => setError(err?.message ?? 'Failed to load loss ratio'))
   }, [])
 
-  useEffect(() => {
-    setError('')
-    getLossRatio(zoneName ? { zone_id: zoneName } : undefined)
-      .then((res) => setRows(res.data?.data ?? res.data ?? []))
-      .catch((err) => setError(err?.response?.data?.error?.message || 'Failed to load loss ratio.'))
-  }, [zoneName])
-
-  const maxRatio = useMemo(() => Math.max(...rows.map((row) => row.loss_ratio), 1), [rows])
-  const avgRatio = useMemo(() => {
-    if (!rows.length) return 0
-    return rows.reduce((sum, row) => sum + row.loss_ratio, 0) / rows.length
-  }, [rows])
+  const chartData = rows.map(r => ({
+    name: r.zone_name,
+    ratio: Math.round(r.loss_ratio * 100),
+    premiums: r.premiums,
+    claims: r.claims
+  })).sort((a, b) => b.ratio - a.ratio).slice(0, 8)
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="rounded-2xl bg-white p-6 shadow">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Loss Ratio by Zone</h1>
-            <p className="mt-2 text-sm text-slate-500">Premiums versus claims, grouped by zone and city.</p>
+    <PageShell
+      eyebrow="Analysis"
+      title="Loss Ratio Distribution"
+      description="Deep dive into zone performance and risk concentration across the active insurer book."
+    >
+      <div className="grid gap-8 xl:grid-cols-[1fr_0.4fr]">
+        <Panel title="Zone Metrics" subtitle="Variance across active operational zones.">
+          <div className="h-[350px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" dark-stroke="#1e293b" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  contentStyle={{ borderRadius: '4px', border: '1px solid #e2e8f0', fontSize: '11px' }}
+                />
+                <Bar dataKey="ratio" radius={[2, 2, 0, 0]} barSize={32}>
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.ratio > 80 ? '#ef4444' : '#f59e0b'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-          <label className="space-y-2 text-sm font-medium text-slate-700">
-            <span>Filter by zone</span>
-            <select
-              value={zoneName}
-              onChange={(e) => setZoneName(e.target.value)}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-orange-400"
-            >
-              <option value="">All zones</option>
-              {zones.map((zone) => (
-                <option key={zone.zone_id} value={zone.name}>
-                  {zone.name} - {zone.city}
-                </option>
+        </Panel>
+
+        <Panel title="Summary Insights" subtitle="Critical risk focuses.">
+          <div className="space-y-4">
+             <div className="p-4 rounded border border-orange-200 bg-orange-50 text-xs text-orange-800 dark:border-orange-950 dark:bg-orange-900/10 dark:text-orange-400">
+                <p className="font-bold mb-1 uppercase tracking-widest text-[9px]">Exposure Alert</p>
+                <p className="leading-relaxed">High variance detected in industrial zones. Suggested adjustment for ratios &gt; 80%.</p>
+             </div>
+             <div className="p-4 rounded border border-emerald-200 bg-emerald-50 text-xs text-emerald-800 dark:border-emerald-950 dark:bg-emerald-900/10 dark:text-emerald-400">
+                <p className="font-bold mb-1 uppercase tracking-widest text-[9px]">Growth Opportunity</p>
+                <p className="leading-relaxed">Zone scaling successful where loss ratio remains below 15% threshold.</p>
+             </div>
+          </div>
+        </Panel>
+      </div>
+
+      <Panel title="Data Grid" className="mt-8">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 dark:border-slate-800">
+                <th className="pb-4 font-black uppercase tracking-widest text-slate-400">Zone</th>
+                <th className="pb-4 font-black uppercase tracking-widest text-slate-400">Premiums</th>
+                <th className="pb-4 font-black uppercase tracking-widest text-slate-400">Claims</th>
+                <th className="pb-4 font-black uppercase tracking-widest text-slate-400 text-right">Ratio</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+              {rows.map((row) => (
+                <tr key={`${row.city}-${row.zone_name}`} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-none">
+                  <td className="py-4">
+                    <p className="font-bold text-slate-900 dark:text-white">{row.zone_name}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{row.city}</p>
+                  </td>
+                  <td className="py-4 text-slate-500">Rs {Math.round(row.premiums).toLocaleString()}</td>
+                  <td className="py-4 text-slate-500">Rs {Math.round(row.claims).toLocaleString()}</td>
+                  <td className="py-4 text-right">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${
+                      row.loss_ratio > 0.8 ? 'bg-rose-500/10 text-rose-600' : 'bg-orange-500/10 text-orange-600'
+                    }`}>
+                      {Math.round(row.loss_ratio * 100)}%
+                    </span>
+                  </td>
+                </tr>
               ))}
-            </select>
-          </label>
+              {rows.length === 0 && !error ? (
+                <tr>
+                  <td className="py-12 text-center text-slate-400 italic" colSpan={4}>
+                     No zone metrics currently streaming.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
-      </div>
-
-      {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div> : null}
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Zones loaded</p>
-          <p className="mt-2 text-3xl font-black text-slate-950">{rows.length}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Average loss ratio</p>
-          <p className="mt-2 text-3xl font-black text-slate-950">{Math.round(avgRatio * 100)}%</p>
-        </div>
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Highest loss ratio</p>
-          <p className="mt-2 text-3xl font-black text-slate-950">{Math.round(maxRatio * 100)}%</p>
-        </div>
-      </div>
-
-      <div className="grid gap-4">
-        {rows.length === 0 ? (
-          <div className="rounded-2xl bg-white p-6 shadow text-slate-500">No loss-ratio rows available.</div>
-        ) : (
-          rows.map((row) => {
-            const width = Math.max(6, Math.round((row.loss_ratio / maxRatio) * 100))
-            return (
-              <div key={`${row.zone_name}-${row.city}`} className="rounded-2xl bg-white p-6 shadow">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{row.city}</p>
-                    <h3 className="text-lg font-bold text-slate-950">{row.zone_name}</h3>
-                  </div>
-                  <div className="text-sm text-slate-600">
-                    Premiums ₹{Number(row.premiums).toLocaleString('en-IN')} · Claims ₹{Number(row.claims).toLocaleString('en-IN')}
-                  </div>
-                </div>
-                <div className="mt-4 h-3 rounded-full bg-slate-100">
-                  <div className="h-3 rounded-full bg-gradient-to-r from-orange-400 to-rose-500" style={{ width: `${width}%` }} />
-                </div>
-                <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
-                  <span>Loss ratio</span>
-                  <span className="font-semibold text-slate-900">{Math.round(row.loss_ratio * 100)}%</span>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
-    </div>
+      </Panel>
+    </PageShell>
   )
 }

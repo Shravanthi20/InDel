@@ -1,11 +1,20 @@
--- InDel Demo Seed Data
+-- Insert users (Required for foreign keys in profiles, policies, etc.)
+INSERT INTO users (id, phone, role) VALUES
+(1, '+919999990001', 'worker'),
+(2, '+919999990002', 'worker'),
+(3, '+919999990003', 'worker'),
+(4, '+919999990004', 'worker');
 
 -- Insert zones
-INSERT INTO zones (name, city, state, risk_rating) VALUES
-('Zone-A', 'Bangalore', 'Karnataka', 0.3),
-('Zone-B', 'Bangalore', 'Karnataka', 0.5),
-('Zone-C', 'Mumbai', 'Maharashtra', 0.4),
-('Zone-D', 'Delhi', 'Delhi', 0.6);
+INSERT INTO zones (id, name, city, state, risk_rating) VALUES
+(1, 'Zone-A', 'Bangalore', 'Karnataka', 0.3),
+(2, 'Zone-B', 'Bangalore', 'Karnataka', 0.5),
+(3, 'Zone-C', 'Mumbai', 'Maharashtra', 0.4),
+(4, 'Zone-D', 'Delhi', 'Delhi', 0.6);
+
+-- Insert policy cycles
+INSERT INTO weekly_policy_cycles (id, week_start, week_end) VALUES
+(1, CURRENT_DATE - INTERVAL '7 days', CURRENT_DATE);
 
 -- Insert workers
 INSERT INTO worker_profiles (worker_id, name, zone_id, vehicle_type, upi_id) VALUES
@@ -45,9 +54,9 @@ INSERT INTO earnings_records (worker_id, date, hours_worked, amount_earned) VALU
 (2, CURRENT_DATE - INTERVAL '1 day', 8, 5000);
 
 -- Insert disruptions
-INSERT INTO disruptions (zone_id, type, severity, signal_timestamp) VALUES
-(1, 'weather', 'high', NOW() - INTERVAL '3 days'),
-(2, 'aqi', 'medium', NOW() - INTERVAL '1 day');
+INSERT INTO disruptions (id, zone_id, type, severity, signal_timestamp) VALUES
+(1, 1, 'weather', 'high', NOW() - INTERVAL '3 days'),
+(2, 2, 'aqi', 'medium', NOW() - INTERVAL '1 day');
 
 -- Insert claims
 INSERT INTO claims (disruption_id, worker_id, claim_amount, status) VALUES

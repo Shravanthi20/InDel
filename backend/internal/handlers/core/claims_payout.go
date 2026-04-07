@@ -89,6 +89,35 @@ func GenerateClaimsForDisruption(c *gin.Context) {
 	apiutil.SendSuccess(c, http.StatusOK, result)
 }
 
+func AutoProcessDisruption(c *gin.Context) {
+	if !hasDB() {
+		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")
+		return
+	}
+
+	disruptionID, err := parseUintParam(c.Param("disruption_id"), "dis_")
+	if err != nil {
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", "invalid disruption id", "disruption_id")
+		return
+	}
+
+	result, err := coreOps.AutoProcessDisruption(uint(disruptionID), time.Now().UTC())
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		field := ""
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+			field = "disruption_id"
+		}
+		apiutil.SendError(c, status, code, err.Error(), field)
+		return
+	}
+
+	apiutil.SendSuccess(c, http.StatusOK, result)
+}
+
 func ProcessPayouts(c *gin.Context) {
 	if !hasDB() {
 		apiutil.SendError(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "db unavailable", "")

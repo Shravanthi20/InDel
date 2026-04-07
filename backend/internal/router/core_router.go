@@ -10,6 +10,7 @@ func SetupCoreRoutes(router *gin.Engine) {
 	internal := router.Group("/api/v1/internal")
 	internal.POST("/policy/weekly-cycle/run", core.RunWeeklyCycle)
 	internal.POST("/claims/generate-for-disruption/:disruption_id", core.GenerateClaimsForDisruption)
+	internal.POST("/claims/auto-process/:disruption_id", core.AutoProcessDisruption)
 	internal.POST("/payouts/queue/:claim_id", core.QueueClaimPayout)
 	internal.POST("/payouts/process", core.ProcessPayouts)
 	internal.GET("/payouts/reconciliation", core.GetPayoutReconciliation)

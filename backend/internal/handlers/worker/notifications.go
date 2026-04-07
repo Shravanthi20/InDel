@@ -1,17 +1,23 @@
 package worker
 
-import "github.com/gin-gonic/gin"
+import (
+	"fmt"
+
+	"github.com/gin-gonic/gin"
+)
 
 func notificationTitle(kind string) string {
 	switch kind {
 	case "disruption_alert":
 		return "Disruption detected"
-	case "claim_made":
-		return "Claim is made"
+	case "claim_generated":
+		return "Claim Generated"
 	case "payout_credited":
 		return "Payout credited"
 	case "order_delivered":
 		return "Order delivered"
+	case "premium_due":
+		return "Premium updated"
 	default:
 		return "Notification"
 	}
@@ -42,7 +48,7 @@ func GetNotifications(c *gin.Context) {
 			notifications := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
 				notifications = append(notifications, gin.H{
-					"id":         row.ID,
+					"id":         fmt.Sprintf("ntf_%d", row.ID),
 					"type":       row.Type,
 					"title":      notificationTitle(row.Type),
 					"body":       row.Message,
