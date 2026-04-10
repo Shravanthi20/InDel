@@ -10,6 +10,16 @@ export const getAvailableBatches = () => client.get('/api/v1/worker/batches')
 export const getAssignedBatches = () => client.get('/api/v1/worker/batches/assigned')
 export const postSimulateOrders = (data: { count: number }) =>
   client.post('/api/v1/demo/simulate-orders', data)
+export const postAddBatches = (data: {
+  count: number
+  zone_id?: number
+  zone_level?: 'A' | 'B' | 'C'
+  from_city?: string
+  to_city?: string
+  from_state?: string
+  to_state?: string
+  distance_km?: number
+}) => client.post('/api/v1/platform/demo/add-batches', data)
 export const postIngestDemoOrder = (data: {
   order_id: string
   customer_name: string

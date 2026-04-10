@@ -40,6 +40,8 @@ class WorkerRepository @Inject constructor(
 
     suspend fun getProfile() = workerApiService.getProfile()
 
+    suspend fun getPolicy() = workerApiService.getPolicy()
+
     suspend fun updateProfile(
         name: String,
         zoneLevel: String,
@@ -66,7 +68,7 @@ class WorkerRepository @Inject constructor(
     )
 
     // Zones
-    suspend fun getZones() = workerApiService.getZones()
+    suspend fun getZones() = platformApiService.getZones()
     
     suspend fun getZonePaths(type: String) = platformApiService.getZonePaths(type)
 

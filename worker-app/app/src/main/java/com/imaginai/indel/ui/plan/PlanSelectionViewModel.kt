@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.model.DeliveryPlan
+import com.imaginai.indel.data.model.Policy
 import com.imaginai.indel.data.repository.WorkerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,10 +33,14 @@ class PlanSelectionViewModel @Inject constructor(
     private val _isPaymentRequired = MutableStateFlow(false)
     val isPaymentRequired = _isPaymentRequired.asStateFlow()
 
+    private val _currentPolicy = MutableStateFlow<Policy?>(null)
+    val currentPolicy = _currentPolicy.asStateFlow()
+
     private var cachedPlans: List<DeliveryPlan> = emptyList()
 
     init {
         loadPlans()
+        loadCurrentPolicy()
     }
 
     fun loadPlans() {
@@ -54,6 +59,19 @@ class PlanSelectionViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading plans", e)
                 _uiState.value = PlanUiState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    fun loadCurrentPolicy() {
+        viewModelScope.launch {
+            try {
+                val response = workerRepository.getPolicy()
+                if (response.isSuccessful) {
+                    _currentPolicy.value = response.body()?.policy
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading current policy", e)
             }
         }
     }
@@ -80,16 +98,26 @@ class PlanSelectionViewModel @Inject constructor(
         return minPremium + ((maxPremium - minPremium) * progress / span)
     }
 
+    fun calculateUpgradeFee(plan: DeliveryPlan): Int {
+        val currentPlanId = currentPolicy.value?.planId?.trim().orEmpty()
+        if (currentPlanId.isEmpty() || currentPlanId == plan.planId) return 0
+
+        val currentPlan = cachedPlans.firstOrNull { it.planId == currentPlanId } ?: return 0
+        return if (plan.maxPayoutInr > currentPlan.maxPayoutInr) 5 else 0
+    }
+
     fun confirmSelection() {
         val plan = _selectedPlan.value ?: return
         val deliveries = _selectedExpectedDeliveries.value ?: plan.rangeStart
         viewModelScope.launch {
             try {
                 val premium = calculatePremium(plan, deliveries)
+                val upgradeFee = calculateUpgradeFee(plan)
+                val totalPayment = premium + upgradeFee
                 val response = workerRepository.selectPlan(
                     planId = plan.planId,
                     expectedDeliveries = deliveries,
-                    paymentAmountInr = premium,
+                    paymentAmountInr = totalPayment,
                 )
 
                 if (response.isSuccessful) {
@@ -105,7 +133,7 @@ class PlanSelectionViewModel @Inject constructor(
                     _selectedExpectedDeliveries.value = deliveries
                     _isPaymentRequired.value = false
                     _uiState.value = PlanUiState.SelectionComplete(cachedPlans, selectedPlan)
-                    Log.d(TAG, "Plan ${plan.planId} selected with premium Rs.$premium and deliveries $deliveries")
+                    Log.d(TAG, "Plan ${plan.planId} selected with premium Rs.$premium, fee Rs.$upgradeFee and deliveries $deliveries")
                 } else {
                     _uiState.value = PlanUiState.Error("Failed to confirm plan selection")
                 }

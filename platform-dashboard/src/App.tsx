@@ -6,6 +6,8 @@ import Workers from './pages/Workers'
 import Zones from './pages/Zones'
 import Analytics from './pages/Analytics'
 import Disruptions from './pages/Disruptions'
+import GodModeLayout from './pages/god-mode/GodModeLayout'
+import { GodModeProvider } from './pages/god-mode/state'
 
 export default function App() {
   return (
@@ -18,6 +20,14 @@ export default function App() {
             <Route path="/zones" element={<Zones />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/disruptions" element={<Disruptions />} />
+            <Route
+              path="/god-mode"
+              element={(
+                <GodModeProvider>
+                  <GodModeLayout />
+                </GodModeProvider>
+              )}
+            />
           </Routes>
         </Sidebar>
       </Router>

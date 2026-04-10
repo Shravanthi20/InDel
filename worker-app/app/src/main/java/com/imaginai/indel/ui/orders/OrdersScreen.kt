@@ -32,6 +32,7 @@ fun OrdersScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val selectedTab by viewModel.selectedTab.collectAsState()
 
     Scaffold(
         topBar = {
@@ -61,7 +62,13 @@ fun OrdersScreen(
             ) {
                 when (val state = uiState) {
                     is OrdersUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    is OrdersUiState.Success -> OrdersContent(state.assignedOrders, state.availableOrders, viewModel, navController)
+                    is OrdersUiState.Success -> OrdersContent(
+                        state = state,
+                        selectedTab = selectedTab,
+                        onTabSelected = viewModel::selectTab,
+                        viewModel = viewModel,
+                        navController = navController
+                    )
                     is OrdersUiState.Error -> ErrorState(state.message) { viewModel.loadOrders() }
                 }
             }
@@ -71,38 +78,73 @@ fun OrdersScreen(
 
 @Composable
 fun OrdersContent(
-    assignedOrders: List<Order>,
-    availableOrders: List<Order>,
+    state: OrdersUiState.Success,
+    selectedTab: OrderLifecycleTab,
+    onTabSelected: (OrderLifecycleTab) -> Unit,
     viewModel: OrdersViewModel,
     navController: NavController
 ) {
+    val tabs = OrderLifecycleTab.entries
+    val visibleOrders = when (selectedTab) {
+        OrderLifecycleTab.AVAILABLE -> state.availableOrders
+        OrderLifecycleTab.ASSIGNED -> state.assignedOrders
+        OrderLifecycleTab.PICKED_UP -> state.pickedUpOrders
+        OrderLifecycleTab.DELIVERED -> state.deliveredOrders
+    }
+
+    val tabCount = when (selectedTab) {
+        OrderLifecycleTab.AVAILABLE -> state.availableOrders.size
+        OrderLifecycleTab.ASSIGNED -> state.assignedOrders.size
+        OrderLifecycleTab.PICKED_UP -> state.pickedUpOrders.size
+        OrderLifecycleTab.DELIVERED -> state.deliveredOrders.size
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        if (assignedOrders.isNotEmpty()) {
-            item {
-                Text("Active Tasks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        item {
+            Text(
+                "Batch Lifecycle",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            TabRow(selectedTabIndex = tabs.indexOf(selectedTab), containerColor = Color.White) {
+                tabs.forEach { tab ->
+                    val count = when (tab) {
+                        OrderLifecycleTab.AVAILABLE -> state.availableOrders.size
+                        OrderLifecycleTab.ASSIGNED -> state.assignedOrders.size
+                        OrderLifecycleTab.PICKED_UP -> state.pickedUpOrders.size
+                        OrderLifecycleTab.DELIVERED -> state.deliveredOrders.size
+                    }
+                    Tab(
+                        selected = selectedTab == tab,
+                        onClick = { onTabSelected(tab) },
+                        text = { Text("${tab.title} ($count)") }
+                    )
+                }
             }
-            items(assignedOrders) { order ->
+        }
+
+        if (visibleOrders.isNotEmpty()) {
+            item {
+                Text(
+                    "${selectedTab.title} Orders",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            items(visibleOrders) { order ->
                 OrderCard(order, viewModel, navController)
             }
         }
 
-        if (availableOrders.isNotEmpty()) {
-            item {
-                Text("Available Near You", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            items(availableOrders) { order ->
-                OrderCard(order, viewModel, navController)
-            }
-        }
-
-        if (assignedOrders.isEmpty() && availableOrders.isEmpty()) {
+        if (tabCount == 0) {
             item {
                 Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No orders available at the moment", color = TextSecondary)
+                    Text("No ${selectedTab.title.lowercase()} orders right now", color = TextSecondary)
                 }
             }
         }
@@ -174,7 +216,7 @@ fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavContro
             
             val buttonText = when(order.status) {
                 "assigned" -> "Accept Order"
-                "accepted" -> "Complete Delivery"
+                "accepted" -> "Mark Picked Up"
                 "picked_up" -> "Complete Delivery"
                 else -> "Complete"
             }
@@ -184,13 +226,19 @@ fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavContro
                     onClick = {
                         when(order.status) {
                             "assigned" -> viewModel.acceptOrder(order.orderId)
-                            "accepted" -> navController.navigate(Screen.DeliveryCompletion.createRoute(order.orderId))
+                            "accepted" -> viewModel.pickedUpOrder(order.orderId)
                             "picked_up" -> navController.navigate(Screen.DeliveryCompletion.createRoute(order.orderId))
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (order.status == "assigned") BrandBlue else SuccessGreen)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = when (order.status) {
+                            "assigned" -> BrandBlue
+                            "accepted" -> Color(0xFF1565C0)
+                            else -> SuccessGreen
+                        }
+                    )
                 ) {
                     Text(buttonText)
                 }

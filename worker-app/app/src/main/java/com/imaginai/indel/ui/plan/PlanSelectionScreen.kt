@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.imaginai.indel.data.model.DeliveryPlan
+import com.imaginai.indel.data.model.Policy
 import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
 
@@ -33,6 +34,7 @@ fun PlanSelectionScreen(
     val selectedPlan by viewModel.selectedPlan.collectAsState()
     val selectedExpectedDeliveries by viewModel.selectedExpectedDeliveries.collectAsState()
     val isPaymentRequired by viewModel.isPaymentRequired.collectAsState()
+    val currentPolicy by viewModel.currentPolicy.collectAsState()
 
     LaunchedEffect(uiState) {
         if (uiState is PlanUiState.Skipped) {
@@ -66,12 +68,14 @@ fun PlanSelectionScreen(
                 is PlanUiState.Success -> {
                     PlanContent(
                         plans = state.plans,
+                        currentPolicy = currentPolicy,
                         selectedPlan = selectedPlan,
                         selectedExpectedDeliveries = selectedExpectedDeliveries,
                         isPaymentRequired = isPaymentRequired,
                         onPlanSelected = { viewModel.selectPlan(it) },
                         onExpectedDeliveriesSelected = { viewModel.selectExpectedDeliveries(it) },
                         premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
+                        upgradeFeeForSelection = { plan -> viewModel.calculateUpgradeFee(plan) },
                         onConfirm = { viewModel.confirmSelection() },
                         onSkip = { viewModel.skipPlan() }
                     )
@@ -79,12 +83,14 @@ fun PlanSelectionScreen(
                 is PlanUiState.SelectionComplete -> {
                     PlanContent(
                         plans = state.plans,
+                        currentPolicy = currentPolicy,
                         selectedPlan = state.selectedPlan,
                         selectedExpectedDeliveries = selectedExpectedDeliveries,
                         isPaymentRequired = false,
                         onPlanSelected = { },
                         onExpectedDeliveriesSelected = { },
                         premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
+                        upgradeFeeForSelection = { plan -> viewModel.calculateUpgradeFee(plan) },
                         onConfirm = { },
                         onSkip = { }
                     )
@@ -100,12 +106,14 @@ fun PlanSelectionScreen(
                 is PlanUiState.Skipped -> {
                     PlanContent(
                         plans = state.plans,
+                        currentPolicy = currentPolicy,
                         selectedPlan = selectedPlan,
                         selectedExpectedDeliveries = selectedExpectedDeliveries,
                         isPaymentRequired = false,
                         onPlanSelected = { },
                         onExpectedDeliveriesSelected = { },
                         premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
+                        upgradeFeeForSelection = { plan -> viewModel.calculateUpgradeFee(plan) },
                         onConfirm = { },
                         onSkip = { }
                     )
@@ -160,12 +168,14 @@ fun SelectionBanner(
 @Composable
 fun PlanContent(
     plans: List<DeliveryPlan>,
+    currentPolicy: Policy?,
     selectedPlan: DeliveryPlan?,
     selectedExpectedDeliveries: Int?,
     isPaymentRequired: Boolean,
     onPlanSelected: (DeliveryPlan) -> Unit,
     onExpectedDeliveriesSelected: (Int) -> Unit,
     premiumForSelection: (DeliveryPlan, Int?) -> Int,
+    upgradeFeeForSelection: (DeliveryPlan) -> Int,
     onConfirm: () -> Unit,
     onSkip: () -> Unit
 ) {
@@ -188,6 +198,35 @@ fun PlanContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
+
+                currentPolicy?.let { policy ->
+                    val currentPlan = plans.firstOrNull { it.planId == policy.planId }
+                    if (currentPlan != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = BrandBlue.copy(alpha = 0.08f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BrandBlue.copy(alpha = 0.25f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Current plan", fontWeight = FontWeight.Bold, color = BrandBlue)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(currentPlan.planName, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "Max payout: ₹${currentPlan.maxPayoutInr}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                                Text(
+                                    "Upgrading to a higher payout tier adds ₹5. Lower payout changes are free.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -207,6 +246,8 @@ fun PlanContent(
             if (selectedPlan != null) {
                 val selectedDeliveries = selectedExpectedDeliveries ?: selectedPlan.rangeStart
                 val selectedPremium = premiumForSelection(selectedPlan, selectedDeliveries)
+                val upgradeFee = upgradeFeeForSelection(selectedPlan)
+                val totalPayment = selectedPremium + upgradeFee
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -228,6 +269,19 @@ fun PlanContent(
                         Text(
                             "Weekly Premium: ₹$selectedPremium",
                             style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (upgradeFee > 0) {
+                            Text(
+                                "Upgrade fee: ₹$upgradeFee",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SuccessGreen,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Text(
+                            "Total payable: ₹$totalPayment",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
                             "Coverage: ${(selectedPlan.coverageRatio * 100).toInt()}%",
@@ -282,10 +336,14 @@ fun PlanContent(
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
                         ) {
-                            Text("Pay & Confirm Plan: ₹$selectedPremium")
+                            Text("Pay & Confirm Plan: ₹$totalPayment")
                         }
                         Text(
-                            "Payment is mandatory to activate this plan.",
+                            if (upgradeFee > 0) {
+                                "This is an upgrade. The ₹5 fee is added because the payout tier is higher."
+                            } else {
+                                "Payment is mandatory to activate this plan."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )

@@ -990,7 +990,7 @@
             const apiBase = await discoverApiBase();
             await ensureToken();
             await fetchWithAuth(`${apiBase}/worker/batches/${batch.batchId}/accept`, {
-              method: 'POST',
+              method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ orderIds: batch.orders.map((order) => order.id), pickupCode: code })
             });
