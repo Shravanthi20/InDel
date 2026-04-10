@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  postAddBatches,
   generateClaimsForDisruption,
   getAssignedBatches,
   getAvailableBatches,
@@ -8,8 +9,6 @@ import {
   getZoneHealth,
   getZonePaths,
   getZones,
-  postIngestDemoOrder,
-  postSimulateOrders,
   postTriggerDemo,
 } from '../../api/platform'
 
@@ -45,6 +44,8 @@ export type ZoneOption = {
 
 export type ZonePathOption = ZoneOption & {
   city?: string
+  zoneName?: string
+  zoneState?: string
   fromCity?: string
   toCity?: string
   state?: string
@@ -192,36 +193,35 @@ function parseZonePaths(level: ZoneLevel, body: any): ZonePathOption[] {
         label: cityName,
         zoneId: 0,
         city: cityName,
+        zoneName: cityName,
       })
     })
   }
 
-  const pairs = payload?.cityPairs ?? payload?.city_pairs ?? []
-  if (Array.isArray(pairs)) {
-    pairs.forEach((pair: any) => {
-      const fromCity = String(pair?.from ?? pair?.fromCity ?? '').trim()
-      const toCity = String(pair?.to ?? pair?.toCity ?? '').trim()
-      const state = String(pair?.state ?? '').trim()
-      const fromState = String(pair?.fromState ?? pair?.from_state ?? '').trim()
-      const toState = String(pair?.toState ?? pair?.to_state ?? '').trim()
+  const zones = payload?.zones ?? payload?.zonePairs ?? payload?.zone_pairs ?? payload?.cityPairs ?? payload?.city_pairs ?? []
+  if (Array.isArray(zones)) {
+    zones.forEach((zone: any) => {
+      const zoneName = String(zone?.zone_name ?? zone?.zoneName ?? zone?.name ?? zone?.city ?? '').trim()
+      const zoneState = String(zone?.zone_state ?? zone?.zoneState ?? zone?.state ?? '').trim()
+      const zoneCity = String(zone?.city ?? '').trim()
 
-      if (!fromCity && !toCity) {
+      if (!zoneName && !zoneCity) {
         return
       }
 
-      const label = level === 'C'
-        ? `${fromCity} (${fromState || ''}) to ${toCity} (${toState || ''})`.replace(/\s+/g, ' ').replace(/\(\s*\)/g, '').trim()
-        : `${fromCity} to ${toCity}${state ? ` (${state})` : ''}`
-
+      const label = zoneState && zoneName ? `${zoneState} - ${zoneName}` : (zoneName || zoneCity)
       options.push({
         value: label,
         label,
-        zoneId: 0,
-        fromCity,
-        toCity,
-        state,
-        fromState,
-        toState,
+        zoneId: Number(zone?.zone_id ?? zone?.zoneId ?? 0),
+        city: zoneCity || zoneName || undefined,
+        zoneName: zoneName || undefined,
+        zoneState: zoneState || undefined,
+        fromCity: zoneName || undefined,
+        toCity: zoneName || undefined,
+        state: zoneState || undefined,
+        fromState: zoneState || undefined,
+        toState: zoneState || undefined,
       })
     })
   }
@@ -246,64 +246,6 @@ function parseZonePaths(level: ZoneLevel, body: any): ZonePathOption[] {
   return Array.from(new Map(options.map((option) => [option.value, option])).values()).slice(0, 10)
 }
 
-function deriveZonePathsFromZones(level: ZoneLevel, zones: ZoneRecord[]): ZonePathOption[] {
-  if (zones.length === 0 || level === 'ALL') {
-    return []
-  }
-
-  if (level === 'A') {
-    const cityOptions: ZonePathOption[] = zones
-      .map((zone) => zone.city?.trim())
-      .filter((city): city is string => Boolean(city))
-      .map((city) => ({ value: city, label: city, zoneId: 0, city }))
-    return Array.from(new Map(cityOptions.map((option) => [option.value, option])).values()).slice(0, 10)
-  }
-
-  const pairs: ZonePathOption[] = []
-  for (let i = 0; i < zones.length; i += 1) {
-    for (let j = 0; j < zones.length; j += 1) {
-      if (i === j) {
-        continue
-      }
-
-      const from = zones[i]
-      const to = zones[j]
-      const fromCity = from.city?.trim() ?? ''
-      const toCity = to.city?.trim() ?? ''
-      const fromState = from.state?.trim() ?? ''
-      const toState = to.state?.trim() ?? ''
-      if (!fromCity || !toCity) {
-        continue
-      }
-
-      const sameState = fromState !== '' && toState !== '' && normalizeText(fromState) === normalizeText(toState)
-      if (level === 'B' && !sameState) {
-        continue
-      }
-      if (level === 'C' && sameState) {
-        continue
-      }
-
-      const label = level === 'C'
-        ? `${fromCity} (${fromState}) to ${toCity} (${toState})`
-        : `${fromCity} to ${toCity}${fromState ? ` (${fromState})` : ''}`
-
-      pairs.push({
-        value: label,
-        label,
-        zoneId: 0,
-        fromCity,
-        toCity,
-        state: fromState || undefined,
-        fromState: fromState || undefined,
-        toState: toState || undefined,
-      })
-    }
-  }
-
-  return Array.from(new Map(pairs.map((option) => [option.value, option])).values()).slice(0, 10)
-}
-
 function zoneMatchesAnyField(zone: ZoneRecord, tokens: string[]) {
   const fields = [zone.name, zone.city, zone.state].map(normalizeText)
   return tokens.some((token) => token && fields.some((field) => field.includes(token)))
@@ -321,6 +263,8 @@ function resolveTargetZoneIds(zoneLevel: ZoneLevel, zoneName: string, zones: Zon
   const selectedPath = zonePaths.find((option) => option.value === zoneName)
   if (selectedPath) {
     const tokens = [
+      selectedPath.zoneName,
+      selectedPath.zoneState,
       selectedPath.city,
       selectedPath.fromCity,
       selectedPath.toCity,
@@ -492,6 +436,9 @@ type GodModeContextValue = {
   notice: Notice | null
   previewResult: SimulationResult
   clearNotice: () => void
+  zones: ZoneRecord[]
+  availableBatches: BatchRow[]
+  assignedBatches: BatchRow[]
   batches: BatchRow[]
   showCodes: boolean
   setShowCodes: (value: boolean) => void
@@ -529,12 +476,6 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     computeResult(DEFAULT_ENV_INPUTS, DEFAULT_POLICY_INPUTS, 'ALL ZONES', 0, 'api-mock'),
   )
 
-  const derivedZonePaths = useMemo(() => deriveZonePathsFromZones(zoneLevel, zones), [zoneLevel, zones])
-  const effectiveZonePaths = useMemo(
-    () => (zonePaths.length > 0 ? zonePaths : derivedZonePaths),
-    [zonePaths, derivedZonePaths],
-  )
-
   const zoneNameOptions = useMemo(() => {
     if (zoneLevel === 'ALL') {
       return [{ value: 'ALL ZONES', label: 'ALL ZONES', zoneId: 0 }]
@@ -544,12 +485,12 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
       return [{ value: '', label: 'Loading zone names...', zoneId: 0 }]
     }
 
-    if (effectiveZonePaths.length === 0) {
+    if (zonePaths.length === 0) {
       return [{ value: '', label: 'No zone names available', zoneId: 0 }]
     }
 
-    return [{ value: '', label: 'Select Zone Name', zoneId: 0 }, ...effectiveZonePaths]
-  }, [zoneLevel, zoneNameLoading, effectiveZonePaths])
+    return [{ value: '', label: 'Select Zone Name', zoneId: 0 }, ...zonePaths]
+  }, [zoneLevel, zoneNameLoading, zonePaths])
 
   const affectedZoneIds = useMemo(() => zones.map((zone) => zone.zone_id), [zones])
 
@@ -735,62 +676,30 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     setError('')
     setNotice(null)
 
-    const selectedPath = effectiveZonePaths.find((option) => option.value === zoneName)
+    const selectedPath = zonePaths.find((option) => option.value === zoneName)
+    const fromCity = selectedPath?.zoneName ?? selectedPath?.fromCity ?? selectedPath?.city ?? zones[0]?.city ?? 'Tambaram'
+    const toCity = selectedPath?.zoneName ?? selectedPath?.toCity ?? selectedPath?.city ?? zones[0]?.name ?? 'Velachery'
+    const fromState = selectedPath?.zoneState ?? selectedPath?.fromState ?? selectedPath?.state ?? zones[0]?.state ?? ''
+    const toState = selectedPath?.zoneState ?? selectedPath?.toState ?? selectedPath?.state ?? zones[0]?.state ?? ''
     const targetZoneId = affectedZoneIds[0] ?? zones[0]?.zone_id ?? 1
-    const fromCity = selectedPath?.fromCity ?? selectedPath?.city ?? zones[0]?.city ?? 'Tambaram'
-    const toCity = selectedPath?.toCity ?? selectedPath?.city ?? zones[0]?.name ?? 'Velachery'
-    const fromState = selectedPath?.fromState ?? selectedPath?.state ?? zones[0]?.state ?? ''
-    const toState = selectedPath?.toState ?? selectedPath?.state ?? zones[0]?.state ?? ''
 
     try {
-      let successMessage = 'Batches generated successfully.'
+      const zoneLevelForApi = zoneLevel === 'ALL' ? undefined : zoneLevel
+      const response = await postAddBatches({
+        count: 6,
+        zone_id: targetZoneId,
+        zone_level: zoneLevelForApi,
+        from_city: fromCity,
+        to_city: toCity,
+        from_state: fromState || undefined,
+        to_state: toState || undefined,
+      })
 
-      try {
-        await postSimulateOrders({ count: 6 })
-        successMessage = 'Batch generation triggered: 6 demo orders simulated.'
-      } catch (simulateErr) {
-        if (!isAuthDenied(simulateErr)) {
-          throw simulateErr
-        }
-
-        const ordersToCreate = 6
-        const seedRequests = Array.from({ length: ordersToCreate }, (_, idx) => {
-          const orderId = `god_${Date.now()}_${idx + 1}`
-          return postIngestDemoOrder({
-            order_id: orderId,
-            customer_name: `God Mode Customer ${idx + 1}`,
-            customer_id: `god-cust-${idx + 1}`,
-            customer_contact_number: `90000000${(10 + idx).toString().padStart(2, '0')}`,
-            address: `${toCity} Address ${idx + 1}`,
-            payment_method: 'cod',
-            order_value: 220 + idx * 15,
-            payment_amount: 220 + idx * 15,
-            package_size: idx % 3 === 0 ? 'small' : idx % 3 === 1 ? 'medium' : 'large',
-            package_weight_kg: idx % 3 === 0 ? 0.8 : idx % 3 === 1 ? 2.4 : 4.2,
-            zone_id: targetZoneId,
-            from_city: fromCity,
-            to_city: toCity,
-            from_state: fromState,
-            to_state: toState,
-            pickup_area: fromCity,
-            drop_area: toCity,
-            distance_km: 6 + idx,
-            tip_inr: 10,
-            delivery_fee_inr: 35,
-            status: 'assigned',
-            source: 'god-mode-batch-generator',
-          })
-        })
-
-        const ingestResults = await Promise.allSettled(seedRequests)
-        const ingestedCount = ingestResults.filter((result) => result.status === 'fulfilled').length
-
-        if (ingestedCount === 0) {
-          throw new Error('Unable to ingest demo orders for batch generation')
-        }
-
-        successMessage = `Batch generation completed using fallback ingest: ${ingestedCount} orders created.`
-      }
+      const createdOrders = Number(response.data?.created_orders ?? 0)
+      const estimatedBatches = Number(response.data?.estimated_batches ?? 0)
+      const successMessage = createdOrders > 0
+        ? `Added ${createdOrders} orders and formed ${estimatedBatches || 'new'} optimized batches.`
+        : 'Add Batches completed.'
 
       await refreshBatchContext()
       setNotice({ tone: 'success', message: successMessage })
@@ -1001,6 +910,9 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         addDisruption,
         generateBatches,
         clearNotice: () => setNotice(null),
+        zones,
+        availableBatches,
+        assignedBatches,
         batches,
         showCodes,
         setShowCodes,

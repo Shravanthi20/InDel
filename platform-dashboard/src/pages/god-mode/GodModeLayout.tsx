@@ -1,6 +1,5 @@
 import { CarFront, CloudRain, ThermometerSun, Wind, type LucideIcon } from 'lucide-react'
-import SimulationBox from './SimulationBox'
-import ResultsPage from './ResultsPage'
+import BatchesPage from './BatchesPage'
 import { useGodMode } from './state'
 
 type FactorMeta = {
@@ -31,9 +30,6 @@ export default function GodModeLayout() {
     setManualInput,
     generatingBatches,
     generateBatches,
-    lastDisruptionSignal,
-    notice,
-    clearNotice,
   } = useGodMode()
 
   const currentInputs = godModeEnabled ? manualInputs : apiInputs
@@ -44,10 +40,10 @@ export default function GodModeLayout() {
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.35em] text-sky-700">God Mode Simulation</p>
-              <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">Factor pages with shared backend state</h1>
+              <p className="text-[11px] uppercase tracking-[0.35em] text-sky-700">God Mode Batch Control</p>
+              <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">Factor pages with batch visibility</h1>
               <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
-                All four factors live on the same page. Add disruption now sends a visible signal and can generate claims and notifications.
+                Tune the environment factors, generate batches, and inspect available or assigned batches by zone.
               </p>
             </div>
 
@@ -77,28 +73,12 @@ export default function GodModeLayout() {
                   disabled={generatingBatches}
                   className="rounded-full border border-slate-300 bg-white px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {generatingBatches ? 'Generating...' : 'Generate Batches'}
+                  {generatingBatches ? 'Adding...' : 'Add Batches'}
                 </button>
               </div>
             </div>
           </div>
 
-          {notice ? (
-            <div
-              className={`mt-4 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-medium ${notice.tone === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-rose-200 bg-rose-50 text-rose-800'}`}
-            >
-              <span>{notice.message}</span>
-              <button
-                type="button"
-                onClick={clearNotice}
-                className="rounded-full border border-current px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] opacity-80 transition hover:opacity-100"
-              >
-                Dismiss
-              </button>
-            </div>
-          ) : null}
         </section>
 
         <section className="grid gap-4 xl:grid-cols-2">
@@ -150,40 +130,7 @@ export default function GodModeLayout() {
           })}
         </section>
 
-        <SimulationBox />
-
-        <ResultsPage />
-
-        <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Disruption signal</p>
-              <h2 className="mt-1 text-2xl font-bold text-slate-900">Persistent confirmation</h2>
-            </div>
-            <div className={`rounded-full border px-4 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${lastDisruptionSignal?.sent ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
-              {lastDisruptionSignal?.sent ? 'Signal sent' : 'No signal sent yet'}
-            </div>
-          </div>
-
-          {lastDisruptionSignal?.sent ? (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <div className="font-semibold uppercase tracking-[0.2em]">It has happened</div>
-              <div className="mt-2">
-                Last trigger at {new Date(lastDisruptionSignal.sentAt).toLocaleString()} for {lastDisruptionSignal.scopeLabel}.
-              </div>
-              <div className="mt-2">
-                Mode: {lastDisruptionSignal.triggerMode} | Zones: {lastDisruptionSignal.zonesCount} | Requests: {lastDisruptionSignal.successfulRequests}
-              </div>
-              <div className="mt-2">
-                Claims: {lastDisruptionSignal.claimsCreated} | Notifications: {lastDisruptionSignal.notificationsCreated}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              No disruption has been sent yet. Use the combined disruption button in the simulation box to trigger all zones.
-            </div>
-          )}
-        </section>
+        <BatchesPage />
       </div>
     </div>
   )

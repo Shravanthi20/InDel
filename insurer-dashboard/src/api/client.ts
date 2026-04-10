@@ -1,7 +1,12 @@
 import axios from 'axios'
 
-const INSURER_API_URL = import.meta.env.VITE_INSURER_API_URL || 'http://localhost:8002'
-const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8000'
+const currentHost = typeof window !== 'undefined' && window.location?.hostname
+  ? window.location.hostname
+  : '192.168.1.6'
+const defaultGatewayBaseUrl = `http://${currentHost}:8004`
+
+const INSURER_API_URL = import.meta.env.VITE_INSURER_API_URL || defaultGatewayBaseUrl
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || defaultGatewayBaseUrl
 
 const insurerClient = axios.create({
   baseURL: INSURER_API_URL,

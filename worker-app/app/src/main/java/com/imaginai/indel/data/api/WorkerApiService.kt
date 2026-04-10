@@ -51,7 +51,7 @@ interface WorkerApiService {
     @GET("api/v1/worker/batches/delivered")
     suspend fun getDeliveredBatches(): Response<BatchListResponse>
 
-    @POST("api/v1/worker/batches/{batch_id}/accept")
+    @PUT("api/v1/worker/batches/{batch_id}/accept")
     suspend fun acceptBatch(
         @Path("batch_id") batchId: String,
         @Body request: BatchAcceptRequest,

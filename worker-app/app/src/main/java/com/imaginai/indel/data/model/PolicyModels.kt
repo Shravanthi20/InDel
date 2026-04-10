@@ -15,7 +15,27 @@ data class Policy(
     @SerializedName("plan_name") val planName: String? = null,
     @SerializedName("range_start") val rangeStart: Int? = null,
     @SerializedName("range_end") val rangeEnd: Int? = null,
-    @SerializedName("selected_deliveries") val selectedDeliveries: Int? = null
+    @SerializedName("selected_deliveries") val selectedDeliveries: Int? = null,
+    @SerializedName("payment_status") val paymentStatus: String? = null,
+    @SerializedName("days_since_last_payment") val daysSinceLastPayment: Int? = null,
+    @SerializedName("next_payment_enabled") val nextPaymentEnabled: Boolean? = null,
+    @SerializedName("coverage_status") val coverageStatus: String? = null,
+    @SerializedName("late_fee_inr") val lateFeeInr: Int? = null,
+    @SerializedName("required_payment_inr") val requiredPaymentInr: Int? = null,
+    @SerializedName("last_payment_timestamp") val lastPaymentTimestamp: String? = null,
+    @SerializedName("grace_days_remaining") val graceDaysRemaining: Int? = null,
+    @SerializedName("billing_cycle_days") val billingCycleDays: Int? = null,
+    @SerializedName("grace_period_days") val gracePeriodDays: Int? = null,
+    @SerializedName("initial_payment_multiplier") val initialPaymentMultiplier: Int? = null,
+    @SerializedName("plan_info") val planInfo: PlanInfo? = null
+)
+
+data class PlanInfo(
+    @SerializedName("initial_payment_rule") val initialPaymentRule: String? = null,
+    @SerializedName("weekly_cycle_days") val weeklyCycleDays: Int? = null,
+    @SerializedName("grace_period_days") val gracePeriodDays: Int? = null,
+    @SerializedName("late_fee_rule") val lateFeeRule: String? = null,
+    @SerializedName("termination_rule") val terminationRule: String? = null
 )
 
 data class ShapImpact(

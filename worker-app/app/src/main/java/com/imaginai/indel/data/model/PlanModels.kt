@@ -34,9 +34,12 @@ data class PlanSelectionResponse(
 
 data class PlanSelectionPolicy(
     @SerializedName("policy_id") val policyId: String? = null,
+    @SerializedName("plan_id") val planId: String? = null,
     @SerializedName("status") val status: String? = null,
     @SerializedName("weekly_premium_inr") val weeklyPremiumInr: Int? = null,
     @SerializedName("coverage_ratio") val coverageRatio: Double? = null,
     @SerializedName("payment_amount_inr") val paymentAmountInr: Int? = null,
-    @SerializedName("payment_status") val paymentStatus: String? = null
+    @SerializedName("payment_status") val paymentStatus: String? = null,
+    @SerializedName("upgrade_fee_inr") val upgradeFeeInr: Int? = null,
+    @SerializedName("required_payment_inr") val requiredPaymentInr: Int? = null
 )

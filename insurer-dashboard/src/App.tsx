@@ -9,6 +9,7 @@ import FraudQueue from './pages/FraudQueue'
 import Forecast from './pages/Forecast'
 import MaintenanceChecks from './pages/MaintenanceChecks'
 import Register from './pages/Register'
+import ViewBatches from './pages/ViewBatches'
 
 function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -23,7 +24,7 @@ function AppContent() {
       <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 font-['Outfit']">
         <div className="w-full max-w-[400px] p-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl">
           <div className="mb-8 text-center">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded bg-orange-600 mb-6 font-black text-white italic text-xl">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded bg-[var(--brand-primary)] mb-6 font-black text-white italic text-xl">
               ID
             </div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Secure Terminal</h1>
@@ -32,7 +33,7 @@ function AppContent() {
           
           <div className="space-y-4">
             <button 
-              className="w-full rounded bg-orange-600 p-4 text-sm font-bold text-white transition-none hover:bg-orange-700 active:bg-orange-800 shadow-md"
+              className="w-full rounded bg-[var(--brand-primary)] p-4 text-sm font-bold text-white transition-none hover:bg-[var(--brand-primary-deep)] active:bg-[var(--brand-primary-deep)] shadow-md"
               onClick={() => {
                 localStorage.setItem('token', 'demo-insurer-token')
                 setIsAuthenticated(true)
@@ -64,6 +65,7 @@ function AppContent() {
           <Route path="/fraud-queue" element={<FraudQueue />} />
           <Route path="/forecast" element={<Forecast />} />
           <Route path="/maintenance-checks" element={<MaintenanceChecks />} />
+          <Route path="/batches" element={<ViewBatches />} />
           <Route path="/register" element={<Register />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

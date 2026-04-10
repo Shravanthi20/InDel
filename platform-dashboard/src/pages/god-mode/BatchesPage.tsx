@@ -1,4 +1,5 @@
-import { deliveryCodeFromBatchId, deliveryCodeFromOrderId, pickupCodeFromBatchId, useGodMode } from './state'
+import { useMemo, useState } from 'react'
+import { deliveryCodeFromBatchId, deliveryCodeFromOrderId, pickupCodeFromBatchId, useGodMode, type BatchRow, type ZoneRecord } from './state'
 
 function compactRouteLabel(zoneLevel?: string, fromCity?: string, toCity?: string) {
   const from = (fromCity || '').trim()
@@ -24,31 +25,160 @@ function isZoneASingleStop(zoneLevel?: string, fromCity?: string, toCity?: strin
   return zoneLevel?.toUpperCase() === 'A' && from !== '' && from.toLowerCase() === to.toLowerCase()
 }
 
+function normalize(value: string | undefined) {
+  return (value || '').trim().toLowerCase()
+}
+
+function batchMatchesZone(batch: BatchRow, zone: ZoneRecord) {
+  const zoneTokens = [zone.name, zone.city, zone.state].map(normalize).filter(Boolean)
+  if (zoneTokens.length === 0) {
+    return false
+  }
+
+  const batchTokens = [
+    batch.fromCity,
+    batch.toCity,
+    batch.zoneLevel,
+    ...(batch.orders || []).flatMap((order) => [order.pickupArea, order.dropArea, order.deliveryAddress]),
+  ]
+    .map(normalize)
+    .filter(Boolean)
+
+  return zoneTokens.some((zoneToken) => batchTokens.some((batchToken) => batchToken.includes(zoneToken) || zoneToken.includes(batchToken)))
+}
+
+function zoneLabel(zone: ZoneRecord) {
+  return `${zone.name}${zone.city ? ` • ${zone.city}` : ''}${zone.state ? `, ${zone.state}` : ''}`
+}
+
+function batchZoneNames(batch: BatchRow, zones: ZoneRecord[]) {
+  const matches = zones.filter((zone) => batchMatchesZone(batch, zone))
+  if (matches.length > 0) {
+    return Array.from(new Set(matches.map((zone) => zone.name)))
+  }
+
+  const fallback = [batch.fromCity, batch.toCity].map((value) => value?.trim()).filter(Boolean) as string[]
+  return fallback.length > 0 ? fallback : ['Unmapped']
+}
+
 export default function BatchesPage() {
-  const { batches, showCodes, setShowCodes, loading } = useGodMode()
+  const { availableBatches, assignedBatches, zones, showCodes, setShowCodes, loading } = useGodMode()
+  const [zoneFilter, setZoneFilter] = useState('ALL')
+
+  const zoneOptions = useMemo(() => {
+    const options = zones
+      .slice()
+      .sort((left, right) => {
+        const leftLabel = `${left.name} ${left.city} ${left.state}`.toLowerCase()
+        const rightLabel = `${right.name} ${right.city} ${right.state}`.toLowerCase()
+        return leftLabel.localeCompare(rightLabel)
+      })
+
+    return [{ value: 'ALL', label: 'All zones' }, ...options.map((zone) => ({ value: String(zone.zone_id), label: zoneLabel(zone) }))]
+  }, [zones])
+
+  const selectedZone = useMemo(() => zones.find((zone) => String(zone.zone_id) === zoneFilter) ?? null, [zones, zoneFilter])
+
+  const filteredAvailable = useMemo(
+    () => (selectedZone ? availableBatches.filter((batch) => batchMatchesZone(batch, selectedZone)) : availableBatches),
+    [availableBatches, selectedZone],
+  )
+
+  const filteredAssigned = useMemo(
+    () => (selectedZone ? assignedBatches.filter((batch) => batchMatchesZone(batch, selectedZone)) : assignedBatches),
+    [assignedBatches, selectedZone],
+  )
 
   return (
-    <section className="space-y-4 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="space-y-5 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">God Mode tools</p>
-          <h2 className="mt-1 text-2xl font-bold text-slate-900">Batch list and verification codes</h2>
+          <h2 className="mt-1 text-2xl font-bold text-slate-900">Batch browser by zone</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Inspect available and assigned batches, then narrow the list by zone name.
+          </p>
         </div>
-        <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-700">
-          <input
-            type="checkbox"
-            checked={showCodes}
-            onChange={(event) => setShowCodes(event.target.checked)}
-            className="h-4 w-4"
-          />
-          Show codes
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-700">
+            <input
+              type="checkbox"
+              checked={showCodes}
+              onChange={(event) => setShowCodes(event.target.checked)}
+              className="h-4 w-4"
+            />
+            Show codes
+          </label>
+
+          <label className="flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-700">
+            <span>Zone filter</span>
+            <select
+              value={zoneFilter}
+              onChange={(event) => setZoneFilter(event.target.value)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-700 outline-none"
+            >
+              {zoneOptions.map((zone) => (
+                <option key={zone.value} value={zone.value}>
+                  {zone.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-600">Loading batch context...</div>
-      ) : batches.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-slate-600">No batches available.</div>
+      ) : (
+        <div className="space-y-5">
+          <BatchGroup
+            title="Available batches"
+            subtitle="Orders that can move from the worker's zone to other zones."
+            batches={filteredAvailable}
+            zones={zones}
+            showCodes={showCodes}
+          />
+
+          <BatchGroup
+            title="Assigned batches"
+            subtitle="Orders already grouped for the same zone."
+            batches={filteredAssigned}
+            zones={zones}
+            showCodes={showCodes}
+          />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function BatchGroup({
+  title,
+  subtitle,
+  batches,
+  zones,
+  showCodes,
+}: {
+  title: string
+  subtitle: string
+  batches: BatchRow[]
+  zones: ZoneRecord[]
+  showCodes: boolean
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <p className="text-sm text-slate-500">{subtitle}</p>
+        </div>
+        <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-600">
+          {batches.length} batches
+        </div>
+      </div>
+
+      {batches.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-slate-600">No batches match this zone.</div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {batches.map((batch) => {
@@ -57,29 +187,33 @@ export default function BatchesPage() {
             const deliveryCode = deliveryCodeFromBatchId(batch.batchId)
             const zoneASingleStop = isZoneASingleStop(batch.zoneLevel, batch.fromCity, batch.toCity)
             const routeLabel = compactRouteLabel(batch.zoneLevel, batch.fromCity, batch.toCity)
+            const zoneNames = batchZoneNames(batch, zones)
 
             return (
               <article key={batch.batchId} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                      <div className="text-lg font-black text-slate-900">{batch.batchId}</div>
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                      {routeLabel}
-                    </div>
+                    <div className="text-lg font-black text-slate-900">{batch.batchId}</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{routeLabel}</div>
                   </div>
-                    <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-sky-800">
+                  <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-sky-800">
                     {batch.status || 'Pending'}
                   </div>
                 </div>
 
-                  <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-4">
-                  <MiniStat label="Zone" value={batch.zoneLevel || '-'} />
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1">Zones: {zoneNames.join(', ')}</span>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1">Zone level: {batch.zoneLevel || '-'}</span>
+                </div>
+
+                <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-4">
                   <MiniStat label="Orders" value={String(orderCount)} />
                   <MiniStat label="Weight" value={`${Number(batch.totalWeight || 0).toFixed(1)} kg`} />
                   <MiniStat label="Target" value={`${Number(batch.targetWeight || 0).toFixed(1)} kg`} />
+                  <MiniStat label="Status" value={batch.status || 'Pending'} />
                 </div>
 
-                  <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-3 text-sm sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-3 text-sm sm:grid-cols-2">
                   <CodeCard label="Pickup code" value={showCodes ? pickupCode : '----'} />
                   <CodeCard
                     label="Delivery code"
@@ -104,7 +238,9 @@ export default function BatchesPage() {
                               <div className="text-xs font-semibold text-slate-900">{order.orderId}</div>
                               <div className="text-[11px] text-slate-500">{orderRoute}</div>
                             </div>
-                            <div className="font-mono text-sm font-black tracking-[0.2em] text-sky-800">{showCodes ? orderDeliveryCode : '----'}</div>
+                            <div className="font-mono text-sm font-black tracking-[0.2em] text-sky-800">
+                              {showCodes ? orderDeliveryCode : '----'}
+                            </div>
                           </div>
                         )
                       })}
