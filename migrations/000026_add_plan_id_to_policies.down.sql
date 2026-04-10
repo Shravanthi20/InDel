@@ -1,0 +1,1 @@
+ALTER TABLE policies DROP COLUMN IF EXISTS plan_id;

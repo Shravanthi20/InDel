@@ -9,7 +9,8 @@ import (
 
 const (
 	weeklyPaymentCycle = 7 * 24 * time.Hour
-	expiryDelay        = 7 * 24 * time.Hour
+	gracePeriodWindow  = 2 * 24 * time.Hour
+	initialMultiplier  = 2
 )
 
 type paymentScheduleState struct {
@@ -17,6 +18,12 @@ type paymentScheduleState struct {
 	DaysSinceLastPay    int
 	NextPaymentEnabled  bool
 	CoverageStatus      string
+	LateFeeINR          int
+	RequiredAmountINR   int
+	GraceDaysRemaining  int
+	BillingCycleDays    int
+	GracePeriodDays     int
+	InitialMultiplier   int
 	LastPaymentRecorded *time.Time
 }
 
@@ -34,17 +41,37 @@ func evaluatePaymentSchedule(lastPayment time.Time, now time.Time) paymentSchedu
 		DaysSinceLastPay:    daysSince,
 		NextPaymentEnabled:  false,
 		CoverageStatus:      "Active",
+		LateFeeINR:          0,
+		RequiredAmountINR:   0,
+		GraceDaysRemaining:  0,
+		BillingCycleDays:    int(weeklyPaymentCycle.Hours() / 24),
+		GracePeriodDays:     int(gracePeriodWindow.Hours() / 24),
+		InitialMultiplier:   initialMultiplier,
 		LastPaymentRecorded: &lastPayment,
 	}
 
-	if elapsed >= weeklyPaymentCycle {
+	if elapsed >= weeklyPaymentCycle && elapsed < weeklyPaymentCycle+gracePeriodWindow {
 		state.PaymentStatus = "Eligible"
 		state.NextPaymentEnabled = true
+		daysLate := daysSince - state.BillingCycleDays
+		if daysLate < 0 {
+			daysLate = 0
+		}
+		if daysLate > state.GracePeriodDays {
+			daysLate = state.GracePeriodDays
+		}
+		state.LateFeeINR = daysLate
+		state.GraceDaysRemaining = state.GracePeriodDays - daysLate
+		if state.GraceDaysRemaining < 0 {
+			state.GraceDaysRemaining = 0
+		}
 	}
-	if elapsed >= weeklyPaymentCycle+expiryDelay {
-		state.PaymentStatus = "Expired"
-		state.NextPaymentEnabled = true
-		state.CoverageStatus = "Expired"
+	if elapsed >= weeklyPaymentCycle+gracePeriodWindow {
+		state.PaymentStatus = "Deactivated"
+		state.NextPaymentEnabled = false
+		state.CoverageStatus = "Deactivated"
+		state.LateFeeINR = state.GracePeriodDays
+		state.GraceDaysRemaining = 0
 	}
 
 	return state
@@ -112,7 +139,10 @@ func getOrBootstrapPaymentSchedule(workerID uint, now time.Time) (paymentSchedul
 			PaymentStatus:      "Eligible",
 			DaysSinceLastPay:   0,
 			NextPaymentEnabled: true,
-			CoverageStatus:     "Expired",
+			CoverageStatus:     "NeedsActivation",
+			BillingCycleDays:   int(weeklyPaymentCycle.Hours() / 24),
+			GracePeriodDays:    int(gracePeriodWindow.Hours() / 24),
+			InitialMultiplier:  initialMultiplier,
 		}, nil
 	}
 
@@ -164,7 +194,10 @@ func paymentStateFromInMemoryPolicy(policy map[string]any, now time.Time) paymen
 			PaymentStatus:      "Eligible",
 			DaysSinceLastPay:   0,
 			NextPaymentEnabled: true,
-			CoverageStatus:     "Expired",
+			CoverageStatus:     "NeedsActivation",
+			BillingCycleDays:   int(weeklyPaymentCycle.Hours() / 24),
+			GracePeriodDays:    int(gracePeriodWindow.Hours() / 24),
+			InitialMultiplier:  initialMultiplier,
 		}
 	}
 
@@ -176,6 +209,12 @@ func applyPaymentStateToPolicy(policy map[string]any, state paymentScheduleState
 	policy["days_since_last_payment"] = state.DaysSinceLastPay
 	policy["next_payment_enabled"] = state.NextPaymentEnabled
 	policy["coverage_status"] = state.CoverageStatus
+	policy["late_fee_inr"] = state.LateFeeINR
+	policy["required_payment_inr"] = state.RequiredAmountINR
+	policy["grace_days_remaining"] = state.GraceDaysRemaining
+	policy["billing_cycle_days"] = state.BillingCycleDays
+	policy["grace_period_days"] = state.GracePeriodDays
+	policy["initial_payment_multiplier"] = state.InitialMultiplier
 	if state.LastPaymentRecorded != nil {
 		policy["last_payment_timestamp"] = state.LastPaymentRecorded.UTC().Format(time.RFC3339)
 	}
@@ -183,4 +222,17 @@ func applyPaymentStateToPolicy(policy map[string]any, state paymentScheduleState
 
 func paymentLockError(state paymentScheduleState) string {
 	return fmt.Sprintf("payment_locked_until_weekly_cycle_complete(days_since_last_payment=%d)", state.DaysSinceLastPay)
+}
+
+func syncPolicyStatusWithPaymentState(workerID uint, state paymentScheduleState) {
+	if !hasDB() {
+		return
+	}
+
+	if strings.EqualFold(state.CoverageStatus, "Deactivated") {
+		_ = workerDB.Exec(
+			"UPDATE policies SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE worker_id = ? AND status <> 'cancelled'",
+			workerID,
+		).Error
+	}
 }

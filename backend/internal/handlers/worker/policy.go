@@ -22,7 +22,8 @@ func GetPolicy(c *gin.Context) {
 			var p models.Policy
 			err := workerDB.Where("worker_id = ?", workerIDUint).Order("id DESC").First(&p).Error
 			if err == nil {
-				quote, _ := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC())
+				now := time.Now().UTC()
+				quote, _ := services.QuotePremium(workerDB, workerIDUint, now)
 				premiumAmount := int(p.PremiumAmount)
 				source := "stored_policy"
 				riskScore := 0.0
@@ -54,6 +55,11 @@ func GetPolicy(c *gin.Context) {
 					coverageRatio = 0.95
 				}
 
+				paymentState, stateErr := getOrBootstrapPaymentSchedule(workerIDUint, now)
+				if stateErr == nil {
+					syncPolicyStatusWithPaymentState(workerIDUint, paymentState)
+				}
+
 				dueDate := p.CreatedAt.AddDate(0, 0, 7).Format("2006-01-02")
 				var lastPaymentDate time.Time
 				if err := workerDB.Table("premium_payments").Select("payment_date").Where("policy_id = ?", p.ID).Order("payment_date DESC").Limit(1).Scan(&lastPaymentDate).Error; err == nil && !lastPaymentDate.IsZero() {
@@ -66,9 +72,25 @@ func GetPolicy(c *gin.Context) {
 					}
 				}
 
+				effectiveStatus := p.Status
+				if stateErr == nil && paymentState.CoverageStatus == "Deactivated" {
+					effectiveStatus = "cancelled"
+				}
+
+				requiredAmount := 0
+				if stateErr == nil {
+					if paymentState.PaymentStatus == "Eligible" {
+						requiredAmount = premiumAmount + paymentState.LateFeeINR
+					} else if paymentState.CoverageStatus == "NeedsActivation" {
+						requiredAmount = premiumAmount * initialMultiplier
+					}
+					paymentState.RequiredAmountINR = requiredAmount
+				}
+
 				policy := gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", p.ID),
-					"status":             p.Status,
+					"plan_id":            p.PlanID,
+					"status":             effectiveStatus,
 					"weekly_premium_inr": premiumAmount,
 					"coverage_ratio":     coverageRatio,
 					"zone":               "Tambaram, Chennai",
@@ -77,6 +99,16 @@ func GetPolicy(c *gin.Context) {
 					"pricing_source":     source,
 					"model_version":      modelVersion,
 					"shap_breakdown":     breakdown,
+					"plan_info": gin.H{
+						"initial_payment_rule": "first_payment_is_double_weekly_premium",
+						"weekly_cycle_days":    7,
+						"grace_period_days":    2,
+						"late_fee_rule":        "rs_1_per_day_during_grace",
+						"termination_rule":     "deactivate_after_7_plus_2_days_without_payment",
+					},
+				}
+				if stateErr == nil {
+					applyPaymentStateToPolicy(policy, paymentState)
 				}
 				c.JSON(200, gin.H{"policy": policy})
 				return

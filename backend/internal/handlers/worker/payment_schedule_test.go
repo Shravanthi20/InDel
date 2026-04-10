@@ -37,21 +37,24 @@ func TestEvaluatePaymentScheduleEligible(t *testing.T) {
 	if state.CoverageStatus != "Active" {
 		t.Fatalf("expected Active coverage, got %s", state.CoverageStatus)
 	}
+	if state.LateFeeINR != 1 {
+		t.Fatalf("expected late fee 1 on day 8, got %d", state.LateFeeINR)
+	}
 }
 
 func TestEvaluatePaymentScheduleExpired(t *testing.T) {
 	now := time.Now().UTC()
-	last := now.Add(-16 * 24 * time.Hour)
+	last := now.Add(-10 * 24 * time.Hour)
 
 	state := evaluatePaymentSchedule(last, now)
 
-	if state.PaymentStatus != "Expired" {
-		t.Fatalf("expected Expired, got %s", state.PaymentStatus)
+	if state.PaymentStatus != "Deactivated" {
+		t.Fatalf("expected Deactivated, got %s", state.PaymentStatus)
 	}
-	if !state.NextPaymentEnabled {
-		t.Fatalf("expected next payment enabled for restart")
+	if state.NextPaymentEnabled {
+		t.Fatalf("expected next payment disabled after deactivation")
 	}
-	if state.CoverageStatus != "Expired" {
-		t.Fatalf("expected Expired coverage, got %s", state.CoverageStatus)
+	if state.CoverageStatus != "Deactivated" {
+		t.Fatalf("expected Deactivated coverage, got %s", state.CoverageStatus)
 	}
 }

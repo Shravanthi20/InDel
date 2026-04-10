@@ -47,6 +47,7 @@ type Zone struct {
 type Policy struct {
 	ID            uint `gorm:"primaryKey"`
 	WorkerID      uint
+	PlanID        string
 	Status        string
 	PremiumAmount float64
 	PolicyCycleID uint

@@ -363,6 +363,11 @@ func seedDemoOrdersWithFallback(workerIDUint, zoneID uint, count int) {
 
 // DemoReset resets all in-memory demo state and clears orders/batches (no auth required for demo).
 func DemoReset(c *gin.Context) {
+	body := parseBody(c)
+	deleteDB := bodyBool(body, "delete_db", false)
+	reason := strings.TrimSpace(bodyString(body, "reason", ""))
+	confirm := strings.TrimSpace(bodyString(body, "confirm", ""))
+
 	var resetLog []string
 	resetLog = append(resetLog, "DemoReset initiated")
 
@@ -376,7 +381,20 @@ func DemoReset(c *gin.Context) {
 	store.mu.Unlock()
 	resetLog = append(resetLog, "Cleared in-memory orders and batches")
 
-	if hasDB() {
+	if hasDB() && deleteDB {
+		if !allowDestructiveDemoDelete() {
+			c.JSON(403, gin.H{"error": "destructive_demo_delete_blocked", "message": "destructive demo delete is disabled in production unless INDEL_ALLOW_DESTRUCTIVE_OPS=true"})
+			return
+		}
+		if len(reason) < 8 {
+			c.JSON(400, gin.H{"error": "reason_required", "message": "reason must be provided and at least 8 characters", "field": "reason"})
+			return
+		}
+		if !strings.EqualFold(confirm, "RESET_DEMO_DB") {
+			c.JSON(400, gin.H{"error": "confirmation_required", "message": "set confirm to RESET_DEMO_DB to allow database deletion", "field": "confirm"})
+			return
+		}
+
 		result1 := workerDB.Exec("DELETE FROM notifications")
 		if result1.Error == nil {
 			resetLog = append(resetLog, fmt.Sprintf("Deleted %d notifications", result1.RowsAffected))
@@ -391,6 +409,8 @@ func DemoReset(c *gin.Context) {
 		if result3.Error == nil {
 			resetLog = append(resetLog, fmt.Sprintf("Deleted %d orders", result3.RowsAffected))
 		}
+	} else if hasDB() {
+		resetLog = append(resetLog, "Skipped database deletion (set delete_db=true with confirm and reason to enable)")
 	}
 
 	log.Println("DemoReset: " + fmt.Sprint(resetLog))
@@ -521,8 +541,19 @@ func DemoResetZone(c *gin.Context) {
 	if !ok {
 		return
 	}
+	body := parseBody(c)
+	reason := strings.TrimSpace(bodyString(body, "reason", ""))
 
 	if hasDB() {
+		if !allowDestructiveDemoDelete() {
+			c.JSON(403, gin.H{"error": "destructive_demo_delete_blocked", "message": "destructive demo delete is disabled in production unless INDEL_ALLOW_DESTRUCTIVE_OPS=true"})
+			return
+		}
+		if len(reason) < 8 {
+			c.JSON(400, gin.H{"error": "reason_required", "message": "reason must be provided and at least 8 characters", "field": "reason"})
+			return
+		}
+
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			_ = workerDB.Exec("DELETE FROM payouts WHERE worker_id = ?", workerIDUint).Error
 			_ = workerDB.Exec("DELETE FROM claims WHERE worker_id = ?", workerIDUint).Error
@@ -537,5 +568,12 @@ func DemoResetZone(c *gin.Context) {
 	store.mu.Unlock()
 
 	c.JSON(200, gin.H{"message": "zone_reset", "time": nowISO()})
+}
+
+func allowDestructiveDemoDelete() bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ALLOW_DESTRUCTIVE_OPS")), "true") {
+		return true
+	}
+	return !strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ENV")), "production")
 }
 

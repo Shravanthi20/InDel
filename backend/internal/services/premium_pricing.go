@@ -203,19 +203,19 @@ func loadPremiumContext(db *gorm.DB, workerID uint, now time.Time) (PremiumConte
 	}
 
 	type row struct {
-		WorkerID        uint      `gorm:"column:worker_id"`
-		ZoneID          uint      `gorm:"column:zone_id"`
-		City            string    `gorm:"column:city"`
-		State           string    `gorm:"column:state"`
-		ZoneLevel       string    `gorm:"column:zone_level"`
-		ZoneRisk        float64   `gorm:"column:zone_risk"`
-		VehicleType     string    `gorm:"column:vehicle_type"`
-		CreatedAt       time.Time `gorm:"column:created_at"`
-		BaselineAmount  float64   `gorm:"column:baseline_amount"`
-		WeeklyEarnings  float64   `gorm:"column:weekly_earnings"`
-		PaidOrders      float64   `gorm:"column:paid_orders"`
-		ActiveHours     float64   `gorm:"column:active_hours"`
-		DisruptionCount float64   `gorm:"column:disruption_count"`
+		WorkerID        uint    `gorm:"column:worker_id"`
+		ZoneID          uint    `gorm:"column:zone_id"`
+		City            string  `gorm:"column:city"`
+		State           string  `gorm:"column:state"`
+		ZoneLevel       string  `gorm:"column:zone_level"`
+		ZoneRisk        float64 `gorm:"column:zone_risk"`
+		VehicleType     string  `gorm:"column:vehicle_type"`
+		CreatedAt       string  `gorm:"column:created_at"`
+		BaselineAmount  float64 `gorm:"column:baseline_amount"`
+		WeeklyEarnings  float64 `gorm:"column:weekly_earnings"`
+		PaidOrders      float64 `gorm:"column:paid_orders"`
+		ActiveHours     float64 `gorm:"column:active_hours"`
+		DisruptionCount float64 `gorm:"column:disruption_count"`
 	}
 
 	var data row
@@ -271,7 +271,8 @@ func loadPremiumContext(db *gorm.DB, workerID uint, now time.Time) (PremiumConte
 	context.State = safeString(data.State, "Tamil Nadu")
 	context.ZoneType = zoneTypeFromLevel(data.ZoneLevel)
 	context.VehicleType = safeString(data.VehicleType, "two_wheeler")
-	context.ExperienceDays = maxInt(7, int(now.UTC().Sub(data.CreatedAt).Hours()/24))
+	createdAt := parseCreatedAtValue(data.CreatedAt, now.UTC())
+	context.ExperienceDays = maxInt(7, int(now.UTC().Sub(createdAt).Hours()/24))
 	context.AvgDailyOrders = maxFloat(3, data.PaidOrders/7)
 	baselineDaily := data.BaselineAmount / 7
 	weeklyDaily := data.WeeklyEarnings / 7
@@ -286,6 +287,28 @@ func loadPremiumContext(db *gorm.DB, workerID uint, now time.Time) (PremiumConte
 	context.Humidity = 58 + data.ZoneRisk*25
 
 	return context, fallbackPremiumQuote(context), nil
+}
+
+func parseCreatedAtValue(raw string, fallback time.Time) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.ParseInLocation(layout, raw, time.UTC); err == nil {
+			return parsed
+		}
+	}
+	return fallback
 }
 
 func fallbackPremiumQuote(context PremiumContext) *PremiumQuote {

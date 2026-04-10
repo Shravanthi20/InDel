@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
+	"github.com/Shravanthi20/InDel/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,6 +20,25 @@ type planConfig struct {
 	CoverageRatio float64
 	MaxPayoutINR  int
 	Description   string
+}
+
+func planUpgradeFee(planConfigs map[string]planConfig, currentPlanID string, selectedPlanID string) int {
+	currentPlanID = strings.TrimSpace(currentPlanID)
+	selectedPlanID = strings.TrimSpace(selectedPlanID)
+	if currentPlanID == "" || currentPlanID == selectedPlanID {
+		return 0
+	}
+
+	currentPlan, currentExists := planConfigs[currentPlanID]
+	selectedPlan, selectedExists := planConfigs[selectedPlanID]
+	if !currentExists || !selectedExists {
+		return 0
+	}
+
+	if selectedPlan.MaxPayoutINR > currentPlan.MaxPayoutINR {
+		return 5
+	}
+	return 0
 }
 
 func clampInt(value, min, max int) int {
@@ -151,6 +171,102 @@ func bodyBool(body map[string]any, key string, fallback bool) bool {
 	return b
 }
 
+func getPremiumProfileFromDB(workerID string) map[string]any {
+	if !hasDB() {
+		return nil
+	}
+
+	workerIDUint, err := parseWorkerID(workerID)
+	if err != nil {
+		return nil
+	}
+
+	type row struct {
+		ZoneID    uint    `gorm:"column:zone_id"`
+		ZoneLevel string  `gorm:"column:zone_level"`
+		ZoneCity  string  `gorm:"column:zone_city"`
+		ZoneState string  `gorm:"column:zone_state"`
+		Vehicle   string  `gorm:"column:vehicle_type"`
+		Baseline  float64 `gorm:"column:baseline_amount"`
+	}
+
+	var r row
+	if qErr := workerDB.Raw(`
+		SELECT
+			COALESCE(wp.zone_id, 0) AS zone_id,
+			COALESCE(z.level, '') AS zone_level,
+			COALESCE(z.city, '') AS zone_city,
+			COALESCE(z.state, '') AS zone_state,
+			COALESCE(wp.vehicle_type, 'two_wheeler') AS vehicle_type,
+			COALESCE(eb.baseline_amount, 4200) AS baseline_amount
+		FROM worker_profiles wp
+		LEFT JOIN zones z ON z.id = wp.zone_id
+		LEFT JOIN earnings_baseline eb ON eb.worker_id = wp.worker_id
+		WHERE wp.worker_id = ?
+		LIMIT 1
+	`, workerIDUint).Scan(&r).Error; qErr != nil {
+		return nil
+	}
+
+	return map[string]any{
+		"zone_id":         float64(r.ZoneID),
+		"zone_level":      r.ZoneLevel,
+		"city":            r.ZoneCity,
+		"state":           r.ZoneState,
+		"vehicle_type":    r.Vehicle,
+		"baseline_amount": r.Baseline,
+	}
+}
+
+func enrichPremiumProfileWithZoneGeo(profile map[string]any, zoneID uint) {
+	if profile == nil || !hasDB() || zoneID == 0 {
+		return
+	}
+
+	type zoneRow struct {
+		City  string `gorm:"column:city"`
+		State string `gorm:"column:state"`
+		Level string `gorm:"column:level"`
+	}
+
+	var z zoneRow
+	if err := workerDB.Raw("SELECT COALESCE(city,'') AS city, COALESCE(state,'') AS state, COALESCE(level,'') AS level FROM zones WHERE id = ? LIMIT 1", zoneID).Scan(&z).Error; err != nil {
+		return
+	}
+
+	if strings.TrimSpace(z.City) != "" {
+		profile["city"] = z.City
+	}
+	if strings.TrimSpace(z.State) != "" {
+		profile["state"] = z.State
+	}
+	if strings.TrimSpace(z.Level) != "" {
+		profile["zone_level"] = z.Level
+	}
+}
+
+func getPremiumEstimate(workerID string, profile map[string]any) (int, string) {
+	if !hasDB() {
+		return 35, "fallback"
+	}
+
+	workerIDUint, err := parseWorkerID(workerID)
+	if err != nil {
+		return 35, "fallback"
+	}
+
+	quote, qErr := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC())
+	if qErr != nil || quote == nil {
+		return 35, "fallback"
+	}
+
+	premium := int(quote.WeeklyPremiumINR)
+	if premium <= 0 {
+		premium = 35
+	}
+	return premium, quote.Source
+}
+
 // GetPlans returns available delivery plans based on order ranges
 func GetPlans(c *gin.Context) {
 	workerID, ok := requireAuth(c)
@@ -238,10 +354,39 @@ func SelectPlan(c *gin.Context) {
 	}
 
 	premiumAmount := premiumForRange(plan, expectedDeliveries)
-	if paymentAmount < premiumAmount {
+	upgradeFee := 0
+	requiredPayment := premiumAmount
+	isInitialActivation := false
+
+	if hasDB() {
+		workerIDUint, parseErr := parseWorkerID(workerID)
+		if parseErr == nil {
+			var currentPolicy models.Policy
+			if err := workerDB.Where("worker_id = ?", workerIDUint).Order("id DESC").First(&currentPolicy).Error; err == nil {
+				upgradeFee = planUpgradeFee(planConfigs, currentPolicy.PlanID, planID)
+
+				var completedPayments int64
+				_ = workerDB.Raw("SELECT COUNT(*) FROM premium_payments WHERE worker_id = ? AND status = 'completed'", workerIDUint).Scan(&completedPayments).Error
+				if completedPayments == 0 || strings.EqualFold(currentPolicy.Status, "cancelled") || strings.EqualFold(currentPolicy.Status, "skipped") {
+					isInitialActivation = true
+				}
+			} else {
+				isInitialActivation = true
+			}
+			requiredPayment = premiumAmount + upgradeFee
+			if isInitialActivation {
+				requiredPayment = (premiumAmount * initialMultiplier) + upgradeFee
+			}
+		}
+	}
+
+	if paymentAmount < requiredPayment {
 		c.JSON(400, gin.H{
-			"error":               "insufficient_payment_amount",
-			"required_amount_inr": premiumAmount,
+			"error":                      "insufficient_payment_amount",
+			"required_amount_inr":        requiredPayment,
+			"upgrade_fee_inr":            upgradeFee,
+			"is_initial_activation":      isInitialActivation,
+			"initial_payment_multiplier": initialMultiplier,
 		})
 		return
 	}
@@ -250,12 +395,63 @@ func SelectPlan(c *gin.Context) {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			now := time.Now().UTC()
-			// Create or update policy
 			policy := models.Policy{
 				WorkerID:      workerIDUint,
+				PlanID:        planID,
 				Status:        "active",
 				PremiumAmount: float64(premiumAmount),
 			}
+
+			var currentPolicy models.Policy
+			currentErr := workerDB.Where("worker_id = ?", workerIDUint).Order("id DESC").First(&currentPolicy).Error
+			if currentErr == nil {
+				if err := workerDB.Model(&models.Policy{}).Where("id = ?", currentPolicy.ID).Updates(map[string]interface{}{
+					"plan_id":        planID,
+					"status":         "active",
+					"premium_amount": float64(premiumAmount),
+					"updated_at":     now,
+				}).Error; err == nil {
+					_ = workerDB.Exec(
+						"INSERT INTO premium_payments (worker_id, policy_id, amount, status, payment_date) VALUES (?, ?, ?, 'completed', CURRENT_TIMESTAMP)",
+						workerIDUint, currentPolicy.ID, paymentAmount,
+					).Error
+					_ = upsertPaymentSchedule(workerIDUint, now, false, "Active")
+
+					c.JSON(200, gin.H{
+						"message": "plan_selected_successfully",
+						"plan": gin.H{
+							"plan_id":                    planID,
+							"plan_name":                  plan.PlanName,
+							"range_start":                plan.RangeStart,
+							"range_end":                  plan.RangeEnd,
+							"selected_deliveries":        expectedDeliveries,
+							"weekly_premium_inr":         premiumAmount,
+							"coverage_ratio":             plan.CoverageRatio,
+							"max_payout_inr":             plan.MaxPayoutINR,
+							"upgrade_fee_inr":            upgradeFee,
+							"required_payment_inr":       requiredPayment,
+							"is_initial_activation":      isInitialActivation,
+							"initial_payment_multiplier": initialMultiplier,
+						},
+						"policy": gin.H{
+							"policy_id":                  fmt.Sprintf("pol-%03d", currentPolicy.ID),
+							"plan_id":                    planID,
+							"status":                     "active",
+							"weekly_premium_inr":         premiumAmount,
+							"coverage_ratio":             plan.CoverageRatio,
+							"payment_amount_inr":         paymentAmount,
+							"payment_status":             "Locked",
+							"days_since_last_payment":    0,
+							"next_payment_enabled":       false,
+							"coverage_status":            "Active",
+							"initial_payment_multiplier": initialMultiplier,
+							"last_payment_timestamp":     now.Format(time.RFC3339),
+						},
+					})
+					return
+				}
+			}
+
 			if err := workerDB.Create(&policy).Error; err == nil {
 				_ = workerDB.Exec(
 					"INSERT INTO premium_payments (worker_id, policy_id, amount, status, payment_date) VALUES (?, ?, ?, 'completed', CURRENT_TIMESTAMP)",
@@ -266,26 +462,32 @@ func SelectPlan(c *gin.Context) {
 				c.JSON(200, gin.H{
 					"message": "plan_selected_successfully",
 					"plan": gin.H{
-						"plan_id":             planID,
-						"plan_name":           plan.PlanName,
-						"range_start":         plan.RangeStart,
-						"range_end":           plan.RangeEnd,
-						"selected_deliveries": expectedDeliveries,
-						"weekly_premium_inr":  premiumAmount,
-						"coverage_ratio":      plan.CoverageRatio,
-						"max_payout_inr":      plan.MaxPayoutINR,
+						"plan_id":                    planID,
+						"plan_name":                  plan.PlanName,
+						"range_start":                plan.RangeStart,
+						"range_end":                  plan.RangeEnd,
+						"selected_deliveries":        expectedDeliveries,
+						"weekly_premium_inr":         premiumAmount,
+						"coverage_ratio":             plan.CoverageRatio,
+						"max_payout_inr":             plan.MaxPayoutINR,
+						"upgrade_fee_inr":            upgradeFee,
+						"required_payment_inr":       requiredPayment,
+						"is_initial_activation":      isInitialActivation,
+						"initial_payment_multiplier": initialMultiplier,
 					},
 					"policy": gin.H{
-						"policy_id":               fmt.Sprintf("pol-%03d", policy.ID),
-						"status":                  policy.Status,
-						"weekly_premium_inr":      int(policy.PremiumAmount),
-						"coverage_ratio":          plan.CoverageRatio,
-						"payment_amount_inr":      paymentAmount,
-						"payment_status":          "Locked",
-						"days_since_last_payment": 0,
-						"next_payment_enabled":    false,
-						"coverage_status":         "Active",
-						"last_payment_timestamp":  now.Format(time.RFC3339),
+						"policy_id":                  fmt.Sprintf("pol-%03d", policy.ID),
+						"plan_id":                    planID,
+						"status":                     policy.Status,
+						"weekly_premium_inr":         int(policy.PremiumAmount),
+						"coverage_ratio":             plan.CoverageRatio,
+						"payment_amount_inr":         paymentAmount,
+						"payment_status":             "Locked",
+						"days_since_last_payment":    0,
+						"next_payment_enabled":       false,
+						"coverage_status":            "Active",
+						"initial_payment_multiplier": initialMultiplier,
+						"last_payment_timestamp":     now.Format(time.RFC3339),
 					},
 				})
 				return
@@ -299,23 +501,27 @@ func SelectPlan(c *gin.Context) {
 
 	// Update or create policy in in-memory store
 	policy := gin.H{
-		"plan_id":                 planID,
-		"plan_name":               plan.PlanName,
-		"plan_status":             "selected",
-		"range_start":             plan.RangeStart,
-		"range_end":               plan.RangeEnd,
-		"selected_deliveries":     expectedDeliveries,
-		"weekly_premium_inr":      premiumAmount,
-		"coverage_ratio":          plan.CoverageRatio,
-		"max_payout_inr":          plan.MaxPayoutINR,
-		"status":                  "active",
-		"payment_amount_inr":      paymentAmount,
-		"payment_status":          "Locked",
-		"days_since_last_payment": 0,
-		"next_payment_enabled":    false,
-		"coverage_status":         "Active",
-		"last_payment_timestamp":  nowISO(),
-		"created_at":              nowISO(),
+		"plan_id":                    planID,
+		"plan_name":                  plan.PlanName,
+		"plan_status":                "selected",
+		"range_start":                plan.RangeStart,
+		"range_end":                  plan.RangeEnd,
+		"selected_deliveries":        expectedDeliveries,
+		"weekly_premium_inr":         premiumAmount,
+		"coverage_ratio":             plan.CoverageRatio,
+		"max_payout_inr":             plan.MaxPayoutINR,
+		"status":                     "active",
+		"payment_amount_inr":         paymentAmount,
+		"payment_status":             "Locked",
+		"days_since_last_payment":    0,
+		"next_payment_enabled":       false,
+		"coverage_status":            "Active",
+		"last_payment_timestamp":     nowISO(),
+		"created_at":                 nowISO(),
+		"upgrade_fee_inr":            upgradeFee,
+		"required_payment_inr":       requiredPayment,
+		"is_initial_activation":      isInitialActivation,
+		"initial_payment_multiplier": initialMultiplier,
 	}
 
 	store.data.Policy = policy
@@ -331,6 +537,7 @@ func SelectPlan(c *gin.Context) {
 		"message": "plan_selected_successfully",
 		"plan":    policy,
 		"policy": gin.H{
+			"plan_id":                 planID,
 			"status":                  "active",
 			"weekly_premium_inr":      premiumAmount,
 			"coverage_ratio":          plan.CoverageRatio,

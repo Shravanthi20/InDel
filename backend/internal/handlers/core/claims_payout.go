@@ -12,9 +12,15 @@ import (
 )
 
 type syntheticRequest struct {
-	Seed      int    `json:"seed"`
-	Scenario  string `json:"scenario"`
-	OutputDir string `json:"output_dir"`
+	Seed               int                              `json:"seed"`
+	Scenario           string                           `json:"scenario"`
+	OutputDir          string                           `json:"output_dir"`
+	WeeksHistory       int                              `json:"weeks_history,omitempty"`
+	ClaimCount         int                              `json:"claim_count,omitempty"`
+	DisruptionsPerZone int                              `json:"disruptions_per_zone,omitempty"`
+	AccountOptions     []services.SyntheticAccountOption `json:"account_options,omitempty"`
+	ForceReset         bool                             `json:"force_reset"`
+	Reason             string                           `json:"reason"`
 }
 
 func QueueClaimPayout(c *gin.Context) {
@@ -169,7 +175,25 @@ func GenerateSyntheticData(c *gin.Context) {
 		return
 	}
 
-	result, err := coreOps.GenerateSyntheticData(services.SyntheticGenerateRequest{Seed: req.Seed, Scenario: req.Scenario, OutputDir: req.OutputDir}, time.Now().UTC())
+	if !req.ForceReset {
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", "force_reset must be true to allow synthetic data reset", "force_reset")
+		return
+	}
+
+	if len(strings.TrimSpace(req.Reason)) < 8 {
+		apiutil.SendError(c, http.StatusBadRequest, "VALIDATION_ERROR", "reason must be provided and at least 8 characters", "reason")
+		return
+	}
+
+	result, err := coreOps.GenerateSyntheticData(services.SyntheticGenerateRequest{
+		Seed:               req.Seed,
+		Scenario:           req.Scenario,
+		OutputDir:          req.OutputDir,
+		WeeksHistory:       req.WeeksHistory,
+		ClaimCount:         req.ClaimCount,
+		DisruptionsPerZone: req.DisruptionsPerZone,
+		AccountOptions:     req.AccountOptions,
+	}, time.Now().UTC())
 	if err != nil {
 		apiutil.SendError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), "")
 		return
