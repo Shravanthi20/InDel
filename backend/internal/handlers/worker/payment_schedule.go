@@ -164,46 +164,6 @@ func upsertPaymentSchedule(workerID uint, lastPayment time.Time, nextEnabled boo
 	`, workerID, lastPayment, nextEnabled, coverageStatus).Error
 }
 
-func parseLastPaymentFromPolicy(policy map[string]any) (time.Time, bool) {
-	raw, exists := policy["last_payment_timestamp"]
-	if !exists || raw == nil {
-		return time.Time{}, false
-	}
-
-	switch v := raw.(type) {
-	case string:
-		if strings.TrimSpace(v) == "" {
-			return time.Time{}, false
-		}
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			return t, true
-		}
-		if t, err := time.Parse("2006-01-02 15:04:05", v); err == nil {
-			return t, true
-		}
-	case time.Time:
-		return v, true
-	}
-	return time.Time{}, false
-}
-
-func paymentStateFromInMemoryPolicy(policy map[string]any, now time.Time) paymentScheduleState {
-	lastPayment, ok := parseLastPaymentFromPolicy(policy)
-	if !ok {
-		return paymentScheduleState{
-			PaymentStatus:      "Eligible",
-			DaysSinceLastPay:   0,
-			NextPaymentEnabled: true,
-			CoverageStatus:     "NeedsActivation",
-			BillingCycleDays:   int(weeklyPaymentCycle.Hours() / 24),
-			GracePeriodDays:    int(gracePeriodWindow.Hours() / 24),
-			InitialMultiplier:  initialMultiplier,
-		}
-	}
-
-	return evaluatePaymentSchedule(lastPayment, now)
-}
-
 func applyPaymentStateToPolicy(policy map[string]any, state paymentScheduleState) {
 	policy["payment_status"] = state.PaymentStatus
 	policy["days_since_last_payment"] = state.DaysSinceLastPay

@@ -253,23 +253,6 @@ func groupRowsByBatchKey(rows []batchOrderRow) map[string][]batchOrderRow {
 	return groups
 }
 
-func snapshotForRows(groupKey string, rows []batchOrderRow) gin.H {
-	if len(rows) == 0 {
-		return nil
-	}
-	batches := rowsToBatches(rows, batchStatusFromRows(rows, "Assigned"))
-	if len(batches) == 0 {
-		return nil
-	}
-	for index := range batches {
-		batches[index]["batchGroupKey"] = groupKey
-		if _, ok := batches[index]["batchKey"].(string); !ok || batches[index]["batchKey"] == "" {
-			batches[index]["batchKey"] = fmt.Sprintf("%s#%02d", groupKey, index+1)
-		}
-	}
-	return batches[0]
-}
-
 func storeBatchSnapshot(workerID string, snapshot gin.H) {
 	if workerID == "" || snapshot == nil {
 		return

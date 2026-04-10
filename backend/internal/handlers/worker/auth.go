@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 // SendOTP sends OTP to worker phone
 func SendOTP(c *gin.Context) {
 	body := parseBody(c)
@@ -231,7 +230,6 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	workerID := fmt.Sprintf("worker-%s", phone)
 	if hasDB() {
 		var user models.User
 		query := workerDB.Where("phone = ?", phone)

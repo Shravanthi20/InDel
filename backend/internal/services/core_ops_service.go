@@ -107,13 +107,13 @@ type SyntheticGenerateRequest struct {
 }
 
 type SyntheticAccountOption struct {
-	Label          string `json:"label,omitempty"`
-	Count          int    `json:"count"`
-	ZoneLevel      string `json:"zone_level,omitempty"`
-	VehicleType    string `json:"vehicle_type,omitempty"`
-	PremiumEnabled *bool  `json:"premium_enabled,omitempty"`
+	Label          string  `json:"label,omitempty"`
+	Count          int     `json:"count"`
+	ZoneLevel      string  `json:"zone_level,omitempty"`
+	VehicleType    string  `json:"vehicle_type,omitempty"`
+	PremiumEnabled *bool   `json:"premium_enabled,omitempty"`
 	WeeklyPremium  float64 `json:"weekly_premium,omitempty"`
-	AQIZone        string `json:"aqi_zone,omitempty"`
+	AQIZone        string  `json:"aqi_zone,omitempty"`
 	BaselineMin    float64 `json:"baseline_min,omitempty"`
 	BaselineMax    float64 `json:"baseline_max,omitempty"`
 }
@@ -792,7 +792,7 @@ func humanizeDisruptionType(raw string) string {
 		if candidate == "" || candidate == "demand_drop" {
 			continue
 		}
-		return strings.Title(strings.ReplaceAll(candidate, "_", " "))
+		return strings.ToTitle(strings.ReplaceAll(candidate, "_", " "))
 	}
 	return "Disruption"
 }
@@ -1103,10 +1103,6 @@ func (s *CoreOpsService) computePremium(baselineAmount, riskRating float64, vehi
 	base := baselineAmount * 0.0052
 	riskAdjusted := base * (1 + riskRating) * vehicleFactor
 	return round2(math.Max(10, math.Min(riskAdjusted, 35)))
-}
-
-func shouldFailPayout(payout models.Payout) bool {
-	return payout.WorkerID%11 == 0 && payout.RetryCount == 1
 }
 
 func weekBounds(now time.Time) (time.Time, time.Time) {
