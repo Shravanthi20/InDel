@@ -230,6 +230,8 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	var workerID string
+
 	if hasDB() {
 		var user models.User
 		query := workerDB.Where("phone = ?", phone)
