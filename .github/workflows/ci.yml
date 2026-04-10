@@ -102,9 +102,23 @@ jobs:
           cd platform-dashboard
           npm run build
 
+  endpoint-contracts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Check endpoint contracts
+        run: node scripts/check-endpoint-contracts.mjs
+
   docker-build:
     runs-on: ubuntu-latest
-    needs: [backend-tests, ml-tests]
+    needs: [backend-tests, ml-tests, frontend-tests, endpoint-contracts]
 
     steps:
       - uses: actions/checkout@v4

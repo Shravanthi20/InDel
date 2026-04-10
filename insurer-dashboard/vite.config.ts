@@ -14,6 +14,29 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-router-dom')) {
+              return 'router'
+            }
+            if (id.includes('recharts')) {
+              return 'charts'
+            }
+            if (id.includes('@tremor/react')) {
+              return 'tremor'
+            }
+            if (id.includes('axios')) {
+              return 'axios'
+            }
+            if (id.includes('react') || id.includes('scheduler')) {
+              return 'react'
+            }
+          }
+        }
+      }
+    }
   }
 })
