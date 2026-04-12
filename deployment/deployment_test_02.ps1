@@ -261,9 +261,26 @@ Write-Output "TOTAL=$total"
 Write-Output "OK_200=$ok200"
 Write-Output "STATUS_4XX=$status4xx"
 Write-Output "STATUS_5XX=$status5xx"
+
+$criticalHealthFailures = @(
+  $results |
+  Where-Object { $_.category -eq 'health' -and $_.expected -eq '200' -and $_.status -ne 200 }
+)
+
+if ($criticalHealthFailures.Count -gt 0) {
+  Write-Output "CRITICAL_HEALTH_FAIL_COUNT=$($criticalHealthFailures.Count)"
+  $criticalHealthFailures | ForEach-Object {
+    Write-Output ("CRITICAL_HEALTH_FAIL={0} {1} -> status={2} sample={3}" -f $_.service, $_.path, $_.status, ($_.sample -replace '\r|\n', ' '))
+  }
+}
+
 Write-Output "DETAILS_BEGIN"
 $results | ForEach-Object {
     $sample = ($_.sample -replace '\|','/' -replace '\r|\n',' ')
     Write-Output ("{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}" -f $_.service,$_.category,$_.method,$_.path,$_.status,$_.ms,$_.expected,$sample)
 }
 Write-Output "DETAILS_END"
+
+if ($criticalHealthFailures.Count -gt 0) {
+  exit 1
+}
