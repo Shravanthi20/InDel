@@ -33,7 +33,8 @@ func GetClaims(c *gin.Context) {
 
 			rows := make([]claimRow, 0)
 			_ = workerDB.Raw(`
-				SELECT c.id AS claim_id,
+				SELECT DISTINCT ON (c.id)
+				       c.id AS claim_id,
 				       c.status,
 				       d.type AS disruption_type,
 				       COALESCE(z.name || ', ' || z.city, 'Unknown Zone') AS zone,
@@ -49,7 +50,7 @@ func GetClaims(c *gin.Context) {
 				LEFT JOIN payouts p ON p.claim_id = c.id
 				LEFT JOIN claim_fraud_scores cfs ON cfs.claim_id = c.id
 				WHERE c.worker_id = ?
-				ORDER BY c.created_at DESC
+				ORDER BY c.id, c.created_at DESC
 			`, workerIDUint).Scan(&rows).Error
 
 			claims := make([]gin.H, 0, len(rows))

@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -236,6 +237,11 @@ func requireAuth(c *gin.Context) (string, bool) {
 		}
 	}
 
+	if !allowInMemoryAuthFallback() {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+		return "", false
+	}
+
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 	workerID, ok := store.data.TokenToWorkerID[token]
@@ -244,4 +250,8 @@ func requireAuth(c *gin.Context) (string, bool) {
 		return "", false
 	}
 	return workerID, true
+}
+
+func allowInMemoryAuthFallback() bool {
+	return !strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ENV")), "production")
 }

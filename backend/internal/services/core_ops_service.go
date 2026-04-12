@@ -457,6 +457,15 @@ func (s *CoreOpsService) QueueClaimPayout(claimID uint) (*PayoutResult, error) {
 		return nil, err
 	}
 
+	// Validate worker has an active policy before queueing a new payout.
+	var policy models.Policy
+	if err := s.DB.Where("worker_id = ? AND status = ?", claim.WorkerID, "active").First(&policy).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("worker does not have an active policy - payout denied")
+		}
+		return nil, err
+	}
+
 	idempotencyKey := fmt.Sprintf("pay_clm_%d", claim.ID)
 	payout := models.Payout{ClaimID: claim.ID, WorkerID: claim.WorkerID, Amount: round2(claim.ClaimAmount), Status: "queued", IdempotencyKey: idempotencyKey, RazorpayStatus: "queued"}
 
@@ -587,6 +596,19 @@ func (s *CoreOpsService) processPayoutsByID(payoutIDs []uint, now time.Time) (*P
 			continue
 		}
 
+		// Verify worker still has an active policy before processing payout
+		var policy models.Policy
+		if err := s.DB.Where("worker_id = ? AND status = ?", payout.WorkerID, "active").First(&policy).Error; err != nil {
+			result.Failed++
+			attempt.Status = "failed"
+			attempt.Error = "no_active_policy"
+			payout.LastError = attempt.Error
+			payout.Status = "failed"
+			s.DB.Create(&attempt)
+			s.DB.Save(&payout)
+			continue
+		}
+
 		if worker.UPIId == "" {
 			result.Failed++
 			attempt.Status = "failed"
@@ -692,7 +714,9 @@ func (s *CoreOpsService) loadApprovedClaimsNeedingPayout(disruptionID uint) ([]m
 	if err := s.DB.Table("claims c").
 		Select("c.*, COALESCE(p.status, '') AS payout_status").
 		Joins("LEFT JOIN payouts p ON p.claim_id = c.id").
+		Joins("LEFT JOIN policies pol ON pol.worker_id = c.worker_id AND pol.status = ?", "active").
 		Where("c.disruption_id = ? AND c.status = ?", disruptionID, "approved").
+		Where("pol.worker_id IS NOT NULL").
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -712,9 +736,11 @@ func (s *CoreOpsService) loadProcessablePayoutIDsForDisruption(disruptionID uint
 	err := s.DB.Table("payouts p").
 		Select("p.id").
 		Joins("JOIN claims c ON c.id = p.claim_id").
+		Joins("LEFT JOIN policies pol ON pol.worker_id = p.worker_id AND pol.status = ?", "active").
 		Where("c.disruption_id = ?", disruptionID).
 		Where("p.status IN ?", []string{"queued", "retry_pending"}).
 		Where("p.next_retry_at IS NULL OR p.next_retry_at <= ?", now.UTC()).
+		Where("pol.worker_id IS NOT NULL").
 		Order("p.id ASC").
 		Pluck("p.id", &payoutIDs).Error
 	return payoutIDs, err

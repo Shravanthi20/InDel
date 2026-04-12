@@ -153,6 +153,10 @@ func optionalAuthWorkerID(c *gin.Context) (string, bool) {
 		}
 	}
 
+	if !allowInMemoryAuthFallback() {
+		return "", false
+	}
+
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 	workerID, ok := store.data.TokenToWorkerID[token]

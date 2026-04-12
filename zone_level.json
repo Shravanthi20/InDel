@@ -1,0 +1,17 @@
+[
+  {
+    "level": "A",
+    "label": "A",
+    "description": "Same-city zones"
+  },
+  {
+    "level": "B",
+    "label": "B",
+    "description": "Intra-state zones"
+  },
+  {
+    "level": "C",
+    "label": "C",
+    "description": "Inter-state zones"
+  }
+]

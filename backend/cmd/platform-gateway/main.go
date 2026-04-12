@@ -38,6 +38,12 @@ func main() {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "platform-gateway"})
 	})
+	router.GET("/api/v1/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"ok": true, "service": "platform-gateway", "time": "mock"})
+	})
+	router.GET("/api/v1/status", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "up", "environment": os.Getenv("INDEL_ENV")})
+	})
 
 	// API routes
 	routerpkg.SetupPlatformRoutes(router)

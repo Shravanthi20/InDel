@@ -258,7 +258,7 @@ func DemoAssignOrders(c *gin.Context) {
 }
 
 func DemoSimulateDeliveries(c *gin.Context) {
-	workerID, ok := requireAuth(c)
+	workerID, ok := requireDemoOperationRole(c)
 	if !ok {
 		return
 	}

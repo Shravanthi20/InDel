@@ -1,7 +1,12 @@
 package worker
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"math/big"
+	"os"
+	"strings"
 
 	"github.com/Shravanthi20/InDel/backend/internal/models"
 	"github.com/gin-gonic/gin"
@@ -19,15 +24,24 @@ func SendOTP(c *gin.Context) {
 	}
 
 	store.mu.Lock()
-	store.data.PhoneToOTP[phone] = "123456"
+	otp, err := generateOTPCode()
+	if err != nil {
+		store.mu.Unlock()
+		c.JSON(500, gin.H{"error": "otp_generation_failed"})
+		return
+	}
+	store.data.PhoneToOTP[phone] = otp
 	store.mu.Unlock()
 
-	c.JSON(200, gin.H{
+	resp := gin.H{
 		"message":            "otp_sent",
-		"otp_for_testing":    "123456",
 		"phone":              phone,
 		"expires_in_seconds": 300,
-	})
+	}
+	if shouldExposeTestingOTP() {
+		resp["otp_for_testing"] = otp
+	}
+	c.JSON(200, resp)
 }
 
 // VerifyOTP verifies OTP and returns JWT
@@ -49,7 +63,11 @@ func VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	token := "mock-jwt-token"
+	token, err := generateSessionToken()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "token_generation_failed"})
+		return
+	}
 	workerID := "worker-001"
 
 	if hasDB() {
@@ -133,7 +151,11 @@ func Register(c *gin.Context) {
 		}
 	}
 
-	token := fmt.Sprintf("mock-jwt-token-%s", phone)
+	token, err := generateSessionToken()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "token_generation_failed"})
+		return
+	}
 	if hasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
 		_ = workerDB.Exec(
@@ -192,7 +214,9 @@ func Register(c *gin.Context) {
 		// 3.5 Set Active Policy (Initial baseline seeded at 35 INR)
 		_ = workerDB.Exec(
 			`INSERT INTO policies (worker_id, status, premium_amount, created_at, updated_at)
-			 VALUES (?, 'active', 35.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+			 VALUES (?, 'active', 35.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			 ON CONFLICT (worker_id) WHERE status = 'active'
+			 DO UPDATE SET premium_amount = EXCLUDED.premium_amount, updated_at = CURRENT_TIMESTAMP`,
 			workerIDUint,
 		)
 
@@ -254,7 +278,11 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	token := fmt.Sprintf("mock-jwt-token-%s", phone)
+	token, err := generateSessionToken()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "token_generation_failed"})
+		return
+	}
 	if hasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
 		_ = workerDB.Exec(
@@ -299,4 +327,27 @@ func Login(c *gin.Context) {
 		"token_type": "Bearer",
 		"worker_id":  workerID,
 	})
+}
+
+func generateOTPCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+func generateSessionToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func shouldExposeTestingOTP() bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ENV")), "production") {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_EXPOSE_TEST_OTP")), "true")
 }

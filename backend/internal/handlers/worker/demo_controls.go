@@ -1,10 +1,12 @@
 package worker
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -363,6 +365,10 @@ func seedDemoOrdersWithFallback(workerIDUint, zoneID uint, count int) {
 
 // DemoReset resets all in-memory demo state and clears orders/batches (no auth required for demo).
 func DemoReset(c *gin.Context) {
+	if !requireDemoControlAuth(c) {
+		return
+	}
+
 	body := parseBody(c)
 	deleteDB := bodyBool(body, "delete_db", false)
 	reason := strings.TrimSpace(bodyString(body, "reason", ""))
@@ -423,7 +429,7 @@ func DemoReset(c *gin.Context) {
 
 // DemoTriggerDisruption creates a disruption notification.
 func DemoTriggerDisruption(c *gin.Context) {
-	workerID, ok := requireAuth(c)
+	workerID, ok := requireDemoOperationRole(c)
 	if !ok {
 		return
 	}
@@ -459,7 +465,7 @@ func DemoTriggerDisruption(c *gin.Context) {
 
 // DemoSimulateOrders appends assigned orders for demo.
 func DemoSimulateOrders(c *gin.Context) {
-	workerID, ok := requireAuth(c)
+	workerID, ok := requireDemoOperationRole(c)
 	if !ok {
 		return
 	}
@@ -499,7 +505,7 @@ func DemoSimulateOrders(c *gin.Context) {
 
 // DemoSettleEarnings settles demo earnings and triggers premium reminder.
 func DemoSettleEarnings(c *gin.Context) {
-	workerID, ok := requireAuth(c)
+	workerID, ok := requireDemoOperationRole(c)
 	if !ok {
 		return
 	}
@@ -537,7 +543,7 @@ func DemoSettleEarnings(c *gin.Context) {
 
 // DemoResetZone resets disruption and claim state for demo replay.
 func DemoResetZone(c *gin.Context) {
-	workerID, ok := requireAuth(c)
+	workerID, ok := requireDemoDestructiveRole(c)
 	if !ok {
 		return
 	}
@@ -577,3 +583,125 @@ func allowDestructiveDemoDelete() bool {
 	return !strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ENV")), "production")
 }
 
+func requireDemoControlAuth(c *gin.Context) bool {
+	if _, ok := requireDemoDestructiveRole(c); ok {
+		return true
+	}
+
+	expected := strings.TrimSpace(os.Getenv("INDEL_DEMO_RESET_KEY"))
+	provided := strings.TrimSpace(c.GetHeader("X-Demo-Reset-Key"))
+	if expected != "" && provided != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1 {
+		return true
+	}
+
+	c.JSON(401, gin.H{"error": "unauthorized_demo_control"})
+	return false
+}
+
+func requireDemoOperationRole(c *gin.Context) (string, bool) {
+	allowed := allowedRolesFromEnv(
+		"INDEL_DEMO_ALLOWED_ROLES",
+		[]string{"admin", "platform_admin", "ops_manager"},
+		[]string{"worker", "admin", "platform_admin", "ops_manager"},
+	)
+	return requireRole(c, allowed, "forbidden_demo_operation")
+}
+
+func requireDemoDestructiveRole(c *gin.Context) (string, bool) {
+	allowed := allowedRolesFromEnv(
+		"INDEL_DEMO_DESTRUCTIVE_ROLES",
+		[]string{"admin", "platform_admin"},
+		[]string{"admin", "platform_admin"},
+	)
+	return requireRole(c, allowed, "forbidden_demo_destructive_operation")
+}
+
+func requireRole(c *gin.Context, allowedRoles []string, errorCode string) (string, bool) {
+	workerID, ok := optionalAuthWorkerID(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "missing_or_invalid_bearer_token"})
+		return "", false
+	}
+
+	role := getWorkerRole(workerID)
+	if role == "" {
+		c.JSON(403, gin.H{"error": errorCode, "message": "unable to determine role"})
+		return "", false
+	}
+
+	if !containsRole(allowedRoles, role) {
+		sortedRoles := append([]string(nil), allowedRoles...)
+		sort.Strings(sortedRoles)
+		c.JSON(403, gin.H{"error": errorCode, "role": role, "allowed_roles": sortedRoles})
+		return "", false
+	}
+
+	return workerID, true
+}
+
+func getWorkerRole(workerID string) string {
+	if hasDB() {
+		if workerIDUint, err := parseWorkerID(workerID); err == nil {
+			type userRoleRow struct {
+				Role string `gorm:"column:role"`
+			}
+			var row userRoleRow
+			if err := workerDB.Raw("SELECT COALESCE(role, '') AS role FROM users WHERE id = ? LIMIT 1", workerIDUint).Scan(&row).Error; err == nil {
+				role := strings.ToLower(strings.TrimSpace(row.Role))
+				if role != "" {
+					return role
+				}
+			}
+		}
+	}
+
+	if isProductionEnv() {
+		return ""
+	}
+
+	defaultRole := strings.ToLower(strings.TrimSpace(os.Getenv("INDEL_DEFAULT_DEV_ROLE")))
+	if defaultRole != "" {
+		return defaultRole
+	}
+	return "worker"
+}
+
+func containsRole(roles []string, target string) bool {
+	target = strings.ToLower(strings.TrimSpace(target))
+	for _, role := range roles {
+		if strings.ToLower(strings.TrimSpace(role)) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func allowedRolesFromEnv(envKey string, prodDefault []string, nonProdDefault []string) []string {
+	raw := strings.TrimSpace(os.Getenv(envKey))
+	if raw == "" {
+		if isProductionEnv() {
+			return prodDefault
+		}
+		return nonProdDefault
+	}
+
+	parts := strings.Split(raw, ",")
+	roles := make([]string, 0, len(parts))
+	for _, p := range parts {
+		role := strings.ToLower(strings.TrimSpace(p))
+		if role != "" {
+			roles = append(roles, role)
+		}
+	}
+	if len(roles) == 0 {
+		if isProductionEnv() {
+			return prodDefault
+		}
+		return nonProdDefault
+	}
+	return roles
+}
+
+func isProductionEnv() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ENV")), "production")
+}
