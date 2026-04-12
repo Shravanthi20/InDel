@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.model.BatchOrderDto
 import com.imaginai.indel.data.model.DeliveryBatchDto
-import com.imaginai.indel.data.model.Order
+import java.util.Locale
 import com.imaginai.indel.data.repository.WorkerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -29,7 +29,7 @@ class OrdersViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
-    private val _selectedTab = MutableStateFlow(OrderLifecycleTab.AVAILABLE)
+    private val _selectedTab = MutableStateFlow(BatchLifecycleTab.AVAILABLE_NEAR)
     val selectedTab = _selectedTab.asStateFlow()
 
     private var cachedBatches: List<DeliveryBatch> = emptyList()
@@ -74,10 +74,6 @@ class OrdersViewModel @Inject constructor(
                 emptyList()
             }
 
-            val assignedOrders = workerOrders.filter { it.status == "assigned" || it.status == "accepted" }
-            val pickedUpOrders = workerOrders.filter { it.status == "picked_up" }
-            val deliveredOrders = workerOrders.filter { it.status == "delivered" }
-
             val batches = buildList {
                 if (availableBatchesRes.isSuccessful) {
                     addAll((availableBatchesRes.body()?.batches ?: emptyList()).map { it.toUiBatch() })
@@ -92,18 +88,30 @@ class OrdersViewModel @Inject constructor(
 
             cachedBatches = batches
 
+            val availableNearBatches = batches.filter {
+                val status = it.status.trim().lowercase(Locale.getDefault()).replace(" ", "_")
+                status == "pending" || status == "assigned" || status == "accepted"
+            }
+            val pickedUpBatches = batches.filter {
+                val status = it.status.trim().lowercase(Locale.getDefault()).replace(" ", "_")
+                status == "picked_up"
+            }
+            val deliveryBatches = batches.filter {
+                val status = it.status.trim().lowercase(Locale.getDefault()).replace(" ", "_")
+                status == "delivered"
+            }
+
             Log.d(
                 TAG,
                 "fetchOrders availableStatus=${availableRes.code()} allStatus=${workerOrdersRes.code()} " +
-                    "available=${availableOrders.size} assigned=${assignedOrders.size} picked=${pickedUpOrders.size} delivered=${deliveredOrders.size}"
+                    "batches availableNear=${availableNearBatches.size} picked=${pickedUpBatches.size} delivered=${deliveryBatches.size}"
             )
 
             if (availableRes.isSuccessful || workerOrdersRes.isSuccessful || availableBatchesRes.isSuccessful || assignedBatchesRes.isSuccessful || deliveredBatchesRes.isSuccessful) {
                 _uiState.value = OrdersUiState.Success(
-                    availableOrders = availableOrders,
-                    assignedOrders = assignedOrders,
-                    pickedUpOrders = pickedUpOrders,
-                    deliveredOrders = deliveredOrders
+                    availableNearBatches = availableNearBatches,
+                    pickedUpBatches = pickedUpBatches,
+                    deliveryBatches = deliveryBatches,
                 )
             } else {
                 _uiState.value = OrdersUiState.Error(
@@ -144,7 +152,7 @@ class OrdersViewModel @Inject constructor(
         }
     }
 
-    fun selectTab(tab: OrderLifecycleTab) {
+    fun selectTab(tab: BatchLifecycleTab) {
         _selectedTab.value = tab
     }
 
@@ -245,20 +253,18 @@ data class BatchDeliveryResult(
     val errorMessage: String?,
 )
 
-enum class OrderLifecycleTab(val title: String) {
-    AVAILABLE("Available"),
-    ASSIGNED("Assigned"),
+enum class BatchLifecycleTab(val title: String) {
+    AVAILABLE_NEAR("Available / Near"),
     PICKED_UP("Picked Up"),
-    DELIVERED("Delivered"),
+    DELIVERY("Delivery"),
 }
 
 sealed class OrdersUiState {
     object Loading : OrdersUiState()
     data class Success(
-        val availableOrders: List<Order>,
-        val assignedOrders: List<Order>,
-        val pickedUpOrders: List<Order>,
-        val deliveredOrders: List<Order>,
+        val availableNearBatches: List<DeliveryBatch>,
+        val pickedUpBatches: List<DeliveryBatch>,
+        val deliveryBatches: List<DeliveryBatch>,
     ) : OrdersUiState()
     data class Error(val message: String) : OrdersUiState()
 }

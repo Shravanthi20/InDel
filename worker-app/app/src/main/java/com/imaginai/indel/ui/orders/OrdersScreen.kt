@@ -20,7 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.imaginai.indel.data.model.Order
 import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
 
@@ -79,24 +78,22 @@ fun OrdersScreen(
 @Composable
 fun OrdersContent(
     state: OrdersUiState.Success,
-    selectedTab: OrderLifecycleTab,
-    onTabSelected: (OrderLifecycleTab) -> Unit,
+    selectedTab: BatchLifecycleTab,
+    onTabSelected: (BatchLifecycleTab) -> Unit,
     viewModel: OrdersViewModel,
     navController: NavController
 ) {
-    val tabs = OrderLifecycleTab.entries
-    val visibleOrders = when (selectedTab) {
-        OrderLifecycleTab.AVAILABLE -> state.availableOrders
-        OrderLifecycleTab.ASSIGNED -> state.assignedOrders
-        OrderLifecycleTab.PICKED_UP -> state.pickedUpOrders
-        OrderLifecycleTab.DELIVERED -> state.deliveredOrders
+    val tabs = BatchLifecycleTab.entries
+    val visibleBatches = when (selectedTab) {
+        BatchLifecycleTab.AVAILABLE_NEAR -> state.availableNearBatches
+        BatchLifecycleTab.PICKED_UP -> state.pickedUpBatches
+        BatchLifecycleTab.DELIVERY -> state.deliveryBatches
     }
 
     val tabCount = when (selectedTab) {
-        OrderLifecycleTab.AVAILABLE -> state.availableOrders.size
-        OrderLifecycleTab.ASSIGNED -> state.assignedOrders.size
-        OrderLifecycleTab.PICKED_UP -> state.pickedUpOrders.size
-        OrderLifecycleTab.DELIVERED -> state.deliveredOrders.size
+        BatchLifecycleTab.AVAILABLE_NEAR -> state.availableNearBatches.size
+        BatchLifecycleTab.PICKED_UP -> state.pickedUpBatches.size
+        BatchLifecycleTab.DELIVERY -> state.deliveryBatches.size
     }
 
     LazyColumn(
@@ -114,10 +111,9 @@ fun OrdersContent(
             TabRow(selectedTabIndex = tabs.indexOf(selectedTab), containerColor = Color.White) {
                 tabs.forEach { tab ->
                     val count = when (tab) {
-                        OrderLifecycleTab.AVAILABLE -> state.availableOrders.size
-                        OrderLifecycleTab.ASSIGNED -> state.assignedOrders.size
-                        OrderLifecycleTab.PICKED_UP -> state.pickedUpOrders.size
-                        OrderLifecycleTab.DELIVERED -> state.deliveredOrders.size
+                        BatchLifecycleTab.AVAILABLE_NEAR -> state.availableNearBatches.size
+                        BatchLifecycleTab.PICKED_UP -> state.pickedUpBatches.size
+                        BatchLifecycleTab.DELIVERY -> state.deliveryBatches.size
                     }
                     Tab(
                         selected = selectedTab == tab,
@@ -128,16 +124,16 @@ fun OrdersContent(
             }
         }
 
-        if (visibleOrders.isNotEmpty()) {
+        if (visibleBatches.isNotEmpty()) {
             item {
                 Text(
-                    "${selectedTab.title} Orders",
+                    "${selectedTab.title} Batches",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
-            items(visibleOrders) { order ->
-                OrderCard(order, viewModel, navController)
+            items(visibleBatches) { batch ->
+                BatchCard(batch = batch, selectedTab = selectedTab, navController = navController)
             }
         }
 
@@ -152,8 +148,26 @@ fun OrdersContent(
 }
 
 @Composable
-fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavController) {
-    val (statusBgColor, statusTextColor, statusLabel) = statusBadgeStyle(order.status)
+fun BatchCard(batch: DeliveryBatch, selectedTab: BatchLifecycleTab, navController: NavController) {
+    val normalizedStatus = batch.status.trim().lowercase().replace(" ", "_")
+    val statusLabel = when (normalizedStatus) {
+        "picked_up" -> "Picked Up"
+        "delivered" -> "Delivered"
+        "assigned", "accepted" -> "Available"
+        else -> batch.status
+    }
+    val isZoneASingleStop = batch.zoneLevel.equals("A", ignoreCase = true) && batch.fromCity.equals(batch.toCity, ignoreCase = true)
+    val routeLabel = if (isZoneASingleStop) batch.fromCity else "${batch.fromCity} -> ${batch.toCity}"
+    val actionLabel = when (selectedTab) {
+        BatchLifecycleTab.AVAILABLE_NEAR -> "Pick Up"
+        BatchLifecycleTab.PICKED_UP -> "Make Delivery"
+        BatchLifecycleTab.DELIVERY -> "View"
+    }
+    val actionColor = when (selectedTab) {
+        BatchLifecycleTab.AVAILABLE_NEAR -> BrandBlue
+        BatchLifecycleTab.PICKED_UP -> Color(0xFF2E7D32)
+        BatchLifecycleTab.DELIVERY -> TextSecondary
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -164,20 +178,16 @@ fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavContro
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Order #${order.orderId.takeLast(4)}", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                    Text("₹${order.earningInr.toInt()}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = BrandBlue)
-                    if (order.tipInr > 0) {
-                        Text("Incl. ₹${order.tipInr.toInt()} tip", style = MaterialTheme.typography.labelSmall, color = SuccessGreen, fontWeight = FontWeight.Bold)
-                    } else {
-                        Text("Tip: ₹0", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                    }
+                    Text("Batch #${batch.batchId.takeLast(6)}", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text(routeLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = BrandBlue)
+                    Text("Zone ${batch.zoneLevel} • ${batch.orderCount} orders", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
                 Surface(
                     color = BlueSoft,
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "${order.distanceKm} km",
+                        text = "${String.format("%.1f", batch.totalWeight)} kg",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
@@ -188,16 +198,13 @@ fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavContro
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Surface(
-                color = statusBgColor,
-                shape = RoundedCornerShape(999.dp)
-            ) {
+            Surface(color = BlueSoft, shape = RoundedCornerShape(999.dp)) {
                 Text(
                     text = statusLabel,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = statusTextColor
+                    color = BrandBlue
                 )
             }
 
@@ -207,60 +214,31 @@ fun OrderCard(order: Order, viewModel: OrdersViewModel, navController: NavContro
                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = BrandBlue, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
-                    Text("Pickup: ${order.pickupArea}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    Text("Drop: ${order.dropArea}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Pickup: ${batch.fromCity}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text("Drop: ${batch.toCity}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            
-            val buttonText = when(order.status) {
-                "assigned" -> "Accept Order"
-                "accepted" -> "Mark Picked Up"
-                "picked_up" -> "Complete Delivery"
-                else -> "Complete"
-            }
 
-            if (order.status != "delivered") {
+            if (normalizedStatus != "delivered") {
                 Button(
-                    onClick = {
-                        when(order.status) {
-                            "assigned" -> viewModel.acceptOrder(order.orderId)
-                            "accepted" -> viewModel.pickedUpOrder(order.orderId)
-                            "picked_up" -> navController.navigate(Screen.DeliveryCompletion.createRoute(order.orderId))
-                        }
-                    },
+                    onClick = { navController.navigate(Screen.BatchDetail.createRoute(batch.batchId)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = when (order.status) {
-                            "assigned" -> BrandBlue
-                            "accepted" -> Color(0xFF1565C0)
-                            else -> SuccessGreen
-                        }
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = actionColor)
                 ) {
-                    Text(buttonText)
+                    Text(actionLabel)
                 }
             } else {
                 Text(
-                    "Completed",
+                    "Delivered",
                     color = SuccessGreen,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
             }
         }
-    }
-}
-
-private fun statusBadgeStyle(status: String): Triple<Color, Color, String> {
-    return when (status) {
-        "assigned" -> Triple(BlueSoft, BrandBlue, "Assigned")
-        "accepted" -> Triple(Color(0xFFE8F4FD), Color(0xFF1565C0), "Accepted")
-        "picked_up" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "Picked Up")
-        "delivered" -> Triple(Color(0xFFE8F5E9), SuccessGreen, "Delivered")
-        else -> Triple(Color(0xFFF1F1F1), TextSecondary, status.replace("_", " ").replaceFirstChar { it.uppercase() })
     }
 }
 

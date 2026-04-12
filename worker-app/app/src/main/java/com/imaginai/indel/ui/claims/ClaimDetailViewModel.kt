@@ -18,9 +18,17 @@ class ClaimDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<ClaimDetailUiState>(ClaimDetailUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private var currentClaimId: String? = null
+    private var isLoading = false
+
     fun loadClaimDetail(claimId: String) {
+        // Prevent reloading the same claim or concurrent loads
+        if (isLoading && currentClaimId == claimId) return
+        
         viewModelScope.launch {
             _uiState.value = ClaimDetailUiState.Loading
+            isLoading = true
+            currentClaimId = claimId
             try {
                 val response = claimsRepository.getClaimDetail(claimId)
                 if (response.isSuccessful) {
@@ -30,6 +38,8 @@ class ClaimDetailViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.value = ClaimDetailUiState.Error(e.message ?: "Unknown error")
+            } finally {
+                isLoading = false
             }
         }
     }

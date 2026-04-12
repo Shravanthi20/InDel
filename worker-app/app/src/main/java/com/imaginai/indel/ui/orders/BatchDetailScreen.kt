@@ -613,6 +613,8 @@ private fun BatchActionCard(
     isDelivering: Boolean,
     showBatchDeliveryCode: Boolean,
 ) {
+    var showPickupDialog by rememberSaveable(batch.batchId) { mutableStateOf(false) }
+    var pickupDialogCode by rememberSaveable(batch.batchId) { mutableStateOf("") }
     val statusLower = batch.status
         .trim()
         .lowercase(Locale.getDefault())
@@ -643,17 +645,17 @@ private fun BatchActionCard(
             Text("Batch status", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             Text(statusLabel, color = BrandBlue, fontWeight = FontWeight.SemiBold)
 
-            if (isPickupStage || isDeliveryStage) {
+            if (isDeliveryStage) {
                 OutlinedTextField(
                     value = enteredCode,
                     onValueChange = onEnteredCodeChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text(if (isPickupStage) "Pickup code" else "Delivery code") },
+                    label = { Text("Delivery code") },
                     placeholder = { Text("Enter 4-digit code") },
                 )
 
-                if (isPickupStage || showBatchDeliveryCode) {
+                if (showBatchDeliveryCode) {
                     Text(
                         "Code for this batch: $expectedCode",
                         style = MaterialTheme.typography.labelSmall,
@@ -678,16 +680,19 @@ private fun BatchActionCard(
 
             if (isPickupStage) {
                 Button(
-                    onClick = onConfirmPickup,
+                    onClick = {
+                        pickupDialogCode = ""
+                        showPickupDialog = true
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
                     shape = RoundedCornerShape(12.dp),
                     enabled = !isAccepting,
                 ) {
-                    Text(if (isAccepting) "Checking..." else "Pick Up Batch")
+                    Text("Pick Up Batch")
                 }
                 Text(
-                    "Entering the correct batch pickup code marks all orders as picked up.",
+                    "Tap Pick Up Batch, enter code in the prompt, and all orders move to picked up.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                 )
@@ -714,6 +719,43 @@ private fun BatchActionCard(
                 )
             }
         }
+    }
+
+    if (showPickupDialog) {
+        AlertDialog(
+            onDismissRequest = { showPickupDialog = false },
+            title = { Text("Enter Pickup Code") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = pickupDialogCode,
+                        onValueChange = { pickupDialogCode = it.take(4) },
+                        singleLine = true,
+                        label = { Text("Pickup code") },
+                        placeholder = { Text("4-digit code") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("Code for this batch: $pickupCode", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onEnteredCodeChange(pickupDialogCode.trim())
+                        onConfirmPickup()
+                        showPickupDialog = false
+                    },
+                    enabled = !isAccepting && pickupDialogCode.trim().length == 4,
+                ) {
+                    Text(if (isAccepting) "Checking..." else "Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPickupDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
