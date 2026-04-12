@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import Navbar from './Navbar'
-import { LayoutDashboard, Users, Map, BarChart3, Zap, ShieldCheck, Sparkles } from 'lucide-react'
+import { LayoutDashboard, Users, Map, BarChart3, Zap, ShieldCheck, Sparkles, CalendarClock, CircleDollarSign, FileSearch, Database } from 'lucide-react'
 
 const platformNav = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -11,8 +11,12 @@ const platformNav = [
 ]
 
 const opsNav = [
-  { to: '/god-mode', label: 'God Mode', icon: Sparkles },
+  { to: '/batches', label: 'View Batches', icon: Sparkles },
+  { to: '/synthetic-data', label: 'Synthetic Data', icon: Database },
   { to: '/disruptions', label: 'Chaos Engine', icon: Zap },
+  { to: '/weekly-cycle', label: 'Weekly Cycle', icon: CalendarClock },
+  { to: '/payout-ops', label: 'Payout Ops', icon: CircleDollarSign },
+  { to: '/reconciliation', label: 'Reconciliation', icon: FileSearch },
 ]
 
 function navClass(isActive: boolean) {

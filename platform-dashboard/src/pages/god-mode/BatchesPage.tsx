@@ -62,7 +62,20 @@ function batchZoneNames(batch: BatchRow, zones: ZoneRecord[]) {
 }
 
 export default function BatchesPage() {
-  const { availableBatches, assignedBatches, zones, showCodes, setShowCodes, loading } = useGodMode()
+  const {
+    availableBatches,
+    assignedBatches,
+    zones,
+    showCodes,
+    setShowCodes,
+    loading,
+    checkingBatchFlow,
+    runBatchFlowCheck,
+    lastBatchFlowCheck,
+    checkingIntegrationSelfTest,
+    runIntegrationSelfTest,
+    integrationSelfTestResult,
+  } = useGodMode()
   const [zoneFilter, setZoneFilter] = useState('ALL')
 
   const zoneOptions = useMemo(() => {
@@ -100,6 +113,24 @@ export default function BatchesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void runIntegrationSelfTest()}
+            disabled={loading || checkingIntegrationSelfTest}
+            className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+          >
+            {checkingIntegrationSelfTest ? 'Running integration test...' : 'Run integration self-test'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void runBatchFlowCheck()}
+            disabled={loading || checkingBatchFlow}
+            className="rounded-full bg-sky-600 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {checkingBatchFlow ? 'Running check...' : 'Run batch flow check'}
+          </button>
+
           <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-700">
             <input
               type="checkbox"
@@ -126,6 +157,68 @@ export default function BatchesPage() {
           </label>
         </div>
       </div>
+
+      {lastBatchFlowCheck ? (
+        <div className={`rounded-2xl border p-4 ${lastBatchFlowCheck.status === 'success' ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className={`text-xs font-bold uppercase tracking-[0.2em] ${lastBatchFlowCheck.status === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>
+              Last batch flow check: {lastBatchFlowCheck.status}
+            </p>
+            <p className="text-xs text-slate-600">
+              {new Date(lastBatchFlowCheck.checkedAt).toLocaleString()}
+            </p>
+          </div>
+
+          <p className="mt-2 text-sm text-slate-800">{lastBatchFlowCheck.detail}</p>
+
+          {(lastBatchFlowCheck.batchId || lastBatchFlowCheck.pickupMessage || lastBatchFlowCheck.deliveryMessage) ? (
+            <div className="mt-3 grid gap-2 text-xs text-slate-700 md:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <span className="font-semibold">Batch:</span> {lastBatchFlowCheck.batchId || '-'}
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <span className="font-semibold">Pickup:</span> {lastBatchFlowCheck.pickupMessage || '-'}
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <span className="font-semibold">Delivery:</span> {lastBatchFlowCheck.deliveryMessage || '-'}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {integrationSelfTestResult ? (
+        <div className={`rounded-2xl border p-4 ${integrationSelfTestResult.failed === 0 ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className={`text-xs font-bold uppercase tracking-[0.2em] ${integrationSelfTestResult.failed === 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              Integration self-test
+            </p>
+            <p className="text-xs text-slate-600">
+              {new Date(integrationSelfTestResult.checkedAt).toLocaleString()}
+            </p>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-emerald-700">Passed: {integrationSelfTestResult.passed}</span>
+            <span className="rounded-full border border-rose-300 bg-white px-3 py-1 text-rose-700">Failed: {integrationSelfTestResult.failed}</span>
+            <span className="rounded-full border border-amber-300 bg-white px-3 py-1 text-amber-700">Skipped: {integrationSelfTestResult.skipped}</span>
+          </div>
+
+          <div className="mt-3 max-h-52 space-y-2 overflow-auto pr-1">
+            {integrationSelfTestResult.checks.map((check) => (
+              <div key={check.name} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-900">{check.name}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${check.status === 'pass' ? 'bg-emerald-100 text-emerald-700' : check.status === 'fail' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {check.status}
+                  </span>
+                </div>
+                <div className="mt-1 text-slate-500">{check.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-600">Loading batch context...</div>

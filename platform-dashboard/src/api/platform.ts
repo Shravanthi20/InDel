@@ -1,13 +1,25 @@
 import client from './client'
 
+export type ZoneLevelOption = {
+  level: 'A' | 'B' | 'C'
+  label: string
+  description?: string
+}
+
 export const getWorkers = () => client.get('/api/v1/platform/workers')
-export const getZones = () => client.get('/api/v1/platform/zones')
+export const getZones = (level?: 'A' | 'B' | 'C' | 'ALL') =>
+  client.get('/api/v1/platform/zones', { params: level && level !== 'ALL' ? { level } : undefined })
+export const getZoneLevels = () => client.get<{ levels: ZoneLevelOption[] }>('/api/v1/platform/zone-levels')
 export const getZonePaths = (type: 'a' | 'b' | 'c') => client.get(`/api/v1/platform/zone-paths?type=${type}`)
 export const getZoneHealth = () => client.get('/api/v1/platform/zones/health')
 export const getDisruptions = () => client.get('/api/v1/platform/disruptions')
 export const getOrders = () => client.get('/api/v1/worker/orders')
 export const getAvailableBatches = () => client.get('/api/v1/worker/batches')
 export const getAssignedBatches = () => client.get('/api/v1/worker/batches/assigned')
+export const putAcceptBatch = (batchId: string, data: { orderIds: string[]; pickupCode: string }) =>
+  client.put(`/api/v1/worker/batches/${encodeURIComponent(batchId)}/accept`, data)
+export const putDeliverBatch = (batchId: string, data: { deliveryCode: string }) =>
+  client.put(`/api/v1/worker/batches/${encodeURIComponent(batchId)}/deliver`, data)
 export const postSimulateOrders = (data: { count: number }) =>
   client.post('/api/v1/demo/simulate-orders', data)
 export const postAddBatches = (data: {

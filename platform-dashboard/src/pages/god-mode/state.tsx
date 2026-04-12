@@ -3,12 +3,19 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import {
   postAddBatches,
   generateClaimsForDisruption,
+  getWorkers,
   getAssignedBatches,
   getAvailableBatches,
   getDisruptions,
+  getOrders,
+  getZoneLevels,
+  putAcceptBatch,
+  putDeliverBatch,
+  postExternalSignal,
   getZoneHealth,
   getZonePaths,
   getZones,
+  postSimulateOrders,
   postTriggerDemo,
 } from '../../api/platform'
 
@@ -112,6 +119,30 @@ export type EndpointStatus = {
 export type Notice = {
   tone: 'success' | 'error'
   message: string
+}
+
+export type BatchFlowCheckResult = {
+  status: 'success' | 'error'
+  checkedAt: string
+  batchId?: string
+  zoneLevel?: string
+  pickupMessage?: string
+  deliveryMessage?: string
+  detail: string
+}
+
+export type IntegrationSelfTestCheck = {
+  name: string
+  status: 'pass' | 'fail' | 'skipped'
+  detail: string
+}
+
+export type IntegrationSelfTestResult = {
+  checkedAt: string
+  checks: IntegrationSelfTestCheck[]
+  passed: number
+  failed: number
+  skipped: number
 }
 
 export type DisruptionSignal = {
@@ -394,7 +425,7 @@ export function pickupCodeFromBatchId(batchId: string) {
 export function deliveryCodeFromBatchId(batchId: string) {
   let seed = 7
   for (const char of batchId.trim().toUpperCase()) {
-    seed = (seed * 17 + char.charCodeAt(0)) % 9000
+    seed = (seed * 37 + char.charCodeAt(0)) % 9000
   }
   return String(1000 + seed).padStart(4, '0')
 }
@@ -443,6 +474,12 @@ type GodModeContextValue = {
   showCodes: boolean
   setShowCodes: (value: boolean) => void
   endpointStatus: EndpointStatus
+  checkingBatchFlow: boolean
+  runBatchFlowCheck: () => Promise<void>
+  lastBatchFlowCheck: BatchFlowCheckResult | null
+  checkingIntegrationSelfTest: boolean
+  runIntegrationSelfTest: () => Promise<void>
+  integrationSelfTestResult: IntegrationSelfTestResult | null
 }
 
 const GodModeContext = createContext<GodModeContextValue | null>(null)
@@ -459,13 +496,17 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
   const [zones, setZones] = useState<ZoneRecord[]>([])
   const [availableBatches, setAvailableBatches] = useState<BatchRow[]>([])
   const [assignedBatches, setAssignedBatches] = useState<BatchRow[]>([])
-  const [showCodes, setShowCodes] = useState(false)
+  const [showCodes, setShowCodes] = useState(true)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [addingDisruption, setAddingDisruption] = useState(false)
   const [generatingBatches, setGeneratingBatches] = useState(false)
+  const [checkingBatchFlow, setCheckingBatchFlow] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [lastBatchFlowCheck, setLastBatchFlowCheck] = useState<BatchFlowCheckResult | null>(null)
+  const [checkingIntegrationSelfTest, setCheckingIntegrationSelfTest] = useState(false)
+  const [integrationSelfTestResult, setIntegrationSelfTestResult] = useState<IntegrationSelfTestResult | null>(null)
   const [lastDisruptionSignal, setLastDisruptionSignal] = useState<DisruptionSignal | null>(null)
   const [endpointStatus, setEndpointStatus] = useState<EndpointStatus>({
     zoneHealth: 'pending',
@@ -789,6 +830,208 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const runBatchFlowCheck = async () => {
+    if (checkingBatchFlow) {
+      return
+    }
+
+    setCheckingBatchFlow(true)
+    setError('')
+    setNotice(null)
+
+    try {
+      const availableResponse = await getAvailableBatches()
+      let freshAvailable = (availableResponse.data?.batches || []) as BatchRow[]
+      setAvailableBatches(freshAvailable)
+
+      let candidate = freshAvailable.find((batch) => (batch.orders?.length || 0) > 0)
+      if (!candidate) {
+        // Try to self-heal: seed orders and batches, then retry once.
+        await generateBatches()
+        const retryAvailableResponse = await getAvailableBatches()
+        freshAvailable = (retryAvailableResponse.data?.batches || []) as BatchRow[]
+        setAvailableBatches(freshAvailable)
+        candidate = freshAvailable.find((batch) => (batch.orders?.length || 0) > 0)
+      }
+
+      if (!candidate) {
+        const detail = 'No available batch found for flow check even after auto-seeding.'
+        setNotice({ tone: 'error', message: detail })
+        setLastBatchFlowCheck({
+          status: 'error',
+          checkedAt: new Date().toISOString(),
+          detail,
+        })
+        return
+      }
+
+      const batchId = candidate.batchId
+      const orderIds = (candidate.orders || []).map((order) => order.orderId).filter(Boolean)
+      if (orderIds.length === 0) {
+        const detail = `Batch ${batchId} has no orders to validate.`
+        setNotice({ tone: 'error', message: detail })
+        setLastBatchFlowCheck({
+          status: 'error',
+          checkedAt: new Date().toISOString(),
+          batchId,
+          zoneLevel: candidate.zoneLevel,
+          detail,
+        })
+        return
+      }
+
+      const pickupCode = pickupCodeFromBatchId(batchId)
+      const pickupRes = await putAcceptBatch(batchId, { orderIds, pickupCode })
+
+      const isZoneA = (candidate.zoneLevel || '').trim().toUpperCase() === 'A'
+      const deliveryCode = isZoneA
+        ? deliveryCodeFromOrderId(orderIds[0])
+        : deliveryCodeFromBatchId(batchId)
+      const deliverRes = await putDeliverBatch(batchId, { deliveryCode })
+
+      await refreshBatchContext()
+
+      const pickupMessage = String(pickupRes.data?.message || 'batch_picked_up')
+      const deliverMessage = String(deliverRes.data?.message || 'batch_delivered')
+      setNotice({
+        tone: 'success',
+        message: `Batch flow check passed for ${batchId}: ${pickupMessage} -> ${deliverMessage}.`,
+      })
+      setLastBatchFlowCheck({
+        status: 'success',
+        checkedAt: new Date().toISOString(),
+        batchId,
+        zoneLevel: candidate.zoneLevel,
+        pickupMessage,
+        deliveryMessage: deliverMessage,
+        detail: `Batch flow check passed for ${batchId}.`,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Batch flow check failed'
+      setError(message)
+      setNotice({ tone: 'error', message })
+      setLastBatchFlowCheck({
+        status: 'error',
+        checkedAt: new Date().toISOString(),
+        detail: message,
+      })
+    } finally {
+      setCheckingBatchFlow(false)
+    }
+  }
+
+  const runIntegrationSelfTest = async () => {
+    if (checkingIntegrationSelfTest) {
+      return
+    }
+
+    setCheckingIntegrationSelfTest(true)
+    setError('')
+    setNotice(null)
+
+    const checks: IntegrationSelfTestCheck[] = []
+
+    const runCheck = async (name: string, action: () => Promise<unknown>) => {
+      try {
+        await action()
+        checks.push({ name, status: 'pass', detail: '200 OK' })
+      } catch (err) {
+        let detail = err instanceof Error ? err.message : 'request failed'
+        if (axios.isAxiosError(err) && err.response) {
+          detail = `${err.response.status} ${err.response.statusText || ''}`.trim()
+        }
+        checks.push({ name, status: 'fail', detail })
+      }
+    }
+
+    try {
+      await runCheck('GET /api/v1/platform/workers', async () => { await getWorkers() })
+      await runCheck('GET /api/v1/platform/zones', async () => { await getZones() })
+      await runCheck('GET /api/v1/platform/zone-levels', async () => { await getZoneLevels() })
+      await runCheck('GET /api/v1/platform/zone-paths?type=a', async () => { await getZonePaths('a') })
+      await runCheck('GET /api/v1/platform/zones/health', async () => { await getZoneHealth() })
+      await runCheck('GET /api/v1/platform/disruptions', async () => { await getDisruptions() })
+      await runCheck('GET /api/v1/worker/orders', async () => { await getOrders() })
+      await runCheck('GET /api/v1/worker/batches', async () => { await getAvailableBatches() })
+      await runCheck('GET /api/v1/worker/batches/assigned', async () => { await getAssignedBatches() })
+      await runCheck('POST /api/v1/demo/simulate-orders', async () => { await postSimulateOrders({ count: 1 }) })
+      await runCheck('POST /api/v1/platform/demo/add-batches', async () => {
+        await postAddBatches({
+          count: 1,
+          zone_id: zones[0]?.zone_id || 1,
+          zone_level: 'B',
+          from_city: 'Chennai',
+          to_city: 'Bangalore',
+          from_state: 'Tamil Nadu',
+          to_state: 'Karnataka',
+        })
+      })
+      await runCheck('POST /api/v1/platform/demo/trigger-disruption', async () => {
+        await postTriggerDemo({
+          zone_id: zones[0]?.zone_id || 1,
+          force_order_drop: false,
+          external_signal: 'traffic_congestion',
+        })
+      })
+      await runCheck('POST /api/v1/platform/webhooks/external-signal', async () => {
+        await postExternalSignal({
+          zone_id: zones[0]?.zone_id || 1,
+          source: 'platform_dashboard_self_test',
+          status: 'active',
+        })
+      })
+
+      try {
+        const disruptions = await getDisruptions()
+        const disruptionRows = disruptions.data?.data || []
+        const disruptionId = Number(disruptionRows[0]?.disruption_id || 0)
+        if (Number.isFinite(disruptionId) && disruptionId > 0) {
+          await runCheck(`POST /api/v1/internal/claims/generate-for-disruption/${disruptionId}`, async () => {
+            await generateClaimsForDisruption(disruptionId)
+          })
+        } else {
+          checks.push({
+            name: 'POST /api/v1/internal/claims/generate-for-disruption/:id',
+            status: 'skipped',
+            detail: 'No disruption id available',
+          })
+        }
+      } catch (err) {
+        let detail = err instanceof Error ? err.message : 'unable to read disruptions'
+        if (axios.isAxiosError(err) && err.response) {
+          detail = `${err.response.status} ${err.response.statusText || ''}`.trim()
+        }
+        checks.push({
+          name: 'POST /api/v1/internal/claims/generate-for-disruption/:id',
+          status: 'fail',
+          detail,
+        })
+      }
+
+      const passed = checks.filter((c) => c.status === 'pass').length
+      const failed = checks.filter((c) => c.status === 'fail').length
+      const skipped = checks.filter((c) => c.status === 'skipped').length
+
+      setIntegrationSelfTestResult({
+        checkedAt: new Date().toISOString(),
+        checks,
+        passed,
+        failed,
+        skipped,
+      })
+
+      await refreshBatchContext()
+
+      if (failed === 0) {
+        setNotice({ tone: 'success', message: `Integration self-test passed (${passed} checks, ${skipped} skipped).` })
+      } else {
+        setNotice({ tone: 'error', message: `Integration self-test found ${failed} failed checks.` })
+      }
+    } finally {
+      setCheckingIntegrationSelfTest(false)
+    }
+  }
+
   const addDisruption = async () => {
   if (addingDisruption) {
     return
@@ -917,6 +1160,12 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         showCodes,
         setShowCodes,
         endpointStatus,
+        checkingBatchFlow,
+        runBatchFlowCheck,
+        lastBatchFlowCheck,
+        checkingIntegrationSelfTest,
+        runIntegrationSelfTest,
+        integrationSelfTestResult,
       }}
     >
       {children}
