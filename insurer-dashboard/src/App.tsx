@@ -7,9 +7,7 @@ import LossRatio from './pages/LossRatio'
 import Claims from './pages/Claims'
 import FraudQueue from './pages/FraudQueue'
 import Forecast from './pages/Forecast'
-import MaintenanceChecks from './pages/MaintenanceChecks'
 import Register from './pages/Register'
-import ViewBatches from './pages/ViewBatches'
 
 function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -56,7 +54,12 @@ function AppContent() {
   }
 
   return (
-    <Router>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Layout>
         <Routes>
           <Route path="/" element={<Overview />} />
@@ -64,8 +67,6 @@ function AppContent() {
           <Route path="/claims" element={<Claims />} />
           <Route path="/fraud-queue" element={<FraudQueue />} />
           <Route path="/forecast" element={<Forecast />} />
-          <Route path="/maintenance-checks" element={<MaintenanceChecks />} />
-          <Route path="/batches" element={<ViewBatches />} />
           <Route path="/register" element={<Register />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

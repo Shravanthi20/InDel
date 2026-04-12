@@ -88,3 +88,15 @@ func (h *InsurerHandler) GetPoolHealth(c *gin.Context) {
 		"pending_payouts": 0,
 	})
 }
+
+// GetMoneyExchange returns dynamic insurer money-flow metrics with zone breakdown.
+func (h *InsurerHandler) GetMoneyExchange(c *gin.Context) {
+	level := c.DefaultQuery("level", "")
+	zone := c.DefaultQuery("zone", "")
+	data, err := h.Service.GetMoneyExchange(level, zone)
+	if err != nil {
+		SendError(c, 500, "INTERNAL_ERROR", err.Error(), "")
+		return
+	}
+	SendSuccess(c, data)
+}
