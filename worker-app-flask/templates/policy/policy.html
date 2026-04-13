@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Policy{% endblock %}
+{% block page_title %}Income Protection Policy{% endblock %}
+{% block page_subtitle %}Your coverage status, premium and risk explainability{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+{% if success %}
+<div class="alert alert-success">✓ {{ success }}</div>
+{% endif %}
+
+<!-- Policy status -->
+<div class="card mb-16">
+  <div class="card-header">
+    <div>
+      <div class="card-title">Policy Status</div>
+      <div class="card-value" style="font-size:1.2rem;
+        color:{% if policy.status=='active' %}var(--success)
+              {% elif policy.status=='paused' %}var(--warning)
+              {% else %}var(--error){% endif %}">
+        {{ policy.status|title or 'Inactive' }}
+      </div>
+    </div>
+    <span class="chip
+      {% if policy.status=='active' %}chip-success
+      {% elif policy.status=='paused' %}chip-warning
+      {% else %}chip-error{% endif %}">
+      {{ policy.status|upper or 'INACTIVE' }}
+    </span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px;">
+    <div>
+      <div class="text-xs text-secondary fw-600">Weekly Premium</div>
+      <div style="font-weight:700;margin-top:4px;">₹{{ policy.weekly_premium_inr or 0 }}</div>
+    </div>
+    <div>
+      <div class="text-xs text-secondary fw-600">Coverage Ratio</div>
+      <div style="font-weight:700;margin-top:4px;">{{ (policy.coverage_ratio * 100)|int if policy.coverage_ratio else 0 }}%</div>
+    </div>
+    <div>
+      <div class="text-xs text-secondary fw-600">Next Due Date</div>
+      <div style="font-weight:700;margin-top:4px;">{{ policy.next_due_date or '—' }}</div>
+    </div>
+  </div>
+
+  {% if policy.plan_name %}
+  <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+    <div class="text-xs text-secondary fw-600">Plan</div>
+    <div style="font-weight:700;margin-top:4px;">{{ policy.plan_name }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- SHAP explainability -->
+{% if policy.shap_breakdown %}
+<div class="card mb-16">
+  <div class="card-title mb-12">Risk Factors (Explainability)</div>
+  <p class="text-sm text-secondary mb-12">
+    These factors influenced your premium calculation.
+  </p>
+  {% for shap in policy.shap_breakdown %}
+  <div style="margin-bottom:10px;">
+    <div class="d-flex justify-between mb-4">
+      <span class="text-sm fw-600">{{ shap.feature }}</span>
+      <span class="text-sm text-secondary">{{ '%.3f'|format(shap.impact) }}</span>
+    </div>
+    <div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden;">
+      <div style="height:100%;background:var(--brand-blue);border-radius:4px;"
+           data-shap-bar="{{ shap.impact|abs }}"></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Premium info -->
+{% if premium %}
+<div class="card mb-16">
+  <div class="card-title mb-12">Premium Breakdown</div>
+  <div class="d-flex align-center justify-between mb-12">
+    <span class="text-secondary">Weekly Premium</span>
+    <strong>₹{{ premium.weekly_premium_inr }} {{ premium.currency }}</strong>
+  </div>
+  <a href="{{ url_for('worker.premium_pay') }}" class="btn btn-primary btn-sm">
+    Pay Premium →
+  </a>
+</div>
+{% endif %}
+
+<!-- Actions -->
+<div class="d-flex gap-8">
+  {% if policy.status != 'active' %}
+  <form method="POST" action="{{ url_for('worker.policy') }}">
+    <input type="hidden" name="action" value="enroll">
+    <button type="submit" class="btn btn-success" id="enroll-btn">
+      Enroll Policy
+    </button>
+  </form>
+  {% endif %}
+  {% if policy.status == 'active' %}
+  <form method="POST" action="{{ url_for('worker.policy') }}">
+    <input type="hidden" name="action" value="pause">
+    <button type="submit" class="btn btn-warning"
+            data-confirm="Pause your policy?" id="pause-btn">
+      ⏸ Pause
+    </button>
+  </form>
+  <form method="POST" action="{{ url_for('worker.policy') }}">
+    <input type="hidden" name="action" value="cancel">
+    <button type="submit" class="btn btn-danger"
+            data-confirm="Cancel your policy? This cannot be undone." id="cancel-btn">
+      ✕ Cancel
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

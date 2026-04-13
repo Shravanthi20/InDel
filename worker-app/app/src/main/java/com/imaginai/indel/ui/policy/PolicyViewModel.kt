@@ -47,8 +47,9 @@ class PolicyViewModel @Inject constructor(
         try {
             val policyRes = policyRepository.getPolicy()
             if (policyRes.isSuccessful) {
+                val policy = policyRes.body()?.policy
                 _uiState.value = PolicyUiState.Success(
-                    policy = policyRes.body()!!.policy
+                    policy = policy ?: Policy()
                 )
             } else {
                 _uiState.value = PolicyUiState.Error("Failed to load policy")

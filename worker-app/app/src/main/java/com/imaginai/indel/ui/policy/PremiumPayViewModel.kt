@@ -30,8 +30,9 @@ class PremiumPayViewModel @Inject constructor(
             try {
                 val response = policyRepository.getPolicy()
                 if (response.isSuccessful) {
-                    val premium = response.body()?.policy?.weeklyPremiumInr ?: 0
-                    _amount.value = premium.toString()
+                    val policy = response.body()?.policy
+                    val payable = policy?.requiredPaymentInr ?: policy?.weeklyPremiumInr ?: 0
+                    _amount.value = payable.toString()
                 }
             } catch (e: Exception) {
                 // Fallback or ignore for init

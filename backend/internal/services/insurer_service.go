@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/kafka"
@@ -27,6 +28,31 @@ type MaintenanceCheckItem struct {
 	InitiatedAt  time.Time `json:"initiated_at"`
 	ResponseAt   *string   `json:"response_at,omitempty"`
 	Findings     string    `json:"findings"`
+}
+
+type ZoneMoneyExchange struct {
+	ZoneID            uint    `json:"zone_id"`
+	ZoneName          string  `json:"zone_name"`
+	City              string  `json:"city"`
+	State             string  `json:"state"`
+	Level             string  `json:"level"`
+	SubscribedWorkers int64   `json:"subscribed_workers"`
+	ClaimsCount       int64   `json:"claims_count"`
+	PremiumsCollected float64 `json:"premiums_collected"`
+	ClaimsAmount      float64 `json:"claims_amount"`
+	PayoutsProcessed  float64 `json:"payouts_processed"`
+	NetFlow           float64 `json:"net_flow"`
+}
+
+type MoneyExchangeSummary struct {
+	PremiumPool      float64             `json:"premium_pool"`
+	TotalSubscribed  int64               `json:"total_subscribed"`
+	TotalClaims      int64               `json:"total_claims"`
+	TotalClaimAmount float64             `json:"total_claim_amount"`
+	TotalPayouts     float64             `json:"total_payouts"`
+	NetPool          float64             `json:"net_pool"`
+	PendingPayouts   int64               `json:"pending_payouts"`
+	ZoneBreakdown    []ZoneMoneyExchange `json:"zone_breakdown"`
 }
 
 func NewInsurerService(db *gorm.DB, kp *kafka.Producer) *InsurerService {
@@ -81,6 +107,146 @@ func (s *InsurerService) GetOverview() (*models.InsurerOverview, string, error) 
 		ReserveUtilization: reserveUtilization,
 		Reserve:            premiums - payouts,
 	}, poolHealth, nil
+}
+
+func (s *InsurerService) GetMoneyExchange(levelFilter, zoneFilter string) (*MoneyExchangeSummary, error) {
+	if s.DB == nil {
+		return &MoneyExchangeSummary{
+			PremiumPool:      2200,
+			TotalSubscribed:  500,
+			TotalClaims:      120,
+			TotalClaimAmount: 960,
+			TotalPayouts:     860,
+			NetPool:          1340,
+			PendingPayouts:   6,
+			ZoneBreakdown: []ZoneMoneyExchange{
+				{ZoneID: 1, ZoneName: "Tambaram", City: "Chennai", State: "Tamil Nadu", Level: "A", SubscribedWorkers: 58, ClaimsCount: 16, PremiumsCollected: 428, ClaimsAmount: 162, PayoutsProcessed: 143, NetFlow: 285},
+			},
+		}, nil
+	}
+
+	level := strings.ToUpper(strings.TrimSpace(levelFilter))
+	zoneLike := strings.TrimSpace(zoneFilter)
+
+	type zoneRow struct {
+		ZoneID            uint
+		ZoneName          string
+		City              string
+		State             string
+		Level             string
+		SubscribedWorkers int64
+		ClaimsCount       int64
+		PremiumsCollected float64
+		ClaimsAmount      float64
+		PayoutsProcessed  float64
+	}
+
+	rows := make([]zoneRow, 0)
+	err := s.DB.Raw(`
+		SELECT
+			z.id AS zone_id,
+			z.name AS zone_name,
+			z.city,
+			z.state,
+			COALESCE(z.level, '') AS level,
+			COALESCE(sub.subscribed_workers, 0) AS subscribed_workers,
+			COALESCE(clm.claims_count, 0) AS claims_count,
+			COALESCE(prem.premiums_collected, 0) AS premiums_collected,
+			COALESCE(clm.claims_amount, 0) AS claims_amount,
+			COALESCE(pay.payouts_processed, 0) AS payouts_processed
+		FROM zones z
+		LEFT JOIN (
+			SELECT wp.zone_id, COUNT(DISTINCT p.worker_id) AS subscribed_workers
+			FROM policies p
+			JOIN worker_profiles wp ON wp.worker_id = p.worker_id
+			WHERE p.status = 'active'
+			GROUP BY wp.zone_id
+		) sub ON sub.zone_id = z.id
+		LEFT JOIN (
+			SELECT wp.zone_id, COALESCE(SUM(pp.amount), 0) AS premiums_collected
+			FROM premium_payments pp
+			JOIN worker_profiles wp ON wp.worker_id = pp.worker_id
+			WHERE pp.status IN ('completed', 'captured', 'processed')
+			GROUP BY wp.zone_id
+		) prem ON prem.zone_id = z.id
+		LEFT JOIN (
+			SELECT d.zone_id,
+			       COUNT(c.id) AS claims_count,
+			       COALESCE(SUM(c.claim_amount), 0) AS claims_amount
+			FROM claims c
+			JOIN disruptions d ON d.id = c.disruption_id
+			GROUP BY d.zone_id
+		) clm ON clm.zone_id = z.id
+		LEFT JOIN (
+			SELECT d.zone_id, COALESCE(SUM(p.amount), 0) AS payouts_processed
+			FROM payouts p
+			JOIN claims c ON c.id = p.claim_id
+			JOIN disruptions d ON d.id = c.disruption_id
+			WHERE p.status IN ('processed', 'credited', 'completed')
+			GROUP BY d.zone_id
+		) pay ON pay.zone_id = z.id
+		WHERE (? = '' OR UPPER(COALESCE(z.level, '')) = ?)
+		  AND (? = '' OR z.name ILIKE ? OR z.city ILIKE ?)
+		ORDER BY z.city ASC, z.name ASC
+	`, level, level, zoneLike, "%"+zoneLike+"%", "%"+zoneLike+"%").Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	zoneBreakdown := make([]ZoneMoneyExchange, 0, len(rows))
+	var totalSubscribed int64
+	var totalClaims int64
+	var premiumPool float64
+	var totalClaimAmount float64
+	var totalPayouts float64
+
+	for _, row := range rows {
+		net := row.PremiumsCollected - row.PayoutsProcessed
+		zoneBreakdown = append(zoneBreakdown, ZoneMoneyExchange{
+			ZoneID:            row.ZoneID,
+			ZoneName:          row.ZoneName,
+			City:              row.City,
+			State:             row.State,
+			Level:             row.Level,
+			SubscribedWorkers: row.SubscribedWorkers,
+			ClaimsCount:       row.ClaimsCount,
+			PremiumsCollected: row.PremiumsCollected,
+			ClaimsAmount:      row.ClaimsAmount,
+			PayoutsProcessed:  row.PayoutsProcessed,
+			NetFlow:           net,
+		})
+
+		totalSubscribed += row.SubscribedWorkers
+		totalClaims += row.ClaimsCount
+		premiumPool += row.PremiumsCollected
+		totalClaimAmount += row.ClaimsAmount
+		totalPayouts += row.PayoutsProcessed
+	}
+
+	var pendingPayouts int64
+	pendingQuery := s.DB.Table("payouts p").
+		Joins("JOIN claims c ON c.id = p.claim_id").
+		Joins("JOIN disruptions d ON d.id = c.disruption_id").
+		Joins("JOIN zones z ON z.id = d.zone_id").
+		Where("p.status IN ?", []string{"queued", "pending", "retry_pending"})
+	if level != "" {
+		pendingQuery = pendingQuery.Where("UPPER(COALESCE(z.level, '')) = ?", level)
+	}
+	if zoneLike != "" {
+		pendingQuery = pendingQuery.Where("z.name ILIKE ? OR z.city ILIKE ?", "%"+zoneLike+"%", "%"+zoneLike+"%")
+	}
+	_ = pendingQuery.Count(&pendingPayouts).Error
+
+	return &MoneyExchangeSummary{
+		PremiumPool:      premiumPool,
+		TotalSubscribed:  totalSubscribed,
+		TotalClaims:      totalClaims,
+		TotalClaimAmount: totalClaimAmount,
+		TotalPayouts:     totalPayouts,
+		NetPool:          premiumPool - totalPayouts,
+		PendingPayouts:   pendingPayouts,
+		ZoneBreakdown:    zoneBreakdown,
+	}, nil
 }
 
 // GetLossRatio returns aggregated claims vs premiums
@@ -234,12 +400,12 @@ func (s *InsurerService) GetClaimDetail(claimID string) (*models.ClaimDetail, er
 	}
 	var row r
 	err := s.DB.Table("claims c").
-		Select("c.id AS claim_id, c.worker_id, c.disruption_id, z.name AS zone_name, z.city, c.claim_amount, c.status, COALESCE(c.fraud_verdict, 'pending') AS fraud_verdict, COALESCE(cfs.score, 0.0) AS fraud_score, cfs.rule_violations AS factors, CAST(c.created_at as text) AS created_at").
+		Select("c.id AS claim_id, c.worker_id, c.disruption_id, z.name AS zone_name, z.city, c.claim_amount, c.status, COALESCE(c.fraud_verdict, 'pending') AS fraud_verdict, COALESCE(cfs.isolation_forest_score, 0.0) AS fraud_score, cfs.rule_violations AS factors, CAST(c.created_at as text) AS created_at").
 		Joins("JOIN disruptions d ON d.id = c.disruption_id").
 		Joins("JOIN zones z ON z.id = d.zone_id").
 		Joins("LEFT JOIN claim_fraud_scores cfs ON cfs.claim_id = c.id").
 		Where("c.id = ?", claimID).
-		First(&row).Error
+		Take(&row).Error
 
 	if err != nil {
 		return nil, fmt.Errorf("claim not found")
@@ -273,17 +439,13 @@ func (s *InsurerService) ReviewClaim(claimID string, req models.ClaimAction) err
 		return nil
 	}
 
-	err := s.DB.Transaction(func(tx *gorm.DB) error {
-		res := tx.Exec("UPDATE claims SET status = ?, fraud_verdict = ?, updated_at = ? WHERE id = ?", req.Status, req.FraudVerdict, time.Now(), claimID)
-		if res.Error != nil {
-			return res.Error
-		}
+	res := s.DB.Exec("UPDATE claims SET status = ?, fraud_verdict = ?, updated_at = ? WHERE id = ?", req.Status, req.FraudVerdict, time.Now(), claimID)
+	if res.Error != nil {
+		return fmt.Errorf("failed to update claim: %w", res.Error)
+	}
 
-		cid := 0
-		if _, err := fmt.Sscanf(claimID, "%d", &cid); err != nil {
-			return err
-		}
-
+	cid := 0
+	if _, err := fmt.Sscanf(claimID, "%d", &cid); err == nil {
 		audit := models.ClaimAuditLog{
 			ClaimID:   uint(cid),
 			Action:    "review",
@@ -292,15 +454,13 @@ func (s *InsurerService) ReviewClaim(claimID string, req models.ClaimAction) err
 			CreatedAt: time.Now(),
 		}
 
-		if err := tx.Create(&audit).Error; err != nil {
-			return err
+		if err := s.DB.Create(&audit).Error; err != nil {
+			// Some demo databases may not include claim_audit_logs yet.
+			// Keep review successful if only audit logging is unavailable.
+			if !strings.Contains(strings.ToLower(err.Error()), "claim_audit_logs") {
+				return fmt.Errorf("failed to create audit entry: %w", err)
+			}
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to review claim: %w", err)
 	}
 
 	// Emit Kafka event
@@ -335,7 +495,7 @@ func (s *InsurerService) GetFraudQueue(offset, limit int) ([]models.FraudQueueIt
 	var total int64
 
 	baseQuery := s.DB.Table("claims c").
-		Select("c.id AS claim_id, COALESCE(cfs.final_verdict, 'pending') AS final_verdict, COALESCE(cfs.score, 0.0) AS score, COALESCE(CAST(cfs.rule_violations as text), '[]') AS violations, CAST(c.created_at as text) AS created_at").
+		Select("c.id AS claim_id, COALESCE(cfs.final_verdict, 'pending') AS final_verdict, COALESCE(cfs.isolation_forest_score, 0.0) AS score, COALESCE(CAST(cfs.rule_violations as text), '[]') AS violations, CAST(c.created_at as text) AS created_at").
 		Joins("LEFT JOIN claim_fraud_scores cfs ON cfs.claim_id = c.id").
 		Where("COALESCE(cfs.final_verdict, 'pending') IN ('flagged', 'manual_review', 'pending')")
 
@@ -344,7 +504,7 @@ func (s *InsurerService) GetFraudQueue(offset, limit int) ([]models.FraudQueueIt
 		Where("COALESCE(cfs.final_verdict, 'pending') IN ('flagged', 'manual_review', 'pending')").
 		Count(&total).Error
 
-	_ = baseQuery.Order("cfs.score DESC, c.created_at DESC").
+	_ = baseQuery.Order("cfs.isolation_forest_score DESC, c.created_at DESC").
 		Offset(offset).
 		Limit(limit).
 		Scan(&rows).Error

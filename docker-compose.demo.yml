@@ -45,6 +45,12 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -61,6 +67,7 @@ services:
         SERVICE: core
     environment:
       INDEL_ENV: demo
+      INDEL_CORE_INTERNAL_ALLOWED_ROLES: ${INDEL_CORE_INTERNAL_ALLOWED_ROLES:-worker,admin,platform_admin,ops_manager}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
@@ -68,14 +75,25 @@ services:
       DB_NAME: indel_demo
       KAFKA_BROKERS: kafka:9092
     ports:
-      - "${HOST_IP}:8000:8000"
+      - "${HOST_IP:-127.0.0.1}:8000:8000"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
+      - ./zone_level.json:/root/zone_level.json:ro
     depends_on:
       postgres:
         condition: service_healthy
       db-migrate:
         condition: service_completed_successfully
       kafka:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8000/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
 
   worker-gateway:
     build:
@@ -87,16 +105,36 @@ services:
       INDEL_ENV: demo
       SERVICE: worker-gateway
       CORE_URL: http://core:8000
+      PREMIUM_ML_URL: http://premium-ml:8000/ml/v1/premium/calculate
+      INDEL_DEMO_RESET_KEY: ${INDEL_DEMO_RESET_KEY:-change-me-demo-reset-key}
+      INDEL_DEMO_ALLOWED_ROLES: ${INDEL_DEMO_ALLOWED_ROLES:-worker,admin,platform_admin,ops_manager}
+      INDEL_DEMO_DESTRUCTIVE_ROLES: ${INDEL_DEMO_DESTRUCTIVE_ROLES:-admin,platform_admin}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
       DB_PASSWORD: ${DB_PASSWORD:-demo_password}
       DB_NAME: indel_demo
     ports:
-      - "${HOST_IP}:8001:8001"
+      - "${HOST_IP:-127.0.0.1}:8001:8001"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
     depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       core:
-        condition: service_started
+        condition: service_healthy
+      premium-ml:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8001/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
 
   insurer-gateway:
     build:
@@ -114,10 +152,24 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-demo_password}
       DB_NAME: indel_demo
     ports:
-      - "${HOST_IP}:8002:8002"
+      - "${HOST_IP:-127.0.0.1}:8002:8002"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
     depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       core:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8002/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
 
   platform-gateway:
     build:
@@ -129,16 +181,71 @@ services:
       INDEL_ENV: demo
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
+      INDEL_PLATFORM_OPERATOR_ALLOWED_ROLES: ${INDEL_PLATFORM_OPERATOR_ALLOWED_ROLES:-admin,platform_admin,ops_manager}
+      INDEL_PLATFORM_WEBHOOK_ALLOWED_ROLES: ${INDEL_PLATFORM_WEBHOOK_ALLOWED_ROLES:-admin,platform_admin,ops_manager}
+      INDEL_PLATFORM_WEBHOOK_KEY: ${INDEL_PLATFORM_WEBHOOK_KEY:-change-me-platform-webhook-key}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
       DB_PASSWORD: ${DB_PASSWORD:-demo_password}
       DB_NAME: indel_demo
     ports:
-      - "${HOST_IP}:8003:8003"
+      - "${HOST_IP:-127.0.0.1}:8003:8003"
+    volumes:
+      - ./zone_a.json:/root/zone_a.json:ro
+      - ./zone_b.json:/root/zone_b.json:ro
+      - ./zone_c.json:/root/zone_c.json:ro
     depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       core:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8003/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  api-gateway:
+    image: nginx:1.27-alpine
+    ports:
+      - "8004:80"
+    volumes:
+      - ./infra/nginx/api-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      worker-gateway:
+        condition: service_healthy
+      platform-gateway:
+        condition: service_healthy
+      insurer-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  platform-dashboard:
+    build:
+      context: ./platform-dashboard
+      dockerfile: Dockerfile
+      args:
+        VITE_PLATFORM_API_URL: ${PLATFORM_API_URL:-http://localhost:8004}
+    ports:
+      - "5174:5174"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:5174 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
   premium-ml:
     build:
@@ -148,6 +255,12 @@ services:
       - "9001:8000"
     environment:
       SERVICE_PORT: 8000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
 
   fraud-ml:
     build:
@@ -157,6 +270,12 @@ services:
       - "9002:8000"
     environment:
       SERVICE_PORT: 8000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
 
   forecast-ml:
     build:
@@ -166,6 +285,25 @@ services:
       - "9003:8000"
     environment:
       SERVICE_PORT: 8000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  backend-worker-tests:
+    image: golang:1.22
+    working_dir: /app/backend
+    command: ["sh", "-c", "go test ./internal/handlers/worker -v"]
+    volumes:
+      - ./:/app
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+    profiles:
+      - test
 
 volumes:
   postgres_demo_data:

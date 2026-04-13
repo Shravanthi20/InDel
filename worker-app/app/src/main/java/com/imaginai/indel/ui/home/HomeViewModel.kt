@@ -55,8 +55,9 @@ class HomeViewModel @Inject constructor(
             val profileRes = workerRepository.getProfile()
             val policyRes = policyRepository.getPolicy()
             val earningsRes = earningsRepository.getEarnings()
+            val notificationsRes = workerRepository.getNotifications()
 
-            if (profileRes.isSuccessful && policyRes.isSuccessful && earningsRes.isSuccessful) {
+            if (profileRes.isSuccessful && policyRes.isSuccessful && earningsRes.isSuccessful && notificationsRes.isSuccessful) {
                 val summary = earningsRes.body()!!
                 val earnings = Earnings(
                     thisWeekActual = summary.thisWeekActual.toDouble(),
@@ -65,11 +66,17 @@ class HomeViewModel @Inject constructor(
                     protectedIncome = summary.protectedIncome.toDouble(),
                     history = summary.history.map { EarningRecord(it.week, it.actual.toDouble()) }
                 )
+
+                val latestDisruption = notificationsRes.body()
+                    ?.notifications
+                    ?.firstOrNull { it.type.equals("disruption_alert", ignoreCase = true) }
                 
                 _uiState.value = HomeUiState.Success(
                     worker = profileRes.body()!!.worker,
                     policy = policyRes.body()!!.policy,
-                    earnings = earnings
+                    earnings = earnings,
+                    hasDisruptionAlert = latestDisruption != null,
+                    disruptionMessage = latestDisruption?.body,
                 )
             } else {
                 _uiState.value = HomeUiState.Error("Failed to load dashboard data")
@@ -99,7 +106,9 @@ sealed class HomeUiState {
     data class Success(
         val worker: WorkerProfile,
         val policy: Policy,
-        val earnings: Earnings
+        val earnings: Earnings,
+        val hasDisruptionAlert: Boolean,
+        val disruptionMessage: String?,
     ) : HomeUiState()
     data class Error(val message: String) : HomeUiState()
 }

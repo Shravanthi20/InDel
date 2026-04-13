@@ -34,13 +34,15 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
             }
         }
     }
-    
+
     fun startRazorpayCheckout(amountInPaise: Int, contactNumber: String, callback: (Boolean, String?, String?) -> Unit) {
         this.razorpayCallback = callback
         val checkout = Checkout()
-        // DYNAMIC CONFIG: Evaluators can replace this with their own test key if desired.
-        // For Phase 2 demo, this can stay as a placeholder to avoid leaking sensitive keys.
-        val razorpayKeyId = "rzp_test_REPLACE_WITH_YOUR_KEY" 
+        val razorpayKeyId = BuildConfig.RAZORPAY_KEY_ID?.trim().orEmpty()
+        if (razorpayKeyId.isBlank()) {
+            callback.invoke(false, null, "Missing RAZORPAY_KEY_ID. Set it in .env and rebuild app.")
+            return
+        }
         checkout.setKeyID(razorpayKeyId) 
 
         try {
@@ -56,7 +58,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
             
             checkout.open(this, options)
         } catch (e: Exception) {
-            callback.invoke(false, null, "Error launching Razorpay: ${e.message}")
+			callback.invoke(false, null, e.message ?: "Unable to open Razorpay checkout")
         }
     }
 
@@ -65,6 +67,6 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     }
 
     override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
-        razorpayCallback?.invoke(false, null, response)
+		razorpayCallback?.invoke(false, null, response ?: "Payment failed (code=$code)")
     }
 }

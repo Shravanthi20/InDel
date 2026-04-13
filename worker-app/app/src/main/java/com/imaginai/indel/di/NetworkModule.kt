@@ -3,6 +3,7 @@ package com.imaginai.indel.di
 import com.imaginai.indel.BuildConfig
 import com.imaginai.indel.data.api.AuthApiService
 import com.imaginai.indel.data.api.WorkerApiService
+import com.imaginai.indel.data.api.PlatformApiService
 import com.imaginai.indel.data.local.PreferencesDataStore
 import dagger.Module
 import dagger.Provides
@@ -15,7 +16,17 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class WorkerGateway
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class PlatformGateway
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -51,14 +62,20 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
             .addInterceptor(authInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    @WorkerGateway
+    fun provideWorkerRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        // Worker gateway base URL (port 8001) - for auth, worker, orders endpoints
+        val baseUrl = BuildConfig.API_BASE_URL.replaceFirst(":8003", ":8001").replace(":8003/", ":8001/")
         return Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL)
+            .baseUrl(baseUrl)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -66,13 +83,36 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthApiService(retrofit: Retrofit): AuthApiService {
+    @PlatformGateway
+    fun providePlatformRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        // Platform gateway base URL (port 8003) - for zone paths, zone data
+        val baseUrl = BuildConfig.API_BASE_URL.replaceFirst(":8001", ":8003").replace(":8001/", ":8003/")
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(@WorkerGateway retrofit: Retrofit): Retrofit = retrofit
+
+    @Provides
+    @Singleton
+    fun provideAuthApiService(@WorkerGateway retrofit: Retrofit): AuthApiService {
         return retrofit.create(AuthApiService::class.java)
     }
 
     @Provides
     @Singleton
-    fun provideWorkerApiService(retrofit: Retrofit): WorkerApiService {
+    fun provideWorkerApiService(@WorkerGateway retrofit: Retrofit): WorkerApiService {
         return retrofit.create(WorkerApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun providePlatformApiService(@PlatformGateway retrofit: Retrofit): PlatformApiService {
+        return retrofit.create(PlatformApiService::class.java)
     }
 }

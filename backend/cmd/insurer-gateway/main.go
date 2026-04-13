@@ -8,9 +8,9 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
 	"github.com/Shravanthi20/InDel/backend/internal/kafka"
+	"github.com/Shravanthi20/InDel/backend/internal/middleware"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
 	"github.com/Shravanthi20/InDel/backend/internal/services"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -23,11 +23,7 @@ func main() {
 
 	// Create Gin router
 	router := gin.Default()
-	
-	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowAllOrigins = true
-	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "Authorization")
-	router.Use(cors.New(corsConfig))
+	router.Use(middleware.CORS())
 
 	// Optional DB wiring for live aggregate metrics.
 	cfg := config.Load()
@@ -50,6 +46,12 @@ func main() {
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "insurer-gateway"})
+	})
+	router.GET("/api/v1/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"ok": true, "service": "insurer-gateway", "time": "mock"})
+	})
+	router.GET("/api/v1/status", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "up", "environment": os.Getenv("INDEL_ENV")})
 	})
 
 	// API routes

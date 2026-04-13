@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delivery Batch Pickup Simulator</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.78);
+      --panel-strong: #111827;
+      --card: rgba(255, 255, 255, 0.08);
+      --card-border: rgba(148, 163, 184, 0.2);
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #f59e0b;
+      --accent-2: #22c55e;
+      --danger: #ef4444;
+      --pending: #eab308;
+      --picked: #22c55e;
+      --delivery: #3b82f6;
+      --shadow: 0 16px 45px rgba(0, 0, 0, 0.32);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(245, 158, 11, 0.22), transparent 30%),
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.2), transparent 28%),
+        linear-gradient(160deg, #020617 0%, #0f172a 55%, #111827 100%);
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px 48px;
+    }
+
+    .app {
+      width: min(1180px, 100%);
+    }
+
+    .hero {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -30% auto;
+      width: 240px;
+      height: 240px;
+      background: radial-gradient(circle, rgba(34, 197, 94, 0.15), transparent 70%);
+      pointer-events: none;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #f59e0b, #fb7185);
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      box-shadow: 0 10px 28px rgba(245, 158, 11, 0.35);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 3vw, 2.7rem);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      max-width: 68ch;
+      line-height: 1.55;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .stat {
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 14px 16px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 0.84rem;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .toolbar {
+      margin: 18px 0 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.55);
+      color: var(--text);
+      user-select: none;
+      cursor: pointer;
+    }
+
+    .toggle input {
+      appearance: none;
+      width: 42px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.25);
+      position: relative;
+      outline: none;
+      transition: 180ms ease;
+      cursor: pointer;
+      flex: none;
+    }
+
+    .toggle input::after {
+      content: "";
+      position: absolute;
+      inset: 3px auto 3px 3px;
+      width: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: inherit;
+    }
+
+    .toggle input:checked {
+      background: rgba(34, 197, 94, 0.7);
+    }
+
+    .toggle input:checked::after {
+      transform: translateX(18px);
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .conn-info {
+      color: #bfdbfe;
+      font-size: 0.86rem;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: rgba(30, 64, 175, 0.18);
+      max-width: 100%;
+      word-break: break-all;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+    }
+
+    .batch-card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.04));
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+      overflow: hidden;
+      animation: rise 520ms ease both;
+    }
+
+    .batch-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      background: var(--pending);
+    }
+
+    .batch-card[data-status="picked-up"]::before {
+      background: var(--picked);
+    }
+
+    .batch-card[data-status="out-for-delivery"]::before {
+      background: var(--delivery);
+    }
+
+    .batch-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .batch-id {
+      font-size: 1.18rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .zone-badge,
+    .status-badge,
+    .code-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .zone-badge {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .status-badge {
+      width: fit-content;
+      background: rgba(148, 163, 184, 0.15);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .batch-card[data-status="picked-up"] .status-badge {
+      background: rgba(34, 197, 94, 0.14);
+      border-color: rgba(34, 197, 94, 0.3);
+      color: #86efac;
+    }
+
+    .batch-card[data-status="out-for-delivery"] .status-badge {
+      background: rgba(59, 130, 246, 0.14);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+    }
+
+    .meta {
+      display: grid;
+      gap: 10px;
+      color: #dbeafe;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+
+    .meta-row span:first-child {
+      color: var(--muted);
+    }
+
+    .pickup-code {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.4);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .code-text {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.24em;
+      font-size: 1.12rem;
+      font-weight: 800;
+    }
+
+    .hidden-code {
+      letter-spacing: 0.36em;
+      color: rgba(229, 231, 235, 0.55);
+    }
+
+    .code-chip {
+      background: rgba(59, 130, 246, 0.12);
+      color: #bfdbfe;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      white-space: nowrap;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    input[type="text"]::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    input[type="text"]:focus {
+      border-color: rgba(245, 158, 11, 0.7);
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 14px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .verify-btn {
+      background: linear-gradient(135deg, #f59e0b, #fb7185);
+      color: #fff;
+    }
+
+    .delivery-btn {
+      background: linear-gradient(135deg, #2563eb, #0ea5e9);
+      color: #fff;
+    }
+
+    .message {
+      min-height: 1.1em;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .message.error {
+      color: #fca5a5;
+    }
+
+    .message.success {
+      color: #86efac;
+    }
+
+    .message.info {
+      color: #bfdbfe;
+    }
+
+    .locked input[type="text"],
+    .locked button.verify-btn {
+      opacity: 0.55;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .batch-card {
+      cursor: pointer;
+    }
+
+    .card-hint {
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .card-action {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+    }
+
+    .modal-backdrop[hidden] {
+      display: none;
+    }
+
+    .modal {
+      width: min(880px, 100%);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+      position: relative;
+      max-height: min(88vh, 960px);
+      overflow: auto;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      font-size: 1.2rem;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .modal-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.9fr);
+      gap: 18px;
+      margin-top: 8px;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 22px;
+      padding: 18px;
+    }
+
+    .panel-title {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .order-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .order-item {
+      display: grid;
+      gap: 6px;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.35);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .order-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .order-id {
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .order-meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .detail-chip {
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.3);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      color: #dbeafe;
+    }
+
+    .detail-chip span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-bottom: 5px;
+    }
+
+    .modal-actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .pickup-entry {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+
+    .pickup-input {
+      flex: 1 1 170px;
+    }
+
+    .code-input-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .modal .verify-btn,
+    .modal .delivery-btn {
+      min-width: 160px;
+    }
+
+    .small-note {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 760px) {
+      .modal-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .modal {
+        padding: 16px;
+        border-radius: 22px;
+      }
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 16px;
+      }
+
+      .hero {
+        padding: 20px;
+        border-radius: 22px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .input-row {
+        flex-direction: column;
+      }
+
+      .pickup-code {
+        flex-direction: column;
+        align-items: start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-mark">📦</div>
+          <div>
+            <h1>Delivery Batch Pickup Simulator</h1>
+            <p class="subtitle">
+              This page mirrors backend batches, shows the 4-digit pickup code for each batch, and lets you submit the code here.
+              Once the code is accepted, worker-app and this page both reflect the updated pickup state.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" aria-label="batch summary">
+        <div class="stat">
+          <div class="stat-label">Total Batches</div>
+          <div class="stat-value" id="totalBatches">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Picked Up</div>
+          <div class="stat-value" id="pickedCount">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Out for Delivery</div>
+          <div class="stat-value" id="deliveryCount">0</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="toolbar">
+      <label class="toggle">
+        <input type="checkbox" id="showCodesToggle" />
+        <span>Show pickup codes</span>
+      </label>
+      <div>
+        <div class="hint">Codes are deterministic from batch ID and should match worker-app validation.</div>
+        <div class="conn-info" id="connectionInfo">UI booting...</div>
+      </div>
+    </div>
+
+    <section class="grid" id="batchGrid" aria-live="polite"></section>
+
+    <div class="modal-backdrop" id="batchModalBackdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <button class="modal-close" id="modalCloseBtn" aria-label="Close details panel">×</button>
+        <div id="modalContent"></div>
+      </div>
+    </div>
+
+    <div class="footer-note">Status colors: Pending Pickup, Picked Up, and Out for Delivery.</div>
+  </main>
+
+  <script>
+    const UI_VERSION = '2026-04-03.3';
+    const DEFAULT_HOST = '192.168.1.6';
+    const REFRESH_MS = 4000;
+
+    const queryParams = new URLSearchParams(window.location.search);
+    const apiBaseOverride = queryParams.get('apiBase') || localStorage.getItem('batchSimulatorApiBase') || '';
+
+    const state = {
+      showCodes: false,
+      selectedBatchId: null,
+      modalMessage: '',
+      token: '',
+      batches: [],
+      loading: false,
+      error: '',
+      apiBase: '',
+      attemptedApiBases: [],
+      pickupInput: '',
+      accepting: false
+    };
+
+    const grid = document.getElementById('batchGrid');
+    const totalBatchesEl = document.getElementById('totalBatches');
+    const pickedCountEl = document.getElementById('pickedCount');
+    const deliveryCountEl = document.getElementById('deliveryCount');
+    const showCodesToggle = document.getElementById('showCodesToggle');
+    const modalBackdrop = document.getElementById('batchModalBackdrop');
+    const modalContent = document.getElementById('modalContent');
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+    const connectionInfo = document.getElementById('connectionInfo');
+
+    const sanitizeApiBase = (value) => String(value || '').trim().replace(/\/$/, '');
+
+    const apiCandidates = () => {
+      const candidates = [];
+      const pageHost = window.location.hostname;
+
+      if (apiBaseOverride) {
+        candidates.push(sanitizeApiBase(apiBaseOverride));
+      }
+      if (pageHost) {
+        candidates.push(`http://${pageHost}:8001/api/v1`);
+      }
+      candidates.push(`http://${DEFAULT_HOST}:8001/api/v1`);
+      candidates.push('http://localhost:8001/api/v1');
+      candidates.push('http://127.0.0.1:8001/api/v1');
+
+      return Array.from(new Set(candidates.map(sanitizeApiBase).filter(Boolean)));
+    };
+
+    const statusClass = (status) => {
+      if (status === 'Picked Up') return 'picked-up';
+      if (status === 'Out for Delivery') return 'out-for-delivery';
+      return 'pending-pickup';
+    };
+
+    const escapeHtml = (value) => String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+    const normalizeStatus = (value) => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (raw === 'picked_up' || raw === 'picked up') return 'Picked Up';
+      if (raw === 'accepted') return 'Accepted';
+      if (raw === 'out_for_delivery' || raw === 'out for delivery') return 'Out for Delivery';
+      if (raw === 'assigned' || raw === 'pending') return 'Pending Pickup';
+      if (!raw) return 'Pending Pickup';
+      return raw.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+    };
+
+    const pickupCodeFromBatchId = (batchId) => {
+      const normalized = String(batchId || '').trim().toUpperCase();
+      let seed = 0;
+      for (const ch of normalized) {
+        seed = (seed * 31 + ch.charCodeAt(0)) % 9000;
+      }
+      return String(1000 + seed).padStart(4, '0');
+    };
+
+    const mapBatch = (batch) => ({
+      id: batch.batchId,
+      batchId: batch.batchId,
+      batchKey: batch.batchKey || batch.batchId,
+      zone: batch.zoneLevel || '-',
+      from: batch.fromCity || 'Unknown',
+      to: batch.toCity || 'Unknown',
+      weight: Number(batch.totalWeight || 0),
+      targetWeight: Number(batch.targetWeight || 10),
+      maxWeight: Number(batch.maxWeight || 12),
+      orders: (batch.orders || []).map((order) => ({
+        id: order.orderId,
+        customer: order.contactName || 'Customer',
+        city: order.deliveryAddress || '-',
+        pickupArea: order.pickupArea || '-',
+        dropArea: order.dropArea || order.deliveryAddress || '-',
+        status: normalizeStatus(order.status),
+        weight: `${Number(order.weight || 0).toFixed(2)} kg`
+      })),
+      pickupCode: pickupCodeFromBatchId(batch.batchId),
+      status: normalizeStatus(batch.status),
+      revealed: false,
+      message: ''
+    });
+
+    const renderStats = () => {
+      const batches = state.batches;
+      totalBatchesEl.textContent = batches.length;
+      pickedCountEl.textContent = batches.filter((batch) => batch.status === 'Picked Up' || batch.status === 'Out for Delivery').length;
+      deliveryCountEl.textContent = batches.filter((batch) => batch.status === 'Out for Delivery').length;
+    };
+
+    const renderConnectionInfo = () => {
+      if (!connectionInfo) return;
+      const apiPart = state.apiBase ? `api=${state.apiBase}` : 'api=not-resolved';
+      const statusPart = state.error ? `status=error(${state.error})` : 'status=ok';
+      connectionInfo.textContent = `UI ${UI_VERSION} | ${apiPart} | ${statusPart}`;
+    };
+
+    const codeDisplay = (batch) => {
+      if (state.showCodes || batch.revealed) {
+        return `<span class="code-text">${batch.pickupCode}</span>`;
+      }
+
+      return `<span class="code-text hidden-code">••••</span>`;
+    };
+
+    const selectedBatch = () => state.batches.find((batch) => batch.id === state.selectedBatchId) || null;
+
+    const batchOrderSummary = (batch) => `${batch.orders.length} order${batch.orders.length === 1 ? '' : 's'} assigned to this batch`;
+
+    const renderBatch = (batch) => {
+      const locked = batch.status !== 'Pending Pickup';
+      const messageClass = batch.message.includes('Invalid') ? 'error' : batch.message.includes('successfully') || batch.message.includes('assigned') ? 'success' : 'info';
+
+      return `
+        <article
+          class="batch-card ${locked ? 'locked' : ''}"
+          data-status="${statusClass(batch.status)}"
+          data-batch-id="${escapeHtml(batch.id)}"
+          role="button"
+          tabindex="0"
+          aria-label="Open details for ${escapeHtml(batch.batchId)}"
+        >
+          <div class="batch-head">
+            <div>
+              <div class="batch-id">${escapeHtml(batch.batchId)}</div>
+              <div class="zone-badge">Zone ${escapeHtml(batch.zone)}</div>
+            </div>
+            <div class="status-badge">${escapeHtml(batch.status)}</div>
+          </div>
+
+          <div class="meta">
+            <div class="meta-row"><span>Route</span><strong>${escapeHtml(batch.from)} → ${escapeHtml(batch.to)}</strong></div>
+            <div class="meta-row"><span>Total Weight</span><strong>${batch.weight.toFixed(1)} kg</strong></div>
+            <div class="meta-row"><span>Orders</span><strong>${batch.orders.length}</strong></div>
+          </div>
+
+          <div class="pickup-code" aria-label="pickup code">
+            <span>Pickup Code</span>
+            ${codeDisplay(batch)}
+          </div>
+
+          <div class="card-footer">
+            <span class="card-hint">Touch to enter code and view all orders in the batch.</span>
+            <button class="card-action" type="button">View order details</button>
+          </div>
+
+          <div class="message ${messageClass}" data-message="${escapeHtml(batch.id)}">${escapeHtml(batch.message)}</div>
+        </article>
+      `;
+    };
+
+    const renderModal = () => {
+      const batch = selectedBatch();
+
+      if (!batch) {
+        modalContent.innerHTML = '';
+        modalBackdrop.hidden = true;
+        return;
+      }
+
+      const codeVisible = state.showCodes || batch.revealed;
+      const ordersMarkup = batch.orders.map((order) => `
+        <div class="order-item">
+          <div class="order-top">
+            <div class="order-id">${escapeHtml(order.id)}</div>
+            <span class="code-chip">${escapeHtml(batch.status)}</span>
+          </div>
+          <div class="order-meta">
+            Customer: ${escapeHtml(order.customer)}<br />
+            Pickup: ${escapeHtml(order.pickupArea)}<br />
+            Destination: ${escapeHtml(order.dropArea)}<br />
+            Package Weight: ${escapeHtml(order.weight)}<br />
+            Status: ${escapeHtml(order.status)}
+          </div>
+        </div>
+      `).join('');
+
+      modalContent.innerHTML = `
+        <div class="batch-head">
+          <div>
+            <h2 id="modalTitle" class="batch-id">${escapeHtml(batch.batchId)}</h2>
+            <div class="zone-badge">Zone ${escapeHtml(batch.zone)}</div>
+          </div>
+          <div class="status-badge">${escapeHtml(batch.status)}</div>
+        </div>
+
+        <p class="subtitle" style="margin-top: 12px; max-width: none;">${escapeHtml(batch.from)} → ${escapeHtml(batch.to)}. ${escapeHtml(batchOrderSummary(batch))}.</p>
+
+        <div class="modal-layout">
+          <section class="panel">
+            <h3 class="panel-title">Batch details</h3>
+            <div class="detail-grid">
+              <div class="detail-chip"><span>Total Weight</span>${batch.weight.toFixed(1)} kg</div>
+              <div class="detail-chip"><span>Target Range</span>${batch.targetWeight.toFixed(1)}-${batch.maxWeight.toFixed(1)} kg</div>
+              <div class="detail-chip"><span>Orders</span>${batch.orders.length}</div>
+              <div class="detail-chip"><span>Pickup Code</span>${codeVisible ? batch.pickupCode : 'Hidden'}</div>
+              <div class="detail-chip"><span>Current Status</span>${escapeHtml(batch.status)}</div>
+            </div>
+
+            <h3 class="panel-title">Orders in batch</h3>
+            <div class="order-list">
+              ${ordersMarkup}
+            </div>
+          </section>
+
+          <aside class="panel">
+            <h3 class="panel-title">Worker pickup code</h3>
+            <p class="small-note">Enter the same 4-digit code here or in worker-app. Successful pickup updates both views on refresh.</p>
+
+            <div class="modal-actions">
+              <div class="pickup-code">
+                <span>Pickup Code</span>
+                ${codeDisplay(batch)}
+              </div>
+              <div class="message info" data-modal-message>${escapeHtml(state.modalMessage || 'Status updates automatically once worker-app submits correct code.')}</div>
+              <div class="pickup-entry">
+                <input id="pickupCodeInput" class="pickup-input" type="text" inputmode="numeric" maxlength="4" placeholder="Enter code" value="${escapeHtml(state.pickupInput || '')}" />
+                <button id="pickupSubmitBtn" class="card-action" type="button">${state.accepting ? 'Checking...' : 'Pick Up Batch'}</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      `;
+
+      const pickupInput = document.getElementById('pickupCodeInput');
+      const pickupSubmitBtn = document.getElementById('pickupSubmitBtn');
+
+      if (pickupInput) {
+        pickupInput.addEventListener('input', (event) => {
+          state.pickupInput = event.target.value.slice(0, 4);
+        });
+      }
+
+      if (pickupSubmitBtn) {
+        pickupSubmitBtn.addEventListener('click', async () => {
+          if (!batch || state.accepting) {
+            return;
+          }
+
+          const code = String(state.pickupInput || '').trim();
+          if (code !== batch.pickupCode) {
+            state.modalMessage = 'Incorrect pickup code';
+            renderModal();
+            return;
+          }
+
+          try {
+            state.accepting = true;
+            state.modalMessage = 'Submitting pickup code...';
+            renderModal();
+
+            const apiBase = await discoverApiBase();
+            await ensureToken();
+            await fetchWithAuth(`${apiBase}/worker/batches/${batch.batchId}/accept`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderIds: batch.orders.map((order) => order.id), pickupCode: code })
+            });
+
+            state.modalMessage = 'Batch picked up successfully.';
+            state.accepting = false;
+            await syncBatches();
+            state.selectedBatchId = batch.batchId;
+            renderModal();
+          } catch (error) {
+            state.accepting = false;
+            state.modalMessage = error?.message || 'Unable to pick up batch';
+            renderModal();
+          }
+        });
+      }
+
+      modalBackdrop.hidden = false;
+    };
+
+    const fetchWithAuth = async (url, options = {}) => {
+      const headers = {
+        ...(options.headers || {}),
+      };
+      if (state.token) {
+        headers.Authorization = `Bearer ${state.token}`;
+      }
+
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    };
+
+    const discoverApiBase = async () => {
+      if (state.apiBase) return state.apiBase;
+
+      const candidates = apiCandidates();
+      state.attemptedApiBases = candidates;
+
+      for (const base of candidates) {
+        try {
+          const probe = await fetch(`${base}/demo/orders/available?limit=1`);
+          if (probe.ok) {
+            state.apiBase = base;
+            localStorage.setItem('batchSimulatorApiBase', base);
+            return base;
+          }
+        } catch (error) {
+          // Try next base.
+        }
+      }
+
+      throw new Error('no_reachable_api_base');
+    };
+
+    const ensureToken = async () => {
+      if (state.token) return;
+      const phone = localStorage.getItem('batchSimulatorPhone') || '9000000002';
+      const apiBase = await discoverApiBase();
+
+      await fetchWithAuth(`${apiBase}/auth/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+
+      const verify = await fetchWithAuth(`${apiBase}/auth/otp/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp: '123456' })
+      });
+
+      state.token = verify.token || '';
+      if (!state.token) {
+        throw new Error('token_missing');
+      }
+    };
+
+    const syncBatches = async () => {
+      state.loading = true;
+      try {
+        const apiBase = await discoverApiBase();
+        await ensureToken();
+        const [available, assigned] = await Promise.all([
+          fetchWithAuth(`${apiBase}/worker/batches?limit=100`),
+          fetchWithAuth(`${apiBase}/worker/batches/assigned?limit=100`)
+        ]);
+
+        const map = new Map();
+        (available.batches || []).forEach((batch) => {
+          map.set(batch.batchId, mapBatch(batch));
+        });
+        (assigned.batches || []).forEach((batch) => {
+          map.set(batch.batchId, mapBatch(batch));
+        });
+
+        state.batches = Array.from(map.values()).sort((a, b) => a.batchId.localeCompare(b.batchId));
+        state.error = '';
+      } catch (error) {
+        state.error = error?.message || 'unable_to_sync';
+      } finally {
+        state.loading = false;
+        render();
+      }
+    };
+
+    const render = () => {
+      if (state.loading && state.batches.length === 0) {
+        grid.innerHTML = '<div class="hint">Loading batches from backend...</div>';
+        renderStats();
+        renderConnectionInfo();
+        return;
+      }
+
+      if (state.error && state.batches.length === 0) {
+        const attempted = state.attemptedApiBases.length > 0
+          ? ` Tried: ${escapeHtml(state.attemptedApiBases.join(', '))}.`
+          : '';
+        const secureContextHint = window.location.protocol === 'https:'
+          ? ' Page is HTTPS; HTTP API may be blocked by browser mixed-content rules.'
+          : '';
+        grid.innerHTML = `<div class="message error">Sync failed: ${escapeHtml(state.error)}.${attempted}${secureContextHint}</div>`;
+        renderStats();
+        renderConnectionInfo();
+        return;
+      }
+
+      grid.innerHTML = state.batches.map(renderBatch).join('');
+      renderStats();
+      renderConnectionInfo();
+      renderModal();
+
+      state.batches.forEach((batch) => {
+        const card = grid.querySelector(`[data-batch-id="${batch.id}"]`);
+
+        if (!card) return;
+
+        card.addEventListener('click', () => {
+          state.selectedBatchId = batch.id;
+          state.modalMessage = batch.message || '';
+          renderModal();
+        });
+
+        card.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            state.selectedBatchId = batch.id;
+            state.modalMessage = batch.message || '';
+            renderModal();
+          }
+        });
+      });
+    };
+
+    const closeModal = () => {
+      state.selectedBatchId = null;
+      state.modalMessage = '';
+      state.pickupInput = '';
+      renderModal();
+    };
+
+    showCodesToggle.addEventListener('change', (event) => {
+      state.showCodes = event.target.checked;
+      state.batches.forEach((batch) => {
+        batch.revealed = state.showCodes;
+      });
+      render();
+    });
+
+    modalCloseBtn.addEventListener('click', closeModal);
+
+    modalBackdrop.addEventListener('click', (event) => {
+      if (event.target === modalBackdrop) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && state.selectedBatchId) {
+        closeModal();
+      }
+    });
+
+    render();
+    syncBatches();
+    setInterval(syncBatches, REFRESH_MS);
+  </script>
+</body>
+</html>

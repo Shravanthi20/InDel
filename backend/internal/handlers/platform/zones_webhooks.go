@@ -11,13 +11,16 @@ import (
 )
 
 type orderAssignedRequest struct {
-	OrderID    string  `json:"order_id"`
-	WorkerID   uint    `json:"worker_id"`
-	ZoneID     uint    `json:"zone_id"`
-	OrderValue float64 `json:"order_value"`
-	PickupArea string  `json:"pickup_area"`
-	DropArea   string  `json:"drop_area"`
-	DistanceKM float64 `json:"distance_km"`
+	OrderID         string  `json:"order_id"`
+	WorkerID        uint    `json:"worker_id"`
+	ZoneID          uint    `json:"zone_id"`
+	OrderValue      float64 `json:"order_value"`
+	PickupArea      string  `json:"pickup_area"`
+	DropArea        string  `json:"drop_area"`
+	DistanceKM      float64 `json:"distance_km"`
+	VehicleType     string  `json:"vehicle_type"`
+	VehicleCapacity int     `json:"vehicle_capacity"`
+	AllowedZones    string  `json:"allowed_zones"`
 }
 
 type orderCompletedRequest struct {
@@ -34,53 +37,93 @@ type orderCancelledRequest struct {
 
 // GetZones returns active zones with risk rating.
 func GetZones(c *gin.Context) {
+	levelFilter := strings.ToUpper(strings.TrimSpace(c.Query("level")))
+	if levelFilter == "ALL" {
+		levelFilter = ""
+	}
+	if levelFilter != "" && levelFilter != "A" && levelFilter != "B" && levelFilter != "C" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_level", "message": "level must be one of A, B, C, or ALL"})
+		return
+	}
+
+	// Static mapping for demo; replace with DB query if areas are in DB
+	var zoneAreas = map[string][]string{
+		"Tambaram":     {"Tambaram", "Velachery", "Pallikaranai"},
+		"Selaiyur":     {"Selaiyur", "Chromepet", "Pallikaranai"},
+		"Pallikaranai": {"Pallikaranai", "Velachery", "Tambaram"},
+		"Chromepet":    {"Chromepet", "Selaiyur", "Tambaram"},
+		"Velachery":    {"Velachery", "Tambaram", "Pallikaranai"},
+		"Medavakkam":   {"Medavakkam", "Velachery", "Pallikaranai"},
+		"Zone-A":       {"Whitefield", "Koramangala", "Indiranagar", "Bangalore City"},
+		"Zone-B":       {"Koramangala", "Indiranagar", "Whitefield", "JP Nagar"},
+		"Zone-C":       {"Bandra", "Andheri", "Dadar", "Marine Drive"},
+		"Zone-D":       {"Connaught Place", "Nehru Place", "Noida", "Gurgaon"},
+	}
+
 	if hasDB() {
 		type row struct {
 			ZoneID      uint    `gorm:"column:zone_id"`
+			Level       string  `gorm:"column:level"`
 			Name        string  `gorm:"column:name"`
 			City        string  `gorm:"column:city"`
 			State       string  `gorm:"column:state"`
 			RiskRating  float64 `gorm:"column:risk_rating"`
 			WorkerCount int64   `gorm:"column:worker_count"`
 		}
-
 		rows := make([]row, 0)
-		_ = platformDB.Raw(`
+		err := platformDB.Raw(`
 			SELECT z.id AS zone_id,
-			       z.name,
-			       z.city,
-			       z.state,
-			       z.risk_rating,
-			       COUNT(wp.worker_id) AS worker_count
+				   COALESCE(z.level, '') AS level,
+				   z.name,
+				   z.city,
+				   z.state,
+				   z.risk_rating,
+				   COUNT(wp.worker_id) AS worker_count
 			FROM zones z
 			LEFT JOIN worker_profiles wp ON wp.zone_id = z.id
-			GROUP BY z.id, z.name, z.city, z.state, z.risk_rating
+			WHERE (? = '' OR UPPER(COALESCE(z.level, '')) = ?)
+			GROUP BY z.id, z.level, z.name, z.city, z.state, z.risk_rating
 			ORDER BY z.city, z.name
-		`).Scan(&rows).Error
-
+		`, levelFilter, levelFilter).Scan(&rows).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "zones_query_failed", "message": err.Error()})
+			return
+		}
 		zones := make([]gin.H, 0, len(rows))
 		for _, r := range rows {
+			areas := zoneAreas[r.Name]
+			if len(areas) == 0 {
+				areas = []string{r.Name, r.City}
+			}
 			zones = append(zones, gin.H{
 				"zone_id":        r.ZoneID,
+				"level":          r.Level,
 				"name":           r.Name,
 				"city":           r.City,
 				"state":          r.State,
 				"risk_rating":    r.RiskRating,
 				"active_workers": r.WorkerCount,
+				"areas":          areas,
 			})
 		}
-
 		c.JSON(200, gin.H{"zones": zones})
 		return
 	}
 
+	fallbackLevel := "B"
+	if levelFilter != "" && levelFilter != fallbackLevel {
+		c.JSON(200, gin.H{"zones": []gin.H{}})
+		return
+	}
 	c.JSON(200, gin.H{"zones": []gin.H{{
 		"zone_id":        1,
+		"level":          fallbackLevel,
 		"name":           "Tambaram",
 		"city":           "Chennai",
 		"state":          "Tamil Nadu",
 		"risk_rating":    0.62,
 		"active_workers": 1,
+		"areas":          []string{"Tambaram", "Velachery", "Pallikaranai"},
 	}}})
 }
 
@@ -107,10 +150,10 @@ func OrderAssignedWebhook(c *gin.Context) {
 	if hasDB() {
 		var createdOrderID uint
 		err := platformDB.Raw(
-			`INSERT INTO orders (worker_id, zone_id, order_value, status, pickup_area, drop_area, distance_km, updated_at)
-			 VALUES (?, ?, ?, 'assigned', ?, ?, ?, CURRENT_TIMESTAMP)
+			`INSERT INTO orders (worker_id, zone_id, order_value, status, pickup_area, drop_area, distance_km, vehicle_type, vehicle_capacity, allowed_zones, updated_at)
+			 VALUES (?, ?, ?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 			 RETURNING id`,
-			req.WorkerID, req.ZoneID, req.OrderValue, req.PickupArea, req.DropArea, req.DistanceKM,
+			req.WorkerID, req.ZoneID, req.OrderValue, req.PickupArea, req.DropArea, req.DistanceKM, req.VehicleType, req.VehicleCapacity, req.AllowedZones,
 		).Scan(&createdOrderID).Error
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "order_create_failed"})
@@ -220,14 +263,14 @@ func OrderCompletedWebhook(c *gin.Context) {
 			},
 			"meta": gin.H{"timestamp": "2026-03-30T10:00:00Z"},
 		})
-		
+
 		// Order tracking per zone
 		zoneParsed := uint(1) // Default to 1 if missing for hackathon scope
 		switch v := req.ZoneID.(type) {
 		case float64:
 			zoneParsed = uint(v)
 		case string:
-			// parse string or map it 
+			// parse string or map it
 			zoneParsed = 1
 		}
 		CheckAndTrackOrder(req.OrderID, zoneParsed, true)

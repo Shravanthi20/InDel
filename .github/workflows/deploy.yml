@@ -3,16 +3,24 @@ name: Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     env:
       RENDER_API_TOKEN: ${{ secrets.RENDER_API_TOKEN }}
       RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
       RENDER_INSURER_DASHBOARD_ID: ${{ secrets.RENDER_INSURER_DASHBOARD_ID }}
       RENDER_PLATFORM_DASHBOARD_ID: ${{ secrets.RENDER_PLATFORM_DASHBOARD_ID }}
+      PUBLIC_CORE_URL: ${{ secrets.PUBLIC_CORE_URL }}
+      PUBLIC_WORKER_URL: ${{ secrets.PUBLIC_WORKER_URL }}
+      PUBLIC_PLATFORM_URL: ${{ secrets.PUBLIC_PLATFORM_URL }}
+      PUBLIC_INSURER_URL: ${{ secrets.PUBLIC_INSURER_URL }}
+      PUBLIC_PREMIUM_ML_URL: ${{ secrets.PUBLIC_PREMIUM_ML_URL }}
+      PUBLIC_FRAUD_ML_URL: ${{ secrets.PUBLIC_FRAUD_ML_URL }}
+      PUBLIC_FORECAST_ML_URL: ${{ secrets.PUBLIC_FORECAST_ML_URL }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
@@ -57,6 +65,46 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.RENDER_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{}'
+
+      - name: Post-deploy health sweep
+        run: |
+          check_url() {
+            name="$1"
+            url="$2"
+            if [ -z "$url" ]; then
+              echo "Skipping $name health check: URL not configured"
+              return 0
+            fi
+
+            for attempt in $(seq 1 18); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" "$url" || true)
+              if [ "$code" = "200" ]; then
+                echo "$name healthy at $url"
+                return 0
+              fi
+              echo "$name not ready yet (attempt $attempt, status=$code): $url"
+              sleep 10
+            done
+
+            echo "$name failed health check: $url"
+            return 1
+          }
+
+          failures=0
+          check_url "core" "${PUBLIC_CORE_URL%/}/health" || failures=$((failures + 1))
+          check_url "worker-gateway" "${PUBLIC_WORKER_URL%/}/health" || failures=$((failures + 1))
+          check_url "worker-gateway-api-health" "${PUBLIC_WORKER_URL%/}/api/v1/health" || failures=$((failures + 1))
+          check_url "worker-gateway-api-status" "${PUBLIC_WORKER_URL%/}/api/v1/status" || failures=$((failures + 1))
+          check_url "platform-gateway" "${PUBLIC_PLATFORM_URL%/}/health" || failures=$((failures + 1))
+          check_url "insurer-gateway" "${PUBLIC_INSURER_URL%/}/health" || failures=$((failures + 1))
+          check_url "premium-ml" "${PUBLIC_PREMIUM_ML_URL%/}/health" || failures=$((failures + 1))
+          check_url "fraud-ml" "${PUBLIC_FRAUD_ML_URL%/}/health" || failures=$((failures + 1))
+          check_url "forecast-ml" "${PUBLIC_FORECAST_ML_URL%/}/health" || failures=$((failures + 1))
+
+          if [ "$failures" -gt 0 ]; then
+            echo "Post-deploy health sweep failed with $failures failing checks"
+            exit 1
+          fi
 
       - name: Notify deployment
         uses: 8398a7/action-slack@v3

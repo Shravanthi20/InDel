@@ -19,13 +19,13 @@ export default function Navbar() {
           {breadcrumbs.length > 0 && <span className="text-slate-300">/</span>}
           {breadcrumbs.map((bc, i) => (
             <div key={bc.path} className="flex items-center gap-1.5">
-              <span className={i === breadcrumbs.length - 1 ? 'text-orange-600 dark:text-orange-500' : 'text-slate-500'}>
+              <span className={i === breadcrumbs.length - 1 ? 'text-[var(--brand-primary)] dark:text-[var(--brand-soft)]' : 'text-slate-500'}>
                 {bc.label}
               </span>
               {i < breadcrumbs.length - 1 && <span className="text-slate-300">/</span>}
             </div>
           ))}
-          {breadcrumbs.length === 0 && <span className="text-orange-600 dark:text-orange-500">Overview</span>}
+          {breadcrumbs.length === 0 && <span className="text-[var(--brand-primary)] dark:text-[var(--brand-soft)]">Overview</span>}
         </div>
       </div>
 
@@ -39,7 +39,7 @@ export default function Navbar() {
           <input
             type="text"
             placeholder="Search console..."
-            className="w-48 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 py-1.5 pl-9 pr-3 text-[11px] text-slate-900 dark:text-white outline-none focus:border-orange-500 transition-none"
+            className="w-48 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 py-1.5 pl-9 pr-3 text-[11px] text-slate-900 dark:text-white outline-none focus:border-[var(--brand-primary)] transition-none"
           />
         </div>
 

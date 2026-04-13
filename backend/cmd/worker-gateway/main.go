@@ -8,8 +8,8 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
 	"github.com/Shravanthi20/InDel/backend/internal/handlers/worker"
+	"github.com/Shravanthi20/InDel/backend/internal/middleware"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -22,7 +22,7 @@ func main() {
 
 	// Create Gin router
 	router := gin.Default()
-	router.Use(cors.Default())
+	router.Use(middleware.CORS())
 
 	// Initialize DB and seed minimal worker demo data if available.
 	cfg := config.Load()

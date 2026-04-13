@@ -29,18 +29,30 @@ fun getHostIpAddress(): String {
     return "10.0.2.2" // Ultimate fallback for official emulator
 }
 
-val apiBaseUrl = listOf("worker-app/.env", ".env", "../.env")
+val envFiles = listOf("worker-app/.env", ".env", "../.env")
     .map { rootProject.file(it) }
     .filter { it.exists() }
-    .firstNotNullOfOrNull { file ->
+
+fun readEnvValue(key: String): String? {
+    val fromSystem = System.getenv(key)?.trim()
+    if (!fromSystem.isNullOrEmpty()) {
+        return fromSystem
+    }
+
+    return envFiles.firstNotNullOfOrNull { file ->
         file.readLines()
-            .find { it.startsWith("API_BASE_URL=") }
-            ?.removePrefix("API_BASE_URL=")
+            .find { it.startsWith("$key=") }
+            ?.removePrefix("$key=")
             ?.trim()
             ?.removeSurrounding("\"")
-    } ?: "http://${getHostIpAddress()}:8001/"
+    }
+}
+
+val apiBaseUrl = readEnvValue("API_BASE_URL") ?: "http://${getHostIpAddress()}:8001/"
+val razorpayKeyId = readEnvValue("RAZORPAY_KEY_ID") ?: ""
 
 println(">>> InDel Build: Using API_BASE_URL=$apiBaseUrl")
+println(">>> InDel Build: Razorpay key configured=${razorpayKeyId.isNotBlank()}")
 
 android {
     namespace = "com.imaginai.indel"
@@ -54,6 +66,7 @@ android {
         versionName = "1.0.0"
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "RAZORPAY_KEY_ID", "\"$razorpayKeyId\"")
     }
 
     compileOptions {

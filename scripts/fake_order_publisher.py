@@ -1,11 +1,39 @@
+
 import argparse
 import json
 import random
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from typing import Optional
+import os
+
+
+def resolve_default_host() -> str:
+    """Resolve API host from env var or project .env, defaulting to localhost."""
+    host = os.getenv("HOST_IP") or os.getenv("INDEL_HOST_IP")
+    if host:
+        return host
+
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    try:
+        with open(env_path, encoding="utf-8") as env_file:
+            for line in env_file:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                if key.strip() == "HOST_IP" and value.strip():
+                    return value.strip()
+    except OSError:
+        pass
+
+    return "127.0.0.1"
+
+
+DEFAULT_HOST = resolve_default_host()
 
 FIRST_NAMES = [
     "Aarav", "Diya", "Ishaan", "Meera", "Rohan", "Kavya", "Arjun", "Nisha"
@@ -13,70 +41,25 @@ FIRST_NAMES = [
 LAST_NAMES = ["Kumar", "Reddy", "Sharma", "Patel", "Iyer", "Verma", "Gupta", "Rao"]
 PAYMENT_METHODS = ["upi", "cod", "card"]
 PACKAGE_SIZES = ["small", "medium", "large"]
+ZONES = {}
+MAX_ZONE_NAMES_PER_LEVEL = 10
+ORDERS_PER_ZONE_NAME = 5
 
-# Zone configurations with area mappings
-ZONES = {
-    1: {
-        "name": "Zone-A",
-        "city": "Bangalore",
-        "state": "Karnataka",
-        "areas": ["Whitefield", "Koramangala", "Indiranagar", "Bangalore City"]
-    },
-    2: {
-        "name": "Zone-B",
-        "city": "Bangalore",
-        "state": "Karnataka",
-        "areas": ["Koramangala", "Indiranagar", "Whitefield", "JP Nagar"]
-    },
-    3: {
-        "name": "Zone-C",
-        "city": "Mumbai",
-        "state": "Maharashtra",
-        "areas": ["Bandra", "Andheri", "Dadar", "Marine Drive"]
-    },
-    4: {
-        "name": "Zone-D",
-        "city": "Delhi",
-        "state": "Delhi",
-        "areas": ["Connaught Place", "Nehru Place", "Noida", "Gurgaon"]
-    },
-    5: {
-        "name": "Tambaram",
-        "city": "Chennai",
-        "state": "Tamil Nadu",
-        "areas": ["Tambaram", "Velachery", "Pallikaranai"]
-    },
-    6: {
-        "name": "Selaiyur",
-        "city": "Chennai",
-        "state": "Tamil Nadu",
-        "areas": ["Selaiyur", "Chromepet", "Pallikaranai"]
-    },
-    7: {
-        "name": "Pallikaranai",
-        "city": "Chennai",
-        "state": "Tamil Nadu",
-        "areas": ["Pallikaranai", "Velachery", "Tambaram"]
-    },
-    8: {
-        "name": "Chromepet",
-        "city": "Chennai",
-        "state": "Tamil Nadu",
-        "areas": ["Chromepet", "Selaiyur", "Tambaram"]
-    },
-    9: {
-        "name": "Velachery",
-        "city": "Chennai",
-        "state": "Tamil Nadu",
-        "areas": ["Velachery", "Tambaram", "Pallikaranai"]
-    },
-    10: {
-        "name": "Medavakkam",
-        "city": "Chennai",
-        "state": "Tamil Nadu",
-        "areas": ["Medavakkam", "Velachery", "Pallikaranai"]
-    },
-}
+
+# Load zone pairs from zone_a.json (same city), zone_b.json (intra-state) and zone_c.json (inter-state)
+def load_zone_pairs():
+    base_dir = os.path.dirname(__file__)
+    with open(os.path.join(base_dir, '../zone_a.json'), encoding='utf-8') as f:
+        zone_a = json.load(f)
+    with open(os.path.join(base_dir, '../zone_b.json'), encoding='utf-8') as f:
+        zone_b = json.load(f)
+    with open(os.path.join(base_dir, '../zone_c.json'), encoding='utf-8') as f:
+        zone_c = json.load(f)
+    return zone_a, zone_b, zone_c
+
+
+def limit_zone_pairs(zone_a_pairs, zone_b_pairs, zone_c_pairs, limit: int = MAX_ZONE_NAMES_PER_LEVEL):
+    return zone_a_pairs[:limit], zone_b_pairs[:limit], zone_c_pairs[:limit]
 
 ZONE_BAND_FEE_INR = {
     "A": 25,
@@ -106,6 +89,22 @@ def get_area_for_zone(zone_id: int) -> str:
     return "Unknown Area"
 
 
+def print_zones(city: Optional[str] = None) -> None:
+    """Print zone metadata if it is available."""
+    print("Available Zones:")
+    if not ZONES:
+        print("  (zone metadata not loaded in this build)")
+        return
+    for zid, zinfo in ZONES.items():
+        if city and zinfo.get("city", "").lower() != city.lower():
+            continue
+        print(f"  Zone ID: {zid}")
+        print(f"    Name: {zinfo.get('name', 'Unknown')}")
+        print(f"    City: {zinfo.get('city', 'Unknown')}")
+        print(f"    State: {zinfo.get('state', 'Unknown')}")
+        print(f"    Areas: {', '.join(zinfo.get('areas', []))}")
+
+
 def random_zone_route_path() -> list[str]:
     return random.choice(ZONE_ROUTE_PATTERNS)
 
@@ -114,19 +113,9 @@ def compute_delivery_fee_inr(zone_route_path: list[str]) -> int:
     return sum(ZONE_BAND_FEE_INR.get(band, 0) for band in zone_route_path)
 
 
-def random_order(idx: int, zone_id: Optional[int] = None) -> dict:
-    """Generate a random order, optionally for a specific zone."""
-    if zone_id is None:
-        zone_id = random.choice(list(ZONES.keys()))
-    
-    zone_info = ZONES.get(zone_id, ZONES[1])
-    pickup_area = get_area_for_zone(zone_id)
-    drop_area = get_area_for_zone(zone_id)
-    
-    # Ensure pickup and drop are different
-    while drop_area == pickup_area:
-        drop_area = get_area_for_zone(zone_id)
-    
+
+# Generate a random order from a zone pair (from/to cities)
+def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 1) -> dict:
     first = random.choice(FIRST_NAMES)
     last = random.choice(LAST_NAMES)
     customer_name = f"{first} {last}"
@@ -134,59 +123,169 @@ def random_order(idx: int, zone_id: Optional[int] = None) -> dict:
     amount = round(random.uniform(120, 1450), 2)
     package_size = random.choice(PACKAGE_SIZES)
     weight = {
-        "small": round(random.uniform(0.2, 2.0), 2),
-        "medium": round(random.uniform(2.1, 7.0), 2),
-        "large": round(random.uniform(7.1, 20.0), 2),
+        "small": round(random.uniform(0.05, 1.0), 2),
+        "medium": round(random.uniform(1.0, 3.0), 2),
+        "large": round(random.uniform(3.0, 5.0), 2),
     }[package_size]
-    
-    distance = {
-        "small": round(random.uniform(1, 5), 1),
-        "medium": round(random.uniform(2, 8), 1),
-        "large": round(random.uniform(3, 10), 1),
-    }[package_size]
+    weight = min(max(weight, 0.05), 5.0)
+    distance = pair.get("distance_km", round(random.uniform(5, 1000), 1))
+    # Use from/to city/state/lat/lon
+    from_city = pair.get("from")
+    to_city = pair.get("to")
+    from_state = pair.get("from_state") or pair.get("state")
+    to_state = pair.get("to_state") or pair.get("state")
+    from_lat = pair.get("from_lat")
+    from_lon = pair.get("from_lon")
+    to_lat = pair.get("to_lat")
+    to_lon = pair.get("to_lon")
+    delivery_fee_inr = int(distance * 2) if zone_type in ("zone_c", "inter-state") else int(distance * 1.2)
     zone_route_path = random_zone_route_path()
-    delivery_fee_inr = compute_delivery_fee_inr(zone_route_path)
-
+    eligibility = determine_zone_and_vehicle(from_city, to_city, CITY_STATE_LOOKUP)
     return {
         "order_id": f"ord-fake-{int(time.time())}-{idx}",
         "customer_name": customer_name,
         "customer_id": f"cust-{random.randint(10000, 99999)}",
         "customer_contact_number": f"+91{random.randint(9000000000, 9999999999)}",
-        "address": f"{random.randint(1, 400)}, {pickup_area}, {zone_info['city']}",
+        "address": f"{random.randint(1, 400)}, {from_city}, {from_state}",
         "payment_method": payment_method,
         "payment_amount": amount,
+        "order_value": amount,
         "package_size": package_size,
         "package_weight_kg": weight,
-        "pickup_area": pickup_area,
-        "drop_area": drop_area,
+        "pickup_area": from_city,
+        "drop_area": to_city,
         "distance_km": distance,
         "tip_inr": 0,
+        "zone_path": [from_city, to_city],
         "zone_route_path": zone_route_path,
         "delivery_fee_inr": delivery_fee_inr,
         "zone_id": zone_id,
+        "zone_level": "A" if zone_type == "zone_a" else "B" if zone_type == "zone_b" else "C" if zone_type == "zone_c" else "",
+        "source_zone_file": "zone_a.json" if zone_type == "zone_a" else "zone_b.json" if zone_type == "zone_b" else "zone_c.json" if zone_type == "zone_c" else "",
         "status": "assigned",
         "assigned_at": now_iso(),
         "source": "fake-order-publisher",
+        # --- Eligibility fields ---
+        "zone_type": eligibility["zone_type"],
+        "required_vehicle_type": eligibility["required_vehicle_type"],
+        "needs_hub_transfer": eligibility["needs_hub_transfer"],
+        # --- New fields ---
+        "from_city": from_city,
+        "to_city": to_city,
+        "from_state": from_state,
+        "to_state": to_state,
+        "from_lat": from_lat,
+        "from_lon": from_lon,
+        "to_lat": to_lat,
+        "to_lon": to_lon,
+        "vehicle_type": eligibility["required_vehicle_type"],
+        "vehicle_capacity": 15 if package_size == "small" else 30 if package_size == "medium" else 50,
+        "allowed_zones": f"{from_city},{to_city}",
+        # --- Current node ---
+        "current_node": from_city,
     }
 
 
-def post_json(url: str, payload: dict, timeout: int) -> tuple[int, str]:
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+def build_zone_a_pair_dicts(zone_a_cities: list[str]) -> list[dict]:
+    pair_dicts = []
+    for city in zone_a_cities:
+        state = CITY_STATE_LOOKUP.get(city, "Unknown")
+        pair_dicts.append(
+            {
+                "from": city,
+                "to": city,
+                "from_state": state,
+                "to_state": state,
+                "distance_km": 1.0,
+                "from_lat": 0,
+                "from_lon": 0,
+                "to_lat": 0,
+                "to_lon": 0,
+            }
+        )
+    return pair_dicts
+
+
+def build_all_pairs(zone_a_pairs: list[str], zone_b_pairs: list[dict], zone_c_pairs: list[dict]) -> list[tuple[dict, str]]:
+    zone_a_pair_dicts = build_zone_a_pair_dicts(zone_a_pairs)
+    return (
+        [(pair, "zone_a") for pair in zone_a_pair_dicts]
+        + [(pair, "zone_b") for pair in zone_b_pairs]
+        + [(pair, "zone_c") for pair in zone_c_pairs]
     )
+
+
+def publish_one_cycle(args, all_pairs: list[tuple[dict, str]], cycle_index: int, global_order_index: int) -> tuple[int, int, int]:
+    published_count = 0
+    failed_count = 0
+    order_index = global_order_index
+
+    print(f"\n=== Publish Cycle {cycle_index} ===")
+    print(f"Routes considered: {len(all_pairs)} | Orders per route: {args.orders_per_run}")
+
+    for pair_index, (pair, zone_type) in enumerate(all_pairs):
+        for route_order_index in range(args.orders_per_run):
+            order_index += 1
+            payload = random_order_from_pair(order_index, pair, zone_type, args.zone_id or 1)
+            status, response_text = post_json(args.url, payload, args.timeout_seconds, retries=2)
+            print(
+                f"  -> {payload['order_id']} {payload['from_city']}->{payload['to_city']} "
+                f"[{payload.get('source_zone_file', zone_type)}] status={status}"
+            )
+
+            if status >= 400:
+                print(f"     error={response_text}")
+                failed_count += 1
+            else:
+                published_count += 1
+
+            is_last_order = pair_index == len(all_pairs) - 1 and route_order_index == args.orders_per_run - 1
+            if not is_last_order:
+                time.sleep(0.005)
+
+    print(f"Cycle {cycle_index} done. published={published_count}, failed={failed_count}")
+    return published_count, failed_count, order_index
+def reset_backend_orders(reset_url: str, timeout: int):
+    print(f"Resetting backend orders via {reset_url} ...")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            text = resp.read().decode("utf-8", errors="replace")
-            return resp.getcode(), text
-    except urllib.error.HTTPError as http_err:
-        text = http_err.read().decode("utf-8", errors="replace")
-        return http_err.code, text
-    except urllib.error.URLError as url_err:
-        return 500, str(url_err)
+        status, text = request_json("POST", reset_url, timeout)
+        print(f"Reset status={status}: {text}")
+    except Exception as e:
+        print(f"Reset failed: {e}")
+
+
+
+def post_json(url: str, payload: dict, timeout: int, retries: int = 3) -> tuple[int, str]:
+    body = json.dumps(payload).encode("utf-8")
+    last_error = None
+    
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                text = resp.read().decode("utf-8", errors="replace")
+                return resp.getcode(), text
+        except urllib.error.HTTPError as http_err:
+            text = http_err.read().decode("utf-8", errors="replace")
+            return http_err.code, text
+        except (urllib.error.URLError, TimeoutError) as err:
+            last_error = err
+            if attempt < retries - 1:
+                # Exponential backoff: 0.5s, 1s, 2s
+                wait_time = 0.5 * (2 ** attempt)
+                # Skip sleep on first attempt to avoid delays
+                if attempt > 0:
+                    time.sleep(wait_time)
+                continue
+            else:
+                return 500, f"Timeout after {retries} retries: {str(err)}"
+    
+    return 500, str(last_error)
 
 
 def request_json(method: str, url: str, timeout: int, payload: dict | None = None, headers: dict | None = None) -> tuple[int, str]:
@@ -207,6 +306,35 @@ def request_json(method: str, url: str, timeout: int, payload: dict | None = Non
         return http_err.code, text
     except urllib.error.URLError as url_err:
         return 500, str(url_err)
+
+
+def probe_endpoint(url: str, timeout: int) -> tuple[bool, str]:
+    """Return whether an endpoint is reachable at the network level.
+
+    A 404/405 still counts as reachable, because the TCP connection succeeded.
+    """
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return True, f"HTTP {resp.getcode()}"
+    except urllib.error.HTTPError as http_err:
+        return True, f"HTTP {http_err.code}"
+    except urllib.error.URLError as url_err:
+        return False, str(url_err)
+
+
+def suggest_host_fix(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    if host.startswith("192.168.") or host.startswith("10.") or host.startswith("172."):
+        return (
+            f"URL host '{host}' looks like a private LAN IP. "
+            "Ensure HOST_IP in .env matches this same LAN IP and containers are restarted."
+        )
+    return (
+        "Verify the URL host/port and that docker compose services are up. "
+        f"Example: http://{DEFAULT_HOST}:8001/api/v1/demo/reset"
+    )
 
 
 def get_publisher_status(status_url: str, timeout: int, control_key: str) -> dict | None:
@@ -263,28 +391,105 @@ def fetch_deliveries(deliveries_url: str, timeout: int, limit: int = 50, zone_id
         return []
 
 
+# --- City-State Lookup Utility ---
+import os
+import csv
+from typing import Dict
+
+def load_city_state_lookup(csv_path: str) -> Dict[str, str]:
+    """
+    Loads a mapping from area name (city in CSV, stripped) to city name (state in CSV).
+    Args:
+        csv_path: Path to the Indian Cities Geo Data CSV file.
+    Returns:
+        Dictionary mapping area name (city, e.g. 'Port Blair') to city name (state).
+    """
+    lookup = {}
+    with open(csv_path, newline='', encoding='utf-8') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            area = row['Location'].replace(' Latitude and Longitude', '').strip()
+            city = row['State'].strip()
+            lookup[area] = city
+    return lookup
+
+CITY_STATE_CSV = os.path.join(os.path.dirname(__file__), '../Indian Cities Geo Data.csv')
+CITY_STATE_LOOKUP = load_city_state_lookup(CITY_STATE_CSV)
+
+
+# --- Zone Rule Engine ---
+def determine_zone_and_vehicle(source_city: str, dest_city: str, city_state_lookup: dict) -> dict:
+    """
+    Determines the zone type and required vehicle for an order.
+    Args:
+        source_city: Name of the source city.
+        dest_city: Name of the destination city.
+        city_state_lookup: Dict mapping city name to state name.
+    Returns:
+        Dict with zone_type, required_vehicle_type, needs_hub_transfer.
+    """
+    source_state = city_state_lookup.get(source_city)
+    dest_state = city_state_lookup.get(dest_city)
+    if not source_state or not dest_state:
+        return {
+            'zone_type': 'unknown',
+            'required_vehicle_type': 'unknown',
+            'needs_hub_transfer': False
+        }
+    if source_state == dest_state:
+        return {
+            'zone_type': 'intra-zone',
+            'required_vehicle_type': 'bike/small van',
+            'needs_hub_transfer': False
+        }
+    else:
+        # For now, assume all inter-state orders are possible directly
+        return {
+            'zone_type': 'inter-state',
+            'required_vehicle_type': 'van/truck',
+            'needs_hub_transfer': False  # Set to True if you want to force hub transfer for some cases
+        }
+
+# Example usage:
+# result = determine_zone_and_vehicle('Chennai', 'Bangalore', CITY_STATE_LOOKUP)
+# print(result)
+
+
+
+
+    """Print available zones, optionally filtered by city name."""
+    print("Available Zones:")
+    for zid, zinfo in ZONES.items():
+        if city and zinfo["city"].lower() != city.lower():
+            continue
+        print(f"  Zone ID: {zid}")
+        print(f"    Name: {zinfo['name']}")
+        print(f"    City: {zinfo['city']}")
+        print(f"    State: {zinfo['state']}")
+        print(f"    Areas: {', '.join(zinfo['areas'])}")
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Send fake orders to worker backend at a fixed interval, with zone-aware generation"
     )
     parser.add_argument(
         "--url",
-        default="http://192.168.1.6:8001/api/v1/demo/orders/ingest",
+        default=f"http://{DEFAULT_HOST}:8001/api/v1/demo/orders/ingest",
         help="Ingest endpoint URL",
     )
     parser.add_argument(
         "--available-url",
-        default="http://192.168.1.6:8001/api/v1/demo/orders/available",
+        default=f"http://{DEFAULT_HOST}:8001/api/v1/demo/orders/available",
         help="Fetch available orders endpoint URL",
     )
     parser.add_argument(
         "--deliveries-url",
-        default="http://192.168.1.6:8001/api/v1/demo/deliveries",
+        default=f"http://{DEFAULT_HOST}:8001/api/v1/demo/deliveries",
         help="Fetch deliveries endpoint URL for tracking",
     )
     parser.add_argument(
         "--status-url",
-        default="http://192.168.1.6:8001/api/v1/demo/orders/publisher/status",
+        default=f"http://{DEFAULT_HOST}:8001/api/v1/demo/orders/publisher/status",
         help="Backend control status URL (publishes only when active=true)",
     )
     parser.add_argument(
@@ -318,8 +523,8 @@ def main() -> None:
     parser.add_argument(
         "--orders-per-run",
         type=int,
-        default=1,
-        help="Orders published per cycle",
+        default=5,
+        help="Orders published per route pair before moving to the next pair",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -347,105 +552,99 @@ def main() -> None:
         action="store_true",
         help="Periodically show completed deliveries from backend",
     )
+    parser.add_argument(
+        "--list-zones",
+        action="store_true",
+        help="List available zones and exit",
+    )
+    parser.add_argument(
+        "--city",
+        type=str,
+        help="Filter zones by city name (used with --list-zones)",
+    )
+
+    parser.add_argument(
+        "--reset-url",
+        default=f"http://{DEFAULT_HOST}:8001/api/v1/demo/reset",
+        help="Backend reset endpoint URL (POST)",
+    )
+
     args = parser.parse_args()
+
+    if args.list_zones:
+        print_zones(args.city)
+        return
+
 
     # Default to generate if neither flag is set
     if not args.fetch and not args.generate:
         args.generate = True
 
+    # Fail fast when the target host is unreachable to avoid long noisy retries.
+    reachable, detail = probe_endpoint(args.reset_url, args.timeout_seconds)
+    if not reachable:
+        print(f"Preflight failed for reset endpoint: {args.reset_url}")
+        print(f"Reason: {detail}")
+        print(suggest_host_fix(args.reset_url))
+        return
+
+    reachable, detail = probe_endpoint(args.url, args.timeout_seconds)
+    if not reachable:
+        print(f"Preflight failed for ingest endpoint: {args.url}")
+        print(f"Reason: {detail}")
+        print(suggest_host_fix(args.url))
+        return
+
+    # Always reset backend before publishing
+    reset_backend_orders(args.reset_url, args.timeout_seconds)
+
+    # Load zone pairs
+    zone_a_pairs, zone_b_pairs, zone_c_pairs = load_zone_pairs()
+    zone_a_pairs, zone_b_pairs, zone_c_pairs = limit_zone_pairs(zone_a_pairs, zone_b_pairs, zone_c_pairs)
+
     print(f"Publishing to: {args.url}")
-    print(f"Control status URL: {args.status_url}")
     print(f"Available orders URL: {args.available_url}")
-    if args.show_deliveries:
-        print(f"Deliveries URL: {args.deliveries_url}")
-    
-    mode = "fetch" if args.fetch else "generate"
-    zone_filter = f" (zone_id={args.zone_id})" if args.zone_id else ""
-    print(f"Mode: {mode}{zone_filter}")
-    
-    if args.continuous:
-        print(
-            f"Plan: continuous mode, {args.orders_per_run} order(s)/cycle, every {args.interval_seconds}s"
-        )
-        print(
-            f"Behavior: publish only when backend initiates; lease expires after 5 minutes unless ack extends it"
-        )
-    else:
-        print(
-            f"Plan: {args.runs} runs, {args.orders_per_run} order(s)/run, every {args.interval_seconds}s"
-        )
+    print(
+        f"Zone sources: zone_a.json / zone_b.json / zone_c.json "
+        f"(first {MAX_ZONE_NAMES_PER_LEVEL} route entries from each)."
+    )
+    print(f"Mode: {'continuous' if args.continuous else f'{args.runs} run(s)'} | interval={args.interval_seconds}s | orders-per-run={args.orders_per_run}")
 
-    run_no = 0
-    current_session = ""
+    all_pairs = build_all_pairs(zone_a_pairs, zone_b_pairs, zone_c_pairs)
+    if not all_pairs:
+        print("No zone pairs loaded; aborting publish.")
+        return
+
+    total_published = 0
+    total_failed = 0
+    cycle_count = 0
+    order_index = 0
+
     try:
-        while True:
-            status_payload = get_publisher_status(args.status_url, args.timeout_seconds, args.control_key)
-            if status_payload is None:
-                time.sleep(max(1, args.poll_seconds))
-                continue
+        while args.continuous or cycle_count < args.runs:
+            cycle_count += 1
 
-            active = bool(status_payload.get("active", False))
-            session_id = str(status_payload.get("session_id", "") or "")
-            remaining_sec = int(status_payload.get("remaining_sec", 0) or 0)
-
-            if not active:
-                if current_session:
-                    print(f"[control] lease expired for session {current_session}. Waiting for backend initiate/ack.")
-                    current_session = ""
-                time.sleep(max(1, args.poll_seconds))
-                continue
-
-            if session_id and session_id != current_session:
-                current_session = session_id
-                print(f"[control] active lease session={current_session}, remaining={remaining_sec}s")
-
-            run_no += 1
-            if args.continuous:
-                print(f"\nRun {run_no} at {now_iso()} (session={current_session}, lease_remaining={remaining_sec}s)")
-            else:
-                print(f"\nRun {run_no}/{args.runs} at {now_iso()}")
-
-            published_count = 0
-            
             if args.fetch:
-                # Fetch available orders from backend
-                available = fetch_available_orders(args.available_url, args.timeout_seconds, limit=args.orders_per_run * 2, zone_id=args.zone_id)
-                if available:
-                    for i, order_data in enumerate(available[:args.orders_per_run]):
-                        # Order already exists in backend, just noting it
-                        print(f"  -> Available: {order_data.get('order_id')} from {order_data.get('zone_name')} (value={order_data.get('order_value')})")
-                        published_count += 1
-                else:
-                    print(f"  -> No available orders to fetch")
+                available = fetch_available_orders(args.available_url, args.timeout_seconds, limit=20, zone_id=args.zone_id)
+                print(f"\n=== Fetch Cycle {cycle_count} ===")
+                print(f"Fetched {len(available)} currently available orders")
             else:
-                # Generate and publish new orders
-                for i in range(args.orders_per_run):
-                    payload = random_order(i + 1, zone_id=args.zone_id)
-                    status, response_text = post_json(args.url, payload, args.timeout_seconds)
-                    zone_name = ZONES.get(payload.get("zone_id", 1), {}).get("name", "Unknown")
-                    print(f"  -> {payload['order_id']} (zone={zone_name}) status={status}")
-                    if status >= 400:
-                        print(f"     error={response_text}")
-                    else:
-                        published_count += 1
-            
-            # Show deliveries tracking if requested
-            if args.show_deliveries and (run_no % 3 == 0 or run_no == 1):
-                deliveries = fetch_deliveries(args.deliveries_url, args.timeout_seconds, limit=5, zone_id=args.zone_id)
-                if deliveries:
-                    print(f"  [Deliveries] Recent completed: {len(deliveries)} orders")
-                    for d in deliveries[:3]:
-                        print(f"    - {d.get('order_id')}: {d.get('worker_name')} in {d.get('zone_name')}")
+                published, failed, order_index = publish_one_cycle(args, all_pairs, cycle_count, order_index)
+                total_published += published
+                total_failed += failed
 
-            if not args.continuous and run_no >= args.runs:
-                break
+            if args.show_deliveries:
+                deliveries = fetch_deliveries(args.deliveries_url, args.timeout_seconds, limit=10, zone_id=args.zone_id)
+                print(f"Recent delivered orders: {len(deliveries)}")
 
-            time.sleep(args.interval_seconds)
+            should_continue = args.continuous or cycle_count < args.runs
+            if should_continue:
+                print(f"Sleeping {args.interval_seconds}s before next cycle...")
+                time.sleep(max(1, args.interval_seconds))
     except KeyboardInterrupt:
         print("\nStopped by user.")
 
-    print("\nDone.")
-
+    print(f"\nDone. total_published={total_published}, total_failed={total_failed}, cycles={cycle_count}")
 
 if __name__ == "__main__":
     main()

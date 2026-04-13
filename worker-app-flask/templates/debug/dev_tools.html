@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Dev Tools{% endblock %}
+{% block page_title %}Dev Tools{% endblock %}
+{% block page_subtitle %}Debug and demo orchestration controls{% endblock %}
+
+{% block content %}
+{% if result %}
+<div class="alert alert-success">✓ {{ result }}</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="alert alert-warning">
+  <strong>Debug-only.</strong> These controls directly mutate backend state. Use only for demos and testing.
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+
+  <!-- Assign Orders -->
+  <div class="dev-panel">
+    <h3>▦ Assign Orders</h3>
+    <form method="POST" action="{{ url_for('demo.dev_tools') }}">
+      <input type="hidden" name="action" value="assign_orders">
+      <div class="dev-row">
+        <label class="dev-label" for="count">Count</label>
+        <input id="count" name="count" type="number" value="3" min="1" max="20"
+               style="width:70px;padding:6px;border-radius:6px;border:1px solid #334155;
+                      background:#1E2A3A;color:#CBD5E1;">
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm" id="assign-orders-btn">
+        Run
+      </button>
+    </form>
+  </div>
+
+  <!-- Simulate Deliveries -->
+  <div class="dev-panel">
+    <h3>✓ Simulate Deliveries</h3>
+    <form method="POST" action="{{ url_for('demo.dev_tools') }}">
+      <input type="hidden" name="action" value="simulate_deliveries">
+      <div class="dev-row">
+        <label class="dev-label" for="sim_count">Count</label>
+        <input id="sim_count" name="sim_count" type="number" value="2" min="1" max="20"
+               style="width:70px;padding:6px;border-radius:6px;border:1px solid #334155;
+                      background:#1E2A3A;color:#CBD5E1;">
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm" id="simulate-deliveries-btn">
+        Run
+      </button>
+    </form>
+  </div>
+
+  <!-- Trigger Disruption -->
+  <div class="dev-panel" style="grid-column:1/-1;">
+    <h3>⚡ Trigger Disruption</h3>
+    <form method="POST" action="{{ url_for('demo.dev_tools') }}">
+      <input type="hidden" name="action" value="trigger_disruption">
+      <div class="dev-row">
+        <label class="dev-label" for="disruption_type">Type</label>
+        <select id="disruption_type" name="disruption_type"
+                style="padding:6px 10px;border-radius:6px;border:1px solid #334155;
+                       background:#1E2A3A;color:#CBD5E1;">
+          <option value="WEATHER">Weather</option>
+          <option value="STRIKE">Strike</option>
+          <option value="CURFEW">Curfew</option>
+          <option value="FLOOD">Flood</option>
+        </select>
+        <label class="dev-label" for="zone_level">Zone Level</label>
+        <input id="zone_level" name="zone_level" type="text" value="city"
+               style="width:80px;padding:6px;border-radius:6px;border:1px solid #334155;
+                      background:#1E2A3A;color:#CBD5E1;">
+        <label class="dev-label" for="zone_name">Zone Name</label>
+        <input id="zone_name" name="zone_name" type="text" value="Tambaram"
+               style="width:120px;padding:6px;border-radius:6px;border:1px solid #334155;
+                      background:#1E2A3A;color:#CBD5E1;">
+      </div>
+      <button type="submit" class="btn btn-warning btn-sm" id="trigger-disruption-btn">
+        Trigger
+      </button>
+    </form>
+  </div>
+
+  <!-- Settle Earnings -->
+  <div class="dev-panel">
+    <h3>₹ Settle Earnings</h3>
+    <p style="color:#94A3B8;font-size:.82rem;margin-bottom:12px;">
+      Force earnings settlement for current session.
+    </p>
+    <form method="POST" action="{{ url_for('demo.dev_tools') }}">
+      <input type="hidden" name="action" value="settle_earnings">
+      <button type="submit" class="btn btn-success btn-sm"
+              data-confirm="Settle all earnings now?"
+              id="settle-earnings-btn">
+        Settle
+      </button>
+    </form>
+  </div>
+
+  <!-- Reset Zone -->
+  <div class="dev-panel">
+    <h3>⊙ Reset Zone</h3>
+    <p style="color:#94A3B8;font-size:.82rem;margin-bottom:12px;">
+      Clear all zone state and active disruptions.
+    </p>
+    <form method="POST" action="{{ url_for('demo.dev_tools') }}">
+      <input type="hidden" name="action" value="reset_zone">
+      <button type="submit" class="btn btn-warning btn-sm"
+              data-confirm="Reset zone state?"
+              id="reset-zone-btn">
+        Reset Zone
+      </button>
+    </form>
+  </div>
+
+  <!-- Full Reset -->
+  <div class="dev-panel" style="grid-column:1/-1;border:1px solid var(--error);">
+    <h3 style="color:#FF6B6B;">✕ Full Reset</h3>
+    <p style="color:#94A3B8;font-size:.82rem;margin-bottom:12px;">
+      Resets ALL demo state — orders, sessions, disruptions, earnings.
+    </p>
+    <form method="POST" action="{{ url_for('demo.dev_tools') }}">
+      <input type="hidden" name="action" value="reset_all">
+      <button type="submit" class="btn btn-danger"
+              data-confirm="FULL RESET — wipes all demo data. Are you sure?"
+              id="full-reset-btn">
+        Full Reset
+      </button>
+    </form>
+  </div>
+
+</div>
+
+<!-- Live order count (polls every 15s) -->
+<div style="margin-top:20px;text-align:right;font-size:.78rem;color:var(--text-secondary);">
+  Live orders: <strong id="dev-order-count">—</strong>
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-import client from './client'
+import client, { coreClient } from './client'
 
 type SuccessEnvelope<T> = {
   data: T
@@ -42,8 +42,18 @@ export const getPoolHealth = async <T = any>(): Promise<T> => {
   return response.data
 }
 
-export const getMaintenanceChecks = async <T = any>(params?: any): Promise<PaginatedEnvelope<T>> =>
-  unwrapPaginated<T>(await client.get<PaginatedEnvelope<T>>('/api/v1/insurer/maintenance-checks', { params }))
+export const getMoneyExchange = async <T = any>(params?: { level?: string; zone?: string }): Promise<T> =>
+  unwrapSuccess<T>(await client.get<SuccessEnvelope<T>>('/api/v1/insurer/money-exchange', { params }))
 
-export const respondToCheck = async <T = any>(checkId: string, response: { findings: string }): Promise<T> =>
-  unwrapSuccess<T>(await client.post<SuccessEnvelope<T>>(`/api/v1/insurer/maintenance-checks/${checkId}/respond`, response))
+// Kept for compatibility with legacy Register flow.
+export const getZones = () => client.get('/api/v1/platform/zones')
+
+export const getAvailableBatches = async <T = any>(): Promise<T> => {
+  const response = await coreClient.get<T>('/api/v1/worker/batches')
+  return response.data
+}
+
+export const getAssignedBatches = async <T = any>(): Promise<T> => {
+  const response = await coreClient.get<T>('/api/v1/worker/batches/assigned')
+  return response.data
+}

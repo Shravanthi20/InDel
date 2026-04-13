@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Delivery Execution{% endblock %}
+{% block page_title %}Delivery Execution{% endblock %}
+{% block page_subtitle %}Confirm pickup and start delivery{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:0 auto;">
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <!-- Order detail card -->
+  <div class="card mb-16">
+    <div class="card-title mb-16">Order Details</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div>
+        <div class="text-xs text-secondary fw-600" style="text-transform:uppercase;letter-spacing:.5px;">Pickup</div>
+        <div style="font-weight:700;margin-top:4px;">{{ order.pickup_area or order.from_city or '—' }}</div>
+      </div>
+      <div>
+        <div class="text-xs text-secondary fw-600" style="text-transform:uppercase;letter-spacing:.5px;">Drop</div>
+        <div style="font-weight:700;margin-top:4px;">{{ order.drop_area or order.to_city or '—' }}</div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="text-sm"><span class="text-secondary">Customer</span><br><strong>{{ order.customer_name or '—' }}</strong></div>
+        <div class="text-sm"><span class="text-secondary">Phone</span><br><strong>{{ order.customer_phone or '—' }}</strong></div>
+        <div class="text-sm"><span class="text-secondary">Address</span><br><strong>{{ order.address or '—' }}</strong></div>
+        <div class="text-sm"><span class="text-secondary">Payment</span><br>
+          <span class="chip {% if 'upi' in (order.payment_type or '')|lower or 'paid' in (order.payment_type or '')|lower %}chip-success{% else %}chip-warning{% endif %}">
+            {{ order.payment_type or '—' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex align-center justify-between">
+      <div>
+        <div class="text-xs text-secondary">Distance</div>
+        <strong>{{ order.distance_km }} km</strong>
+      </div>
+      <div>
+        <div class="text-xs text-secondary">Package</div>
+        <strong>{{ order.package_weight_kg }} kg{{ ', ' + order.package_size if order.package_size else '' }}</strong>
+      </div>
+      <div style="text-align:right;">
+        <div class="text-xs text-secondary">Earning</div>
+        <span class="order-earning">₹{{ order.earning_inr }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm pickup -->
+  <form method="POST"
+        action="{{ url_for('worker.delivery_execution', order_id=order_id) }}"
+        id="pickup-form">
+    <div class="alert alert-info mb-16">
+      ℹ Clicking <strong>Confirm Pickup</strong> will mark the order as picked up
+      and send the delivery code to the customer.
+    </div>
+    <button type="submit" class="btn btn-primary btn-block btn-lg"
+            data-confirm="Confirm pickup and alert the customer?"
+            id="confirm-pickup-btn">
+      ✓ Confirm & Start Delivery
+    </button>
+    <a href="{{ url_for('worker.orders') }}" class="btn btn-ghost btn-block mt-8">
+      ← Back to Orders
+    </a>
+  </form>
+</div>
+{% endblock %}

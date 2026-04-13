@@ -23,6 +23,8 @@ class ClaimsViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
+    private var isFetching = false
+
     init {
         loadClaimsData()
         startAutoRefresh()
@@ -30,6 +32,8 @@ class ClaimsViewModel @Inject constructor(
 
     fun loadClaimsData() {
         viewModelScope.launch {
+            // Prevent multiple concurrent fetches
+            if (isFetching) return@launch
             _uiState.value = ClaimsUiState.Loading
             fetchClaimsData()
         }
@@ -37,6 +41,8 @@ class ClaimsViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
+            // Prevent multiple concurrent fetches
+            if (isFetching) return@launch
             _isRefreshing.value = true
             fetchClaimsData()
             delay(500)
@@ -46,19 +52,26 @@ class ClaimsViewModel @Inject constructor(
 
     private suspend fun fetchClaimsData() {
         try {
+            isFetching = true
             val claimsRes = claimsRepository.getClaims()
             val walletRes = claimsRepository.getWallet()
 
             if (claimsRes.isSuccessful && walletRes.isSuccessful) {
+                val claims = claimsRes.body()?.claims ?: emptyList()
+                val wallet = walletRes.body()!!
+                // Deduplicate claims by claim_id just in case
+                val uniqueClaims = claims.distinctBy { it.claimId }
                 _uiState.value = ClaimsUiState.Success(
-                    claims = claimsRes.body()?.claims ?: emptyList(),
-                    wallet = walletRes.body()!!
+                    claims = uniqueClaims,
+                    wallet = wallet
                 )
             } else {
                 _uiState.value = ClaimsUiState.Error("Failed to load claims data")
             }
         } catch (e: Exception) {
             _uiState.value = ClaimsUiState.Error(e.message ?: "Unknown error")
+        } finally {
+            isFetching = false
         }
     }
 
@@ -66,7 +79,10 @@ class ClaimsViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 delay(12000)
-                fetchClaimsData()
+                // Only auto-fetch if not already fetching
+                if (!isFetching && uiState.value is ClaimsUiState.Success) {
+                    fetchClaimsData()
+                }
             }
         }
     }

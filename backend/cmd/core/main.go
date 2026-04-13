@@ -8,96 +8,47 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
 	"github.com/Shravanthi20/InDel/backend/internal/handlers/core"
-	"github.com/Shravanthi20/InDel/backend/internal/pollers"
+	"github.com/Shravanthi20/InDel/backend/internal/middleware"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
-	"github.com/Shravanthi20/InDel/backend/internal/services"
-	"github.com/Shravanthi20/InDel/backend/pkg/razorpay"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"time"
 )
 
 func main() {
+	// Load environment variables
 	if err := godotenv.Load(); err != nil && os.Getenv("INDEL_ENV") != "production" {
 		log.Println("No .env file found, using environment variables")
 	}
 
+	// Load configuration
 	cfg := config.Load()
 
+	// Initialize database
 	db, err := database.InitDB(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Run migrations
 	if err := database.Migrate(db); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	core.SetDB(db)
 
-	// ─── Initialize Razorpay Client ────────────────────────────────────
-	razorpayAPIKey := os.Getenv("RAZORPAY_API_KEY")
-	if razorpayAPIKey == "" {
-		razorpayAPIKey = os.Getenv("Test_Key_ID")
-	}
-	razorpayAPISecret := os.Getenv("RAZORPAY_API_SECRET")
-	if razorpayAPISecret == "" {
-		razorpayAPISecret = os.Getenv("Test_Key_Secret")
-	}
-	razorpayClient := razorpay.NewRazorpayClient(razorpayAPIKey, razorpayAPISecret)
-	log.Printf("✅ Razorpay client initialized (Mock Mode: %v)", razorpayClient.MockMode)
-
-	// ─── Start Automated Disruption Triggers ────────────────────────────
-	coreSvc := services.NewCoreOpsService(db)
-	coreSvc.SetRazorpayClient(razorpayClient)
-
-	// Trigger 1 & 2: Heavy Rain + Extreme Heat (OpenWeatherMap, every 10 min)
-	// weatherPoller := &pollers.WeatherPoller{DB: db}
-	// weatherPoller.Start()
-
-	// Trigger 3: Severe Pollution (OpenAQ, every 30 min)
-	// aqiPoller := &pollers.AQIPoller{DB: db}
-	// aqiPoller.Start()
-
-	// Trigger 4: Platform Order Drop (internal DB, every 15 min)
-	// orderDropPoller := &pollers.OrderDropPoller{DB: db}
-	// orderDropPoller.Start()
-
-	// Trigger 5: Zone Closure / Curfew / Strike (mock gov API, every 60 min)
-	// zoneClosurePoller := &pollers.ZoneClosurePoller{DB: db}
-	// zoneClosurePoller.Start()
-
-	// Pipeline Processor: picks up confirmed disruptions → auto-generates claims + payouts
-	disruptionProcessor := &pollers.DisruptionProcessor{DB: db, CoreSvc: coreSvc}
-	disruptionProcessor.Start()
-
-	log.Println("✅ All 5 disruption triggers started")
-	log.Println("✅ Disruption pipeline processor started")
-
-	// DEMO MODE: Standalone Payout Heartbeat (every 10s)
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			_, _ = coreSvc.ProcessQueuedPayouts(time.Now().UTC())
-		}
-	}()
-	log.Println("✅ Payout Heartbeat started")
-
+	// Create Gin router
 	router := gin.Default()
+	router.Use(middleware.CORS())
 
-	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowAllOrigins = true
-	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "Authorization")
-	router.Use(cors.New(corsConfig))
-
+	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "triggers": "active"})
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	// API routes
 	routerpkg.SetupCoreRoutes(router)
 
+	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8000"

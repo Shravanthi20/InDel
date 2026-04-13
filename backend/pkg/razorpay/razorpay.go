@@ -124,7 +124,7 @@ func (r *RazorpayClient) CreatePayout(workerID uint, amount float64, UPI string)
 		if payoutResp.Error != "" {
 			errMsg = fmt.Sprintf("Razorpay API error: %s (%s): %s", payoutResp.ErrorCode, payoutResp.Error, payoutResp.ErrorDescription)
 		}
-		return "", fmt.Errorf(errMsg)
+		return "", fmt.Errorf("%s", errMsg)
 	}
 
 	if payoutResp.ID == "" {

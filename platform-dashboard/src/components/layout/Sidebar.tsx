@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import Navbar from './Navbar'
-import { LayoutDashboard, Users, Map, BarChart3, Zap, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Users, Map, BarChart3, Zap, ShieldCheck, Sparkles, CalendarClock, CircleDollarSign, FileSearch, Database } from 'lucide-react'
 
 const platformNav = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
@@ -11,14 +11,19 @@ const platformNav = [
 ]
 
 const opsNav = [
+  { to: '/batches', label: 'View Batches', icon: Sparkles },
+  { to: '/synthetic-data', label: 'Synthetic Data', icon: Database },
   { to: '/disruptions', label: 'Chaos Engine', icon: Zap },
+  { to: '/weekly-cycle', label: 'Weekly Cycle', icon: CalendarClock },
+  { to: '/payout-ops', label: 'Payout Ops', icon: CircleDollarSign },
+  { to: '/reconciliation', label: 'Reconciliation', icon: FileSearch },
 ]
 
 function navClass(isActive: boolean) {
   return [
     'group flex items-center gap-3 px-4 py-2.5 text-sm font-medium border-l-2 transition-none',
-    isActive 
-      ? 'bg-slate-100 dark:bg-slate-800 border-orange-500 text-slate-900 dark:text-white' 
+    isActive
+      ? 'bg-[var(--brand-soft)] dark:bg-slate-800 border-[var(--brand-primary)] text-slate-900 dark:text-white'
       : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50',
   ].join(' ')
 }
@@ -30,7 +35,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
       <aside className="fixed left-0 top-0 z-50 h-screen w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="flex h-full flex-col py-8">
           <div className="mb-10 flex items-center gap-3 px-6">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-orange-500">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-[var(--brand-primary)]">
               <ShieldCheck className="h-4 w-4 text-white" />
             </div>
             <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white font-['Outfit']">InDel <span className="font-light text-slate-500">Platform</span></h1>

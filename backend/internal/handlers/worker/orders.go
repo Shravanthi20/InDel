@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,14 +29,11 @@ func parseOrderID(orderID string) (uint, error) {
 	return uint(parsed), nil
 }
 
-func totalDeliveryEarningINR(feeINR, tipINR float64) int {
+func totalDeliveryEarningINR(tipINR float64) int {
 	if tipINR < 0 {
 		tipINR = 0
 	}
-	if feeINR <= 0 {
-		feeINR = float64(deliveryBaseEarningINR)
-	}
-	return int(feeINR) + int(tipINR)
+	return deliveryBaseEarningINR + int(tipINR)
 }
 
 func normalizeZoneBandPath(zonePath []string) []string {
@@ -97,21 +93,102 @@ func zonePathDisplay(zonePath []string) string {
 	return strings.Join(norm, ">")
 }
 
+type workerOrderScope struct {
+	ZoneID   uint
+	ZoneName string
+	ZoneCity string
+}
+
+func getWorkerOrderScope(workerIDUint uint) workerOrderScope {
+	scope := workerOrderScope{}
+	if !hasDB() {
+		return scope
+	}
+
+	type scopeRow struct {
+		ZoneID   uint   `gorm:"column:zone_id"`
+		ZoneName string `gorm:"column:zone_name"`
+		ZoneCity string `gorm:"column:zone_city"`
+	}
+
+	var row scopeRow
+	err := workerDB.Raw(`
+		SELECT wp.zone_id, COALESCE(z.name, '') AS zone_name, COALESCE(z.city, '') AS zone_city
+		FROM worker_profiles wp
+		LEFT JOIN zones z ON z.id = wp.zone_id
+		WHERE wp.worker_id = ?
+		LIMIT 1
+	`, workerIDUint).Scan(&row).Error
+	if err != nil {
+		return scope
+	}
+
+	scope.ZoneID = row.ZoneID
+	scope.ZoneName = strings.TrimSpace(row.ZoneName)
+	scope.ZoneCity = strings.TrimSpace(row.ZoneCity)
+	return scope
+}
+
+func optionalAuthWorkerID(c *gin.Context) (string, bool) {
+	authHeader := c.GetHeader("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return "", false
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if token == "" {
+		return "", false
+	}
+
+	if hasDB() {
+		type tokenRow struct {
+			UserID uint `gorm:"column:user_id"`
+		}
+		var row tokenRow
+		err := workerDB.Raw(
+			"SELECT user_id FROM auth_tokens WHERE token = ? AND expires_at > CURRENT_TIMESTAMP LIMIT 1",
+			token,
+		).Scan(&row).Error
+		if err == nil && row.UserID != 0 {
+			return fmt.Sprintf("%d", row.UserID), true
+		}
+	}
+
+	if !allowInMemoryAuthFallback() {
+		return "", false
+	}
+
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	workerID, ok := store.data.TokenToWorkerID[token]
+	if !ok {
+		return "", false
+	}
+	return workerID, true
+}
+
 // GetAssignedOrders returns assigned orders only.
 func GetAssignedOrders(c *gin.Context) {
 	workerID, ok := requireAuth(c)
 	if !ok {
 		return
 	}
+	pathFilter := strings.TrimSpace(c.Query("path"))
+	pathLike := "%" + strings.ToLower(pathFilter) + "%"
 
 	if hasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			type orderRow struct {
 				ID             uint    `gorm:"column:id"`
 				OrderValue     float64 `gorm:"column:order_value"`
+				PackageSize    string  `gorm:"column:package_size"`
+				PackageWeight  float64 `gorm:"column:package_weight_kg"`
 				TipInr         float64 `gorm:"column:tip_inr"`
 				DeliveryFeeInr float64 `gorm:"column:delivery_fee_inr"`
 				ZoneRoutePath  string  `gorm:"column:zone_route_path"`
+				FromCity       string  `gorm:"column:from_city"`
+				ToCity         string  `gorm:"column:to_city"`
+				FromState      string  `gorm:"column:from_state"`
+				ToState        string  `gorm:"column:to_state"`
 				Status         string  `gorm:"column:status"`
 				PickupArea     string  `gorm:"column:pickup_area"`
 				DropArea       string  `gorm:"column:drop_area"`
@@ -119,11 +196,16 @@ func GetAssignedOrders(c *gin.Context) {
 				CreatedAt      string  `gorm:"column:created_at"`
 			}
 			rows := make([]orderRow, 0)
-			_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Velachery') AS pickup_area, COALESCE(drop_area, 'Adyar') AS drop_area, COALESCE(distance_km, 3.2) AS distance_km, created_at::text FROM orders WHERE worker_id = ? ORDER BY created_at DESC LIMIT 20", workerIDUint).Scan(&rows).Error
-			if len(rows) == 0 {
-				// Demo fallback: expose unclaimed assigned orders when worker has none.
-				_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Chromepet') AS pickup_area, COALESCE(drop_area, 'Tambaram') AS drop_area, COALESCE(distance_km, 2.5) AS distance_km, created_at::text FROM orders WHERE status = 'assigned' ORDER BY created_at DESC LIMIT 20").Scan(&rows).Error
+			baseSelect := "SELECT o.id, o.order_value, COALESCE(o.package_size, '') AS package_size, COALESCE(o.package_weight_kg, 0) AS package_weight_kg, COALESCE(o.tip_inr, 0) AS tip_inr, COALESCE(o.delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(o.zone_route_path, '[\"A\"]') AS zone_route_path, COALESCE(o.from_city, '') AS from_city, COALESCE(o.to_city, '') AS to_city, COALESCE(o.from_state, '') AS from_state, COALESCE(o.to_state, '') AS to_state, o.status, COALESCE(o.pickup_area, 'Pickup Location') AS pickup_area, COALESCE(o.drop_area, 'Drop Location') AS drop_area, COALESCE(o.distance_km, 0) AS distance_km, o.created_at::text FROM orders o"
+			query := baseSelect + " WHERE o.worker_id = ?"
+			args := []interface{}{workerIDUint}
+			if pathFilter != "" {
+				query += " AND (LOWER(COALESCE(o.pickup_area, '')) LIKE ? OR LOWER(COALESCE(o.drop_area, '')) LIKE ? OR LOWER(COALESCE(o.from_city, '')) LIKE ? OR LOWER(COALESCE(o.to_city, '')) LIKE ?)"
+				args = append(args, pathLike, pathLike, pathLike, pathLike)
 			}
+			query += " ORDER BY o.created_at DESC LIMIT 20"
+			_ = workerDB.Raw(query, args...).Scan(&rows).Error
+
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
 				zonePath := decodeZonePath(row.ZoneRoutePath)
@@ -133,10 +215,17 @@ func GetAssignedOrders(c *gin.Context) {
 				}
 				orders = append(orders, gin.H{
 					"order_id":           fmt.Sprintf("ord-%03d", row.ID),
+					"order_value":        row.OrderValue,
+					"package_size":       row.PackageSize,
+					"package_weight_kg":  row.PackageWeight,
+					"from_city":          row.FromCity,
+					"to_city":            row.ToCity,
+					"from_state":         row.FromState,
+					"to_state":           row.ToState,
 					"pickup_area":        row.PickupArea,
 					"drop_area":          row.DropArea,
 					"distance_km":        row.DistanceKm,
-					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
+					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -153,7 +242,10 @@ func GetAssignedOrders(c *gin.Context) {
 	store.mu.RLock()
 	assigned := make([]map[string]any, 0)
 	for _, order := range store.data.Orders {
-		if order["status"] == "assigned" {
+		if worker, ok := order["worker_id"]; ok && fmt.Sprintf("%v", worker) != workerID {
+			continue
+		}
+		if order["status"] == "assigned" || order["status"] == "accepted" || order["status"] == "picked_up" {
 			assigned = append(assigned, order)
 		}
 	}
@@ -168,15 +260,23 @@ func GetOrders(c *gin.Context) {
 	if !ok {
 		return
 	}
+	pathFilter := strings.TrimSpace(c.Query("path"))
+	pathLike := "%" + strings.ToLower(pathFilter) + "%"
 
 	if hasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			type orderRow struct {
 				ID             uint    `gorm:"column:id"`
 				OrderValue     float64 `gorm:"column:order_value"`
+				PackageSize    string  `gorm:"column:package_size"`
+				PackageWeight  float64 `gorm:"column:package_weight_kg"`
 				TipInr         float64 `gorm:"column:tip_inr"`
 				DeliveryFeeInr float64 `gorm:"column:delivery_fee_inr"`
 				ZoneRoutePath  string  `gorm:"column:zone_route_path"`
+				FromCity       string  `gorm:"column:from_city"`
+				ToCity         string  `gorm:"column:to_city"`
+				FromState      string  `gorm:"column:from_state"`
+				ToState        string  `gorm:"column:to_state"`
 				Status         string  `gorm:"column:status"`
 				PickupArea     string  `gorm:"column:pickup_area"`
 				DropArea       string  `gorm:"column:drop_area"`
@@ -184,11 +284,24 @@ func GetOrders(c *gin.Context) {
 				CreatedAt      string  `gorm:"column:created_at"`
 			}
 			rows := make([]orderRow, 0)
-			_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Selaiyur') AS pickup_area, COALESCE(drop_area, 'Sholinganallur') AS drop_area, COALESCE(distance_km, 5.1) AS distance_km, created_at::text FROM orders WHERE worker_id = ? ORDER BY created_at DESC LIMIT 50", workerIDUint).Scan(&rows).Error
-			if len(rows) < 5 { // If worker has few orders, always show a pool of available ones
-				var extraRows []orderRow
-				_ = workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(zone_route_path, '[\"A\"]') AS zone_route_path, status, COALESCE(pickup_area, 'Guindy') AS pickup_area, COALESCE(drop_area, 'T.Nagar') AS drop_area, COALESCE(distance_km, 4.3) AS distance_km, created_at::text FROM orders WHERE status = 'assigned' ORDER BY created_at DESC LIMIT 10").Scan(&extraRows).Error
-				rows = append(rows, extraRows...)
+			query := "SELECT o.id, o.order_value, COALESCE(o.package_size, '') AS package_size, COALESCE(o.package_weight_kg, 0) AS package_weight_kg, COALESCE(o.tip_inr, 0) AS tip_inr, COALESCE(o.delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(o.zone_route_path, '[\"A\"]') AS zone_route_path, COALESCE(o.from_city, '') AS from_city, COALESCE(o.to_city, '') AS to_city, COALESCE(o.from_state, '') AS from_state, COALESCE(o.to_state, '') AS to_state, o.status, COALESCE(o.pickup_area, 'Pickup Location') AS pickup_area, COALESCE(o.drop_area, 'Drop Location') AS drop_area, COALESCE(o.distance_km, 0) AS distance_km, o.created_at::text FROM orders o WHERE o.worker_id = ?"
+			args := []interface{}{workerIDUint}
+			if pathFilter != "" {
+				query += " AND (LOWER(COALESCE(o.pickup_area, '')) LIKE ? OR LOWER(COALESCE(o.drop_area, '')) LIKE ? OR LOWER(COALESCE(o.from_city, '')) LIKE ? OR LOWER(COALESCE(o.to_city, '')) LIKE ?)"
+				args = append(args, pathLike, pathLike, pathLike, pathLike)
+			}
+			query += " ORDER BY o.created_at DESC LIMIT 50"
+			_ = workerDB.Raw(query, args...).Scan(&rows).Error
+			if len(rows) == 0 {
+				// Demo fallback: return assigned pool so the app always has order cards to render.
+				query = "SELECT o.id, o.order_value, COALESCE(o.package_size, '') AS package_size, COALESCE(o.package_weight_kg, 0) AS package_weight_kg, COALESCE(o.tip_inr, 0) AS tip_inr, COALESCE(o.delivery_fee_inr, 0) AS delivery_fee_inr, COALESCE(o.zone_route_path, '[\"A\"]') AS zone_route_path, COALESCE(o.from_city, '') AS from_city, COALESCE(o.to_city, '') AS to_city, COALESCE(o.from_state, '') AS from_state, COALESCE(o.to_state, '') AS to_state, o.status, COALESCE(o.pickup_area, 'Pickup Location') AS pickup_area, COALESCE(o.drop_area, 'Drop Location') AS drop_area, COALESCE(o.distance_km, 0) AS distance_km, o.created_at::text FROM orders o WHERE o.status = 'assigned'"
+				args = []interface{}{}
+				if pathFilter != "" {
+					query += " AND (LOWER(COALESCE(o.pickup_area, '')) LIKE ? OR LOWER(COALESCE(o.drop_area, '')) LIKE ? OR LOWER(COALESCE(o.from_city, '')) LIKE ? OR LOWER(COALESCE(o.to_city, '')) LIKE ?)"
+					args = append(args, pathLike, pathLike, pathLike, pathLike)
+				}
+				query += " ORDER BY o.created_at DESC LIMIT 50"
+				_ = workerDB.Raw(query, args...).Scan(&rows).Error
 			}
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
@@ -199,10 +312,13 @@ func GetOrders(c *gin.Context) {
 				}
 				orders = append(orders, gin.H{
 					"order_id":           fmt.Sprintf("ord-%03d", row.ID),
+					"order_value":        row.OrderValue,
+					"package_size":       row.PackageSize,
+					"package_weight_kg":  row.PackageWeight,
 					"pickup_area":        row.PickupArea,
 					"drop_area":          row.DropArea,
 					"distance_km":        row.DistanceKm,
-					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
+					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -243,55 +359,28 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 			if newStatus == "delivered" {
 				_ = workerDB.Exec("UPDATE orders SET status='delivered', delivered_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id = ? AND worker_id = ?", orderNumID, workerIDUint).Error
 				_ = workerDB.Exec("INSERT INTO notifications (worker_id, type, message) VALUES (?, 'order_delivered', ?)", workerIDUint, fmt.Sprintf("%s delivered. Earnings updated.", orderID)).Error
-
-				// Update earnings in DB
-				var tip, fee float64
-				_ = workerDB.Raw("SELECT COALESCE(tip_inr, 0), COALESCE(delivery_fee_inr, 0) FROM orders WHERE id = ?", orderNumID).Row().Scan(&tip, &fee)
-				earning := totalDeliveryEarningINR(fee, tip)
-
-				weekStart, _ := weekBounds(time.Now().UTC())
-
-				// Update weekly summary
-				_ = workerDB.Exec(`
-					INSERT INTO weekly_earnings_summary (worker_id, week_start, week_end, total_earnings, claim_eligible)
-					VALUES (?, ?, ?, ?, false)
-					ON CONFLICT (worker_id, week_start)
-					DO UPDATE SET total_earnings = weekly_earnings_summary.total_earnings + ?, updated_at = CURRENT_TIMESTAMP
-				`, workerIDUint, weekStart, weekStart.AddDate(0, 0, 7), float64(earning), float64(earning)).Error
-
-				// Update daily record
-				_ = workerDB.Exec(`
-					INSERT INTO earnings_records (worker_id, date, amount_earned, hours_worked, created_at)
-					VALUES (?, CURRENT_DATE, ?, 0, CURRENT_TIMESTAMP)
-					ON CONFLICT (worker_id, date)
-					DO UPDATE SET amount_earned = earnings_records.amount_earned + ?
-				`, workerIDUint, float64(earning), float64(earning)).Error
-
-				// Update lifetime earnings
-				_ = workerDB.Exec("UPDATE worker_profiles SET total_earnings_lifetime = total_earnings_lifetime + ?, updated_at = CURRENT_TIMESTAMP WHERE worker_id = ?", float64(earning), workerIDUint).Error
 			}
 
 			type row struct {
-				ID             uint    `gorm:"column:id"`
-				OrderValue     float64 `gorm:"column:order_value"`
-				TipInr         float64 `gorm:"column:tip_inr"`
-				DeliveryFeeInr float64 `gorm:"column:delivery_fee_inr"`
-				Status         string  `gorm:"column:status"`
-				PickupArea     string  `gorm:"column:pickup_area"`
-				DropArea       string  `gorm:"column:drop_area"`
-				DistanceKm     float64 `gorm:"column:distance_km"`
-				CreatedAt      string  `gorm:"column:created_at"`
-				UpdatedAt      string  `gorm:"column:updated_at"`
+				ID         uint    `gorm:"column:id"`
+				OrderValue float64 `gorm:"column:order_value"`
+				TipInr     float64 `gorm:"column:tip_inr"`
+				Status     string  `gorm:"column:status"`
+				CreatedAt  string  `gorm:"column:created_at"`
+				UpdatedAt  string  `gorm:"column:updated_at"`
 			}
 			var r row
-			err := workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, COALESCE(delivery_fee_inr, 0) AS delivery_fee_inr, status, COALESCE(pickup_area, '') AS pickup_area, COALESCE(drop_area, '') AS drop_area, COALESCE(distance_km, 0) AS distance_km, created_at::text, updated_at::text FROM orders WHERE id = ? AND worker_id = ?", orderNumID, workerIDUint).Scan(&r).Error
+			err := workerDB.Raw("SELECT id, order_value, COALESCE(tip_inr, 0) AS tip_inr, status, created_at::text, updated_at::text FROM orders WHERE id = ? AND worker_id = ?", orderNumID, workerIDUint).Scan(&r).Error
 			if err == nil && r.ID != 0 {
+				mirrorStoredOrderStatus(orderID, fmt.Sprintf("%d", workerIDUint), r.Status)
+				refreshBatchSnapshotForOrderID(availableBatchCacheScope, orderID)
+				refreshBatchSnapshotForOrderID(fmt.Sprintf("%d", workerIDUint), orderID)
 				c.JSON(200, gin.H{"message": message, "order": gin.H{
 					"order_id":    fmt.Sprintf("ord-%03d", r.ID),
-					"pickup_area": r.PickupArea,
-					"drop_area":   r.DropArea,
-					"distance_km": r.DistanceKm,
-					"earning_inr": totalDeliveryEarningINR(r.DeliveryFeeInr, r.TipInr),
+					"pickup_area": "Tambaram",
+					"drop_area":   "Camp Road",
+					"distance_km": 3.1,
+					"earning_inr": totalDeliveryEarningINR(r.TipInr),
 					"tip_inr":     r.TipInr,
 					"status":      r.Status,
 					"assigned_at": r.CreatedAt,
@@ -306,7 +395,7 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 	}
 
 	store.mu.Lock()
-	defer store.mu.Unlock()
+	var responseOrder map[string]any
 
 	for _, order := range store.data.Orders {
 		if order["order_id"] != orderID {
@@ -319,12 +408,9 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 
 		if newStatus == "delivered" && previousStatus != "delivered" {
 			tip, _ := order["tip_inr"].(float64)
-			fee, _ := order["delivery_fee_inr"].(float64)
-			earning := totalDeliveryEarningINR(fee, tip)
+			earning := totalDeliveryEarningINR(tip)
 			if current, ok := store.data.Earnings["this_week_actual"].(int); ok {
 				store.data.Earnings["this_week_actual"] = current + earning
-			} else if currentF, ok := store.data.Earnings["this_week_actual"].(float64); ok {
-				store.data.Earnings["this_week_actual"] = int(currentF) + earning
 			}
 			if profile, exists := store.data.WorkerProfiles[workerID]; exists {
 				if completed, ok := profile["orders_completed"].(int); ok {
@@ -341,8 +427,15 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 				"read":       false,
 			}}, store.data.Notifications...)
 		}
+		responseOrder = order
+		break
+	}
+	store.mu.Unlock()
 
-		c.JSON(200, gin.H{"message": message, "order": order})
+	if responseOrder != nil {
+		refreshBatchSnapshotForOrder(availableBatchCacheScope, responseOrder)
+		refreshBatchSnapshotForOrder(workerID, responseOrder)
+		c.JSON(200, gin.H{"message": message, "order": responseOrder})
 		return
 	}
 
@@ -370,22 +463,39 @@ func DeliverOrder(c *gin.Context) {
 func GetAvailableOrders(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "50")
 	zoneIDStr := c.Query("zone_id")
+	pathFilter := strings.TrimSpace(c.Query("path"))
+	pathLike := "%" + strings.ToLower(pathFilter) + "%"
 
-	limit := 4
+	limit := 50
 	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
 		limit = l
 	}
 
 	if hasDB() {
+		var workerScope workerOrderScope
+		if workerID, ok := optionalAuthWorkerID(c); ok {
+			if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+				workerScope = getWorkerOrderScope(workerIDUint)
+			}
+		}
+		zoneNameLower := strings.ToLower(workerScope.ZoneName)
+		zoneCityLower := strings.ToLower(workerScope.ZoneCity)
+
 		type availableOrderRow struct {
 			ID             uint    `gorm:"column:id"`
 			OrderValue     float64 `gorm:"column:order_value"`
+			PackageSize    string  `gorm:"column:package_size"`
+			PackageWeight  float64 `gorm:"column:package_weight_kg"`
 			TipInr         float64 `gorm:"column:tip_inr"`
 			DeliveryFeeInr float64 `gorm:"column:delivery_fee_inr"`
 			ZoneRoutePath  string  `gorm:"column:zone_route_path"`
 			ZoneID         uint    `gorm:"column:zone_id"`
 			ZoneName       string  `gorm:"column:zone_name"`
 			Status         string  `gorm:"column:status"`
+			FromCity       string  `gorm:"column:from_city"`
+			ToCity         string  `gorm:"column:to_city"`
+			FromState      string  `gorm:"column:from_state"`
+			ToState        string  `gorm:"column:to_state"`
 			PickupArea     string  `gorm:"column:pickup_area"`
 			DropArea       string  `gorm:"column:drop_area"`
 			DistanceKm     float64 `gorm:"column:distance_km"`
@@ -397,12 +507,18 @@ func GetAvailableOrders(c *gin.Context) {
 			SELECT 
 				o.id, 
 				o.order_value, 
+				COALESCE(o.package_size, '') as package_size,
+				COALESCE(o.package_weight_kg, 0) as package_weight_kg,
 				COALESCE(o.tip_inr, 0) as tip_inr,
 				COALESCE(o.delivery_fee_inr, 0) as delivery_fee_inr,
 				COALESCE(o.zone_route_path, '["A"]') as zone_route_path,
 				o.zone_id, 
 				z.name as zone_name, 
 				o.status, 
+				COALESCE(o.from_city, '') as from_city,
+				COALESCE(o.to_city, '') as to_city,
+				COALESCE(o.from_state, '') as from_state,
+				COALESCE(o.to_state, '') as to_state,
 				COALESCE(o.pickup_area, 'Pickup Location') as pickup_area,
 				COALESCE(o.drop_area, 'Drop Location') as drop_area,
 				COALESCE(o.distance_km, 0) as distance_km,
@@ -416,6 +532,19 @@ func GetAvailableOrders(c *gin.Context) {
 		if zoneIDStr != "" {
 			query += " AND o.zone_id = ?"
 			args = append(args, zoneIDStr)
+		} else if workerScope.ZoneID != 0 {
+			// Worker visibility rule: selected zone + cross-zone routes originating from worker's current location.
+			if zoneNameLower != "" || zoneCityLower != "" {
+				query += " AND (o.zone_id = ? OR LOWER(COALESCE(o.from_city, '')) = ? OR LOWER(COALESCE(o.pickup_area, '')) = ? OR LOWER(COALESCE(o.from_city, '')) = ? OR LOWER(COALESCE(o.pickup_area, '')) = ?)"
+				args = append(args, workerScope.ZoneID, zoneNameLower, zoneNameLower, zoneCityLower, zoneCityLower)
+			} else {
+				query += " AND o.zone_id = ?"
+				args = append(args, workerScope.ZoneID)
+			}
+		}
+		if pathFilter != "" {
+			query += " AND (LOWER(COALESCE(o.pickup_area, '')) LIKE ? OR LOWER(COALESCE(o.drop_area, '')) LIKE ? OR LOWER(COALESCE(o.from_city, '')) LIKE ? OR LOWER(COALESCE(o.to_city, '')) LIKE ?)"
+			args = append(args, pathLike, pathLike, pathLike, pathLike)
 		}
 
 		query += " ORDER BY o.created_at DESC LIMIT ?"
@@ -423,27 +552,6 @@ func GetAvailableOrders(c *gin.Context) {
 
 		err := workerDB.Raw(query, args...).Scan(&rows).Error
 		if err == nil {
-			if len(rows) == 0 {
-				zoneToUse := 1
-				if zoneIDStr != "" {
-					z, _ := strconv.Atoi(zoneIDStr)
-					zoneToUse = z
-				}
-				var defaultUser int
-				_ = workerDB.Raw("SELECT id FROM users LIMIT 1").Scan(&defaultUser)
-				if defaultUser == 0 {
-					defaultUser = 1
-				}
-				pickupOptions := []string{"Anna Nagar", "Mylapore", "Nungambakkam", "Besant Nagar", "Egmore"}
-				dropOptions := []string{"Selaiyur", "Medavakkam", "Perungudi", "Kottivakkam", "Chemmancherry"}
-				for i := 0; i < 5; i++ {
-					p := pickupOptions[i%len(pickupOptions)]
-					d := dropOptions[i%len(dropOptions)]
-					_ = workerDB.Exec("INSERT INTO orders (worker_id, order_value, tip_inr, delivery_fee_inr, zone_id, status, pickup_area, drop_area, distance_km) VALUES (?, ?, ?, ?, ?, 'assigned', ?, ?, ?)", defaultUser, 50+i*10, 0, 30, zoneToUse, p, d, 2.5+float64(i)*0.5).Error
-				}
-				_ = workerDB.Raw(query, args...).Scan(&rows).Error
-			}
-
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
 				zonePath := decodeZonePath(row.ZoneRoutePath)
@@ -454,7 +562,13 @@ func GetAvailableOrders(c *gin.Context) {
 				orders = append(orders, gin.H{
 					"order_id":           fmt.Sprintf("ord-%d", row.ID),
 					"order_value":        row.OrderValue,
-					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
+					"package_size":       row.PackageSize,
+					"package_weight_kg":  row.PackageWeight,
+					"from_city":          row.FromCity,
+					"to_city":            row.ToCity,
+					"from_state":         row.FromState,
+					"to_state":           row.ToState,
+					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -534,19 +648,19 @@ func GetDeliveries(c *gin.Context) {
 			SELECT 
 				o.id, 
 				o.order_value, 
-				COALESCE(o.tip_inr, 0) as tip_inr,
-				COALESCE(o.delivery_fee_inr, 0) as delivery_fee_inr,
-				COALESCE(o.zone_route_path, '["A"]') as zone_route_path,
+				COALESCE(o.tip_inr, 0) AS tip_inr,
+				COALESCE(o.delivery_fee_inr, 0) AS delivery_fee_inr,
+				COALESCE(o.zone_route_path, '["A"]') AS zone_route_path,
 				o.worker_id,
-				COALESCE(wp.name, 'Unknown') as worker_name,
+				COALESCE(wp.name, 'Unknown') AS worker_name,
 				o.zone_id, 
-				z.name as zone_name, 
+				z.name AS zone_name, 
 				o.status, 
-				COALESCE(o.pickup_area, 'Pickup') as pickup_area,
-				COALESCE(o.drop_area, 'Drop') as drop_area,
-				COALESCE(o.distance_km, 0) as distance_km,
+				COALESCE(o.pickup_area, 'Pickup') AS pickup_area,
+				COALESCE(o.drop_area, 'Drop') AS drop_area,
+				COALESCE(o.distance_km, 0) AS distance_km,
 				o.created_at::text,
-				o.delivered_at::text as delivered_at
+				o.delivered_at::text AS delivered_at
 			FROM orders o
 			LEFT JOIN zones z ON o.zone_id = z.id
 			LEFT JOIN worker_profiles wp ON o.worker_id = wp.worker_id
@@ -554,7 +668,6 @@ func GetDeliveries(c *gin.Context) {
 		`
 
 		args := []interface{}{statusStr}
-
 		if workerIDStr != "" {
 			query += " AND o.worker_id = ?"
 			args = append(args, workerIDStr)
@@ -579,7 +692,7 @@ func GetDeliveries(c *gin.Context) {
 				delivery := gin.H{
 					"order_id":           fmt.Sprintf("ord-%d", row.ID),
 					"order_value":        row.OrderValue,
-					"earning_inr":        totalDeliveryEarningINR(deliveryFee, row.TipInr),
+					"earning_inr":        totalDeliveryEarningINR(row.TipInr),
 					"tip_inr":            row.TipInr,
 					"delivery_fee_inr":   deliveryFee,
 					"zone_route_path":    zonePath,
@@ -608,7 +721,6 @@ func GetDeliveries(c *gin.Context) {
 		}
 	}
 
-	// Fallback to in-memory store
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
@@ -626,12 +738,4 @@ func GetDeliveries(c *gin.Context) {
 		"count":      len(delivered),
 		"deliveries": delivered,
 	})
-}
-
-func weekBounds(now time.Time) (time.Time, time.Time) {
-	normalized := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	offset := (int(normalized.Weekday()) + 6) % 7
-	start := normalized.AddDate(0, 0, -offset)
-	end := start.AddDate(0, 0, 6)
-	return start, end
 }

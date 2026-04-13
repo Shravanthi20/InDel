@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Start Delivery{% endblock %}
+{% block page_title %}Start Delivery{% endblock %}
+{% block page_subtitle %}Your single action to begin earning today{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }} — showing cached data.</div>
+{% endif %}
+
+<!-- CTA Banner -->
+<div class="landing-cta">
+  <h2>Ready to Deliver?</h2>
+  <p>Tap below to see available orders in your zone and start your session.</p>
+  <a href="{{ url_for('worker.orders') }}" class="btn-cta" id="start-delivery-btn">
+    ▦ Start Delivery
+  </a>
+</div>
+
+<!-- Snapshot grid -->
+<div class="stats-grid mb-24">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Today's Earnings</div>
+      <div class="card-icon">₹</div>
+    </div>
+    <div class="card-value">{{ earnings.this_week_actual or 0 }}</div>
+    <div class="card-subtitle">This week actual</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Protection</div>
+      <div class="card-icon" style="background:{% if policy.status=='active' %}#D1FAE5{% else %}#FEF3C7{% endif %};
+                                     color:{% if policy.status=='active' %}var(--success){% else %}#B45309{% endif %};">◉</div>
+    </div>
+    <div class="card-value" style="font-size:1.3rem;
+      color:{% if policy.status=='active' %}var(--success){% else %}var(--warning){% endif %}">
+      {{ 'Active' if policy.status == 'active' else 'Not Enrolled' }}
+    </div>
+    <div class="card-subtitle">
+      Coverage: {{ (policy.coverage_ratio * 100)|int if policy.coverage_ratio else 0 }}%
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Worker Zone</div>
+      <div class="card-icon">⊙</div>
+    </div>
+    <div class="card-value" style="font-size:1rem;">
+      {{ profile.zone_name or profile.city or '—' }}
+    </div>
+    <div class="card-subtitle">{{ profile.vehicle_type or '—' }}</div>
+  </div>
+</div>
+
+<!-- Quick links -->
+<div style="margin-bottom:12px;font-weight:700;font-size:.9rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px;">Quick Access</div>
+<div class="nav-grid">
+  <a href="{{ url_for('worker.orders') }}" class="nav-box">
+    <span class="nav-box-icon">▦</span> Orders
+  </a>
+  <a href="{{ url_for('worker.earnings') }}" class="nav-box">
+    <span class="nav-box-icon">%</span> Earnings
+  </a>
+  <a href="{{ url_for('worker.policy') }}" class="nav-box">
+    <span class="nav-box-icon">⚡</span> Policy
+  </a>
+  <a href="{{ url_for('worker.claims') }}" class="nav-box">
+    <span class="nav-box-icon">≡</span> Claims
+  </a>
+</div>
+{% endblock %}

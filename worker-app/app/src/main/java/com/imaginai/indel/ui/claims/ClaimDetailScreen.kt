@@ -7,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.imaginai.indel.data.model.Claim
@@ -87,7 +85,7 @@ fun ClaimDetailContent(claim: Claim) {
                 Text("₹${claim.payoutAmount}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = SuccessGreen)
                 Spacer(modifier = Modifier.height(8.dp))
                 StatusBadge(claim.status)
-                
+
                 Spacer(modifier = Modifier.height(20.dp))
                 HorizontalDivider(color = BackgroundWarmWhite)
                 Spacer(modifier = Modifier.height(20.dp))
@@ -102,30 +100,14 @@ fun ClaimDetailContent(claim: Claim) {
                         Text(claim.disruptionType.replace("_", " "), fontWeight = FontWeight.Bold)
                     }
                 }
-            }
-        }
 
-        // 2. Disruption Timeline
-        Text("Incident Window", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Event, contentDescription = null, tint = BrandOrange)
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text("Time Frame", fontWeight = FontWeight.Bold)
-                    claim.disruptionWindow?.let {
-                         Text("${it.start.take(16)} - ${it.end.take(16)}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                    }
+                Spacer(modifier = Modifier.height(16.dp))
+                claim.claimReason?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                 }
             }
         }
 
-        // 3. Breakdown
-        Text("Payout Breakdown", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),

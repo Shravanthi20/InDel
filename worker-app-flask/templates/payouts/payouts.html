@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Payouts{% endblock %}
+{% block page_title %}Payout History{% endblock %}
+{% block page_subtitle %}Wallet balance and payout timeline{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-warning">{{ error }}</div>
+{% endif %}
+
+<!-- Wallet card -->
+{% if wallet %}
+<div class="card mb-24" style="background:linear-gradient(135deg,var(--brand-blue),var(--blue-deep));color:#fff;">
+  <div class="card-title" style="color:rgba(255,255,255,.75);">Wallet Balance</div>
+  <div style="font-size:2.4rem;font-weight:800;margin:8px 0;">
+    ₹{{ wallet.available_balance or 0 }}
+  </div>
+  <div style="font-size:.85rem;opacity:.85;">
+    Last payout: ₹{{ wallet.last_payout_amount or 0 }} on {{ wallet.last_payout_at or '—' }}
+  </div>
+</div>
+{% endif %}
+
+<!-- Payout timeline -->
+{% if payouts %}
+<div class="card">
+  <div class="card-title mb-16">Payout Timeline</div>
+  <div class="timeline">
+    {% for payout in payouts %}
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-content">
+        <div class="d-flex justify-between align-center mb-8">
+          <strong style="font-size:1.1rem;color:var(--success);">₹{{ payout.amount }}</strong>
+          <span class="chip
+            {% if payout.status == 'completed' %}chip-success
+            {% elif payout.status == 'processing' %}chip-warning
+            {% else %}chip-muted{% endif %}">
+            {{ payout.status }}
+          </span>
+        </div>
+        <div class="text-sm text-secondary">
+          Method: {{ payout.method }}
+          {% if payout.claim_id %}
+          · Claim: <code>{{ payout.claim_id[:8] }}…</code>
+          {% endif %}
+        </div>
+        <time class="text-xs text-secondary" style="display:block;margin-top:4px;">
+          {{ payout.processed_at }}
+        </time>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">⊕</div>
+  <h3>No payouts yet</h3>
+  <p>Payouts appear after approved claims are processed.</p>
+</div>
+{% endif %}
+{% endblock %}

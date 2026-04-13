@@ -8,6 +8,7 @@ import (
 // SetupCoreRoutes sets up core internal routes.
 func SetupCoreRoutes(router *gin.Engine) {
 	internal := router.Group("/api/v1/internal")
+	internal.Use(core.RequireInternalRole())
 	internal.POST("/policy/weekly-cycle/run", core.RunWeeklyCycle)
 	internal.POST("/claims/generate-for-disruption/:disruption_id", core.GenerateClaimsForDisruption)
 	internal.POST("/claims/auto-process/:disruption_id", core.AutoProcessDisruption)
@@ -17,5 +18,6 @@ func SetupCoreRoutes(router *gin.Engine) {
 	internal.POST("/data/synthetic/generate", core.GenerateSyntheticData)
 
 	legacy := router.Group("/internal/v1")
+	legacy.Use(core.RequireInternalRole())
 	legacy.POST("/claims/:claim_id/payout", core.QueueClaimPayout)
 }

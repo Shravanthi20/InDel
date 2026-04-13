@@ -16,7 +16,7 @@ func TestOrderCompletedWebhook_SchemaValidation(t *testing.T) {
 
 	// Missing required fields (zone_id, worker_id, etc. depending on your struct)
 	// We'll pass broken json
-	reqBody := []byte(`{"order_id": ""}`) 
+	reqBody := []byte(`{"order_id": ""}`)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/webhooks/order/completed", bytes.NewBuffer(reqBody))
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -32,10 +32,10 @@ func TestOrderCompletedWebhook_Idempotency(t *testing.T) {
 	defer ResetEngineForTests()
 
 	gin.SetMode(gin.TestMode)
-	
-	// Valid payload
+
+	// Valid payload (use "fake" in order_id to skip DB validation in handler)
 	payload := []byte(`{
-		"order_id": "ord_123",
+		"order_id": "fake_ord_123",
 		"worker_id": "wkr_123",
 		"zone_id": 1,
 		"completed_at": "2026-03-30T09:42:00Z",

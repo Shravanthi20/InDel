@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,11 +25,18 @@ type appData struct {
 }
 
 type stateStore struct {
-	mu   sync.RWMutex
-	data *appData
+	mu          sync.RWMutex
+	data        *appData
+	batchMu     sync.Mutex
+	batchTimers map[string]*time.Timer
+	batchCache  map[string]map[string]gin.H
 }
 
-var store = &stateStore{data: newDefaultAppData()}
+var store = &stateStore{
+	data:        newDefaultAppData(),
+	batchTimers: map[string]*time.Timer{},
+	batchCache:  map[string]map[string]gin.H{},
+}
 
 func newDefaultAppData() *appData {
 	return &appData{
@@ -39,6 +47,8 @@ func newDefaultAppData() *appData {
 				"worker_id":        "worker-001",
 				"name":             "Gayathri Worker",
 				"phone":            "+919999999999",
+				"zone_level":       "a",
+				"zone_name":        "Tambaram",
 				"zone":             "Tambaram, Chennai",
 				"vehicle_type":     "bike",
 				"upi_id":           "gayathri@upi",
@@ -49,12 +59,16 @@ func newDefaultAppData() *appData {
 			},
 		},
 		Policy: map[string]any{
-			"policy_id":          "pol-001",
-			"status":             "active",
-			"weekly_premium_inr": 22,
-			"coverage_ratio":     0.8,
-			"zone":               "Tambaram, Chennai",
-			"next_due_date":      "2026-03-30",
+			"policy_id":              "pol-001",
+			"status":                 "active",
+			"weekly_premium_inr":     22,
+			"coverage_ratio":         0.8,
+			"last_payment_timestamp": time.Now().UTC().Add(-2 * 24 * time.Hour).Format(time.RFC3339),
+			"next_payment_enabled":   false,
+			"coverage_status":        "Active",
+			"payment_status":         "Locked",
+			"zone":                   "Tambaram, Chennai",
+			"next_due_date":          "2026-03-30",
 			"shap_breakdown": []map[string]any{
 				{"feature": "rain_risk", "impact": 0.42},
 				{"feature": "order_drop_volatility", "impact": 0.31},
@@ -151,6 +165,15 @@ func (s *stateStore) reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data = newDefaultAppData()
+	s.batchMu.Lock()
+	for _, timer := range s.batchTimers {
+		if timer != nil {
+			timer.Stop()
+		}
+	}
+	s.batchTimers = map[string]*time.Timer{}
+	s.batchCache = map[string]map[string]gin.H{}
+	s.batchMu.Unlock()
 }
 
 func nextID(prefix string, current int) string {
@@ -214,6 +237,11 @@ func requireAuth(c *gin.Context) (string, bool) {
 		}
 	}
 
+	if !allowInMemoryAuthFallback() {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+		return "", false
+	}
+
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 	workerID, ok := store.data.TokenToWorkerID[token]
@@ -222,4 +250,8 @@ func requireAuth(c *gin.Context) (string, bool) {
 		return "", false
 	}
 	return workerID, true
+}
+
+func allowInMemoryAuthFallback() bool {
+	return !strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ENV")), "production")
 }

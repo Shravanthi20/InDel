@@ -83,7 +83,9 @@ func EnsureDemoSeed() error {
 
 	if err := workerDB.Exec(
 		`INSERT INTO policies (worker_id, status, premium_amount, policy_cycle_id)
-		 VALUES (?, 'active', 22, (SELECT id FROM weekly_policy_cycles ORDER BY id DESC LIMIT 1))`,
+		 VALUES (?, 'active', 22, (SELECT id FROM weekly_policy_cycles ORDER BY id DESC LIMIT 1))
+		 ON CONFLICT (worker_id) WHERE status = 'active'
+		 DO UPDATE SET premium_amount = EXCLUDED.premium_amount, policy_cycle_id = EXCLUDED.policy_cycle_id, updated_at = CURRENT_TIMESTAMP`,
 		user.ID,
 	).Error; err != nil {
 		return err

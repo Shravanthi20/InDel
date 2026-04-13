@@ -76,12 +76,12 @@ type ClaimAction struct {
 // --- DB Models representing relational concepts specifically ---
 
 type ClaimFraudScore struct {
-	ClaimID        uint      `gorm:"primaryKey"`
-	Score          float64
-	FinalVerdict   string
-	RuleViolations string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ClaimID             uint      `gorm:"primaryKey;column:claim_id"`
+	IsolationForestScore float64   `gorm:"column:isolation_forest_score"`
+	DbscanScore          float64   `gorm:"column:dbscan_score"`
+	FinalVerdict         string    `gorm:"column:final_verdict"`
+	RuleViolations       string    `gorm:"column:rule_violations"`
+	CreatedAt            time.Time `gorm:"column:created_at"`
 }
 
 type ClaimAuditLog struct {

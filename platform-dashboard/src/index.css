@@ -6,16 +6,22 @@
 
 @layer base {
   :root {
-    --bg-main: #f8fafc;
-    --border-subtle: #e2e8f0;
-    --text-primary: #0f172a;
-    --text-secondary: #64748b;
+    --brand-primary: #00739d;
+    --brand-primary-deep: #005a7a;
+    --brand-soft: #e6f3f7;
+    --bg-main: #f5f7f9;
+    --border-subtle: #dbe3e9;
+    --text-primary: #666766;
+    --text-secondary: #919291;
   }
   .dark {
-    --bg-main: #020617;
-    --border-subtle: #1e293b;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
+    --brand-primary: #4ba6c8;
+    --brand-primary-deep: #00739d;
+    --brand-soft: #0f2733;
+    --bg-main: #0c141a;
+    --border-subtle: #1f303a;
+    --text-primary: #e7f0f4;
+    --text-secondary: #a9bbc4;
   }
   
   body {
@@ -33,7 +39,8 @@
 
   /* High precision focus states */
   *:focus-visible {
-    @apply outline-none ring-2 ring-slate-400 dark:ring-slate-600;
+    @apply outline-none ring-2;
+    --tw-ring-color: var(--brand-primary);
   }
 }
 
@@ -50,5 +57,50 @@
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     @apply bg-slate-200 dark:bg-slate-800 rounded-full;
+  }
+}
+
+@layer utilities {
+  /* Ensure readable text in dark mode for legacy components missing dark: variants. */
+  .dark .text-slate-900 { color: #e7f0f4 !important; }
+  .dark .text-slate-800 { color: #dbe8ee !important; }
+  .dark .text-slate-700 { color: #cbdde5 !important; }
+  .dark .text-slate-600 { color: #b8cdd7 !important; }
+  .dark .text-slate-500 { color: #a9bbc4 !important; }
+
+  /* Brand remap: replace legacy orange accents with worker-app blue palette. */
+  .text-orange-700,
+  .text-orange-600,
+  .text-orange-500,
+  .text-orange-400,
+  .text-orange-300 {
+    color: var(--brand-primary) !important;
+  }
+
+  .bg-orange-700,
+  .bg-orange-600,
+  .bg-orange-500 {
+    background-color: var(--brand-primary) !important;
+  }
+
+  .bg-orange-100,
+  .bg-orange-50,
+  .bg-orange-500\/10 {
+    background-color: var(--brand-soft) !important;
+  }
+
+  .border-orange-700,
+  .border-orange-600,
+  .border-orange-500,
+  .border-orange-400,
+  .border-orange-500\/40,
+  .border-orange-500\/20 {
+    border-color: var(--brand-primary) !important;
+  }
+
+  .focus\:border-orange-600:focus,
+  .focus\:border-orange-500:focus,
+  .focus\:border-orange-400:focus {
+    border-color: var(--brand-primary) !important;
   }
 }

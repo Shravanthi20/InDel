@@ -1,5 +1,6 @@
 package com.imaginai.indel.ui.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -16,6 +17,7 @@ import com.imaginai.indel.ui.policy.PremiumPayScreen
 import com.imaginai.indel.ui.earnings.EarningsScreen
 import com.imaginai.indel.ui.claims.ClaimsScreen
 import com.imaginai.indel.ui.claims.ClaimDetailScreen
+import com.imaginai.indel.ui.orders.BatchDetailScreen
 import com.imaginai.indel.ui.orders.OrdersScreen
 import com.imaginai.indel.ui.delivery.LandingScreen
 import com.imaginai.indel.ui.delivery.FetchVerificationScreen
@@ -25,6 +27,7 @@ import com.imaginai.indel.ui.delivery.SessionTrackingScreen
 import com.imaginai.indel.ui.notifications.NotificationsScreen
 import com.imaginai.indel.ui.profile.ProfileEditScreen
 import com.imaginai.indel.ui.payouts.PayoutHistoryScreen
+import com.imaginai.indel.ui.plan.PlanSelectionScreen
 import com.imaginai.indel.ui.debug.DevToolsScreen
 
 sealed class Screen(val route: String) {
@@ -33,9 +36,13 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object OTP : Screen("otp")
     object Onboarding : Screen("onboarding")
+    object PlanSelection : Screen("plan-selection")
     object Landing : Screen("landing")
     object Home : Screen("home")
     object Orders : Screen("orders")
+    object BatchDetail : Screen("batch-detail/{batchId}") {
+        fun createRoute(batchId: String) = "batch-detail/${Uri.encode(batchId)}"
+    }
     object FetchVerification : Screen("fetch-verification")
     object DeliveryExecution : Screen("delivery-execution/{orderId}") {
         fun createRoute(orderId: String) = "delivery-execution/$orderId"
@@ -75,6 +82,9 @@ fun NavGraph() {
         composable(Screen.Onboarding.route) {
             OnboardingScreen(navController)
         }
+        composable(Screen.PlanSelection.route) {
+            PlanSelectionScreen(navController)
+        }
         composable(Screen.Landing.route) {
             LandingScreen(navController)
         }
@@ -83,6 +93,14 @@ fun NavGraph() {
         }
         composable(Screen.Orders.route) {
             OrdersScreen(navController)
+        }
+        composable(
+            route = Screen.BatchDetail.route,
+            arguments = listOf(navArgument("batchId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val encodedBatchId = backStackEntry.arguments?.getString("batchId") ?: ""
+            val batchId = Uri.decode(encodedBatchId)
+            BatchDetailScreen(navController, batchId)
         }
         composable(Screen.FetchVerification.route) {
             FetchVerificationScreen(navController)

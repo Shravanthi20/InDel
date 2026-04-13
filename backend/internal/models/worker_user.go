@@ -3,8 +3,8 @@ package models
 import "time"
 
 type User struct {
-	ID        uint   `gorm:"primaryKey"`
-	Phone     string `gorm:"uniqueIndex"`
+	ID           uint   `gorm:"primaryKey"`
+	Phone        string `gorm:"uniqueIndex"`
 	Email        string
 	PasswordHash string `gorm:"column:password_hash"`
 	Role         string
@@ -13,9 +13,9 @@ type User struct {
 }
 
 type AuthToken struct {
-	ID        uint      `gorm:"primaryKey"`
-	UserID    uint      `gorm:"index"`
-	Token     string    `gorm:"uniqueIndex"`
+	ID        uint   `gorm:"primaryKey"`
+	UserID    uint   `gorm:"index"`
+	Token     string `gorm:"uniqueIndex"`
 	ExpiresAt time.Time
 	CreatedAt time.Time
 }
@@ -47,6 +47,7 @@ type Zone struct {
 type Policy struct {
 	ID            uint `gorm:"primaryKey"`
 	WorkerID      uint
+	PlanID        string
 	Status        string
 	PremiumAmount float64
 	PolicyCycleID uint
@@ -61,7 +62,7 @@ type Claim struct {
 	ClaimAmount    float64
 	Status         string
 	FraudVerdict   string
-	ManualReviewAt *time.Time
+	ManualReviewAt *time.Time `gorm:"column:manual_reviewed_at"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -80,15 +81,13 @@ type Order struct {
 	WorkerID        uint
 	ZoneID          uint
 	OrderValue      float64
-	Status          string
-	PickupArea      string
-	DropArea        string
-	DistanceKM      float64
-	DeliveredAt     *time.Time
-	SourceNode      string
-	DestinationNode string
-	CurrentNode     string
-	Route           string
+	SourceNode      string // e.g., "Tambaram"
+	DestinationNode string // e.g., "Pondicherry"
+	CurrentNode     string // e.g., "Chennai" (updated as order moves)
+	Route           string // e.g., "Tambaram,Chennai,Pondicherry" (comma-separated path)
+	VehicleType     string // e.g., "bike", "van", "truck"
+	VehicleCapacity int    // e.g., 15 (kg)
+	AllowedZones    string // comma-separated zone IDs or names
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -107,23 +106,27 @@ type WeeklyPolicyCycle struct {
 }
 
 type PremiumPayment struct {
-	ID             uint      `gorm:"primaryKey"`
-	WorkerID       uint      `gorm:"index"`
-	PolicyCycleID  uint      `gorm:"index"`
+	ID             uint `gorm:"primaryKey"`
+	WorkerID       uint `gorm:"index"`
+	PolicyCycleID  uint `gorm:"index"`
 	Amount         float64
 	Status         string
-	IdempotencyKey string    `gorm:"uniqueIndex"`
+	IdempotencyKey string `gorm:"uniqueIndex"`
 	Date           time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
 
 type EarningsBaseline struct {
-	WorkerID       uint      `gorm:"primaryKey"`
+	WorkerID       uint `gorm:"primaryKey"`
 	BaselineAmount float64
 	LastUpdatedAt  time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+func (EarningsBaseline) TableName() string {
+	return "earnings_baseline"
 }
 
 type WeeklyEarningsSummary struct {
@@ -135,6 +138,10 @@ type WeeklyEarningsSummary struct {
 	ClaimEligible bool
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+func (WeeklyEarningsSummary) TableName() string {
+	return "weekly_earnings_summary"
 }
 
 type Disruption struct {
@@ -154,7 +161,7 @@ type Disruption struct {
 }
 
 type Payout struct {
-	ID            uint `gorm:"primaryKey"`
+	ID             uint `gorm:"primaryKey"`
 	ClaimID        uint `gorm:"uniqueIndex"`
 	WorkerID       uint `gorm:"index"`
 	Amount         float64
@@ -172,7 +179,7 @@ type Payout struct {
 
 type PayoutAttempt struct {
 	ID        uint `gorm:"primaryKey"`
-	PayoutID   uint `gorm:"index"`
+	PayoutID  uint `gorm:"index"`
 	AttemptNo int
 	Status    string
 	Error     string
@@ -180,7 +187,7 @@ type PayoutAttempt struct {
 }
 
 type KafkaEventLog struct {
-	ID          uint `gorm:"primaryKey"`
+	ID          uint   `gorm:"primaryKey"`
 	Topic       string `gorm:"index"`
 	EventType   string
 	PayloadJSON string `gorm:"type:text"`
@@ -188,7 +195,7 @@ type KafkaEventLog struct {
 }
 
 type SyntheticGenerationRun struct {
-	ID                 uint `gorm:"primaryKey"`
+	ID                 uint   `gorm:"primaryKey"`
 	RunID              string `gorm:"uniqueIndex"`
 	Seed               int
 	Scenario           string
@@ -204,10 +211,10 @@ type SyntheticGenerationRun struct {
 }
 
 type Notification struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	WorkerID  uint           `gorm:"index" json:"worker_id"`
-	Type      string         `gorm:"size:50" json:"type"`
-	Message   string         `gorm:"type:text" json:"message"`
-	ReadAt    *time.Time     `json:"read_at"`
-	CreatedAt time.Time      `json:"created_at"`
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	WorkerID  uint       `gorm:"index" json:"worker_id"`
+	Type      string     `gorm:"size:50" json:"type"`
+	Message   string     `gorm:"type:text" json:"message"`
+	ReadAt    *time.Time `json:"read_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }

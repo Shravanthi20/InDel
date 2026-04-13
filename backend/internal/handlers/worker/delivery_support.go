@@ -21,20 +21,20 @@ func GetOrderDetail(c *gin.Context) {
 		orderNumID, parseOrderErr := parseOrderID(orderID)
 		if parseWorkerErr == nil && parseOrderErr == nil {
 			type row struct {
-				ID             uint    `gorm:"column:id"`
-				Status         string  `gorm:"column:status"`
-				PickupArea     string  `gorm:"column:pickup_area"`
-				DropArea       string  `gorm:"column:drop_area"`
-				DistanceKm     float64 `gorm:"column:distance_km"`
-				TipInr         float64 `gorm:"column:tip_inr"`
-				DeliveryFeeInr float64 `gorm:"column:delivery_fee_inr"`
-				CreatedAt      string  `gorm:"column:created_at"`
-				ZoneName       string  `gorm:"column:zone_name"`
-				ZoneLevel      string  `gorm:"column:zone_level"`
-				SourceNode     string  `gorm:"column:source_node"`
-				DestinationNode string `gorm:"column:destination_node"`
-				CurrentNode    string  `gorm:"column:current_node"`
-				Route          string  `gorm:"column:route"`
+				ID              uint    `gorm:"column:id"`
+				Status          string  `gorm:"column:status"`
+				PickupArea      string  `gorm:"column:pickup_area"`
+				DropArea        string  `gorm:"column:drop_area"`
+				DistanceKm      float64 `gorm:"column:distance_km"`
+				TipInr          float64 `gorm:"column:tip_inr"`
+				DeliveryFeeInr  float64 `gorm:"column:delivery_fee_inr"`
+				CreatedAt       string  `gorm:"column:created_at"`
+				ZoneName        string  `gorm:"column:zone_name"`
+				ZoneLevel       string  `gorm:"column:zone_level"`
+				SourceNode      string  `gorm:"column:source_node"`
+				DestinationNode string  `gorm:"column:destination_node"`
+				CurrentNode     string  `gorm:"column:current_node"`
+				Route           string  `gorm:"column:route"`
 			}
 			var r row
 			err := workerDB.Raw(`
@@ -68,7 +68,7 @@ func GetOrderDetail(c *gin.Context) {
 					"pickup_area":      r.PickupArea,
 					"drop_area":        r.DropArea,
 					"distance_km":      r.DistanceKm,
-					"earning_inr":      totalDeliveryEarningINR(r.DeliveryFeeInr, r.TipInr),
+					"earning_inr":      totalDeliveryEarningINR(r.TipInr),
 					"tip_inr":          r.TipInr,
 					"status":           r.Status,
 					"assigned_at":      r.CreatedAt,
@@ -106,8 +106,8 @@ func SendCustomerCode(c *gin.Context) {
 	}
 	orderID := c.Param("order_id")
 	c.JSON(200, gin.H{
-		"message":      "customer_code_sent",
-		"order_id":     orderID,
+		"message":       "customer_code_sent",
+		"order_id":      orderID,
 		"customer_code": "1234",
 	})
 }
@@ -160,9 +160,9 @@ func GetZoneConfig(c *gin.Context) {
 			`, workerIDUint).Scan(&r).Error
 			if r.ZoneName != "" {
 				c.JSON(200, gin.H{
-					"zone_id":                fmt.Sprintf("%d", r.ZoneID),
-					"name":                   r.ZoneName,
-					"require_ip_validation":  false,
+					"zone_id":               fmt.Sprintf("%d", r.ZoneID),
+					"name":                  r.ZoneName,
+					"require_ip_validation": false,
 				})
 				return
 			}
@@ -207,12 +207,12 @@ func GetSession(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-		"session_id":            sessionID,
-		"start_time":            timeNowMinus(90),
-		"end_time":              nil,
-		"status":                "active",
-		"deliveries_completed":  deliveriesCompleted,
-		"earnings_in_session":   float64(earningsInSession),
+		"session_id":           sessionID,
+		"start_time":           timeNowMinus(90),
+		"end_time":             nil,
+		"status":               "active",
+		"deliveries_completed": deliveriesCompleted,
+		"earnings_in_session":  float64(earningsInSession),
 	})
 }
 
@@ -258,7 +258,7 @@ func DemoAssignOrders(c *gin.Context) {
 }
 
 func DemoSimulateDeliveries(c *gin.Context) {
-	workerID, ok := requireAuth(c)
+	workerID, ok := requireDemoOperationRole(c)
 	if !ok {
 		return
 	}

@@ -12,9 +12,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -119,7 +117,7 @@ fun ClaimsContent(
             }
         } else {
             items(claims) { claim ->
-                ClaimCard(claim) {
+                ClaimCard(claim, navController) {
                     navController.navigate(Screen.ClaimDetail.createRoute(claim.claimId))
                 }
             }
@@ -132,16 +130,18 @@ fun ClaimsContent(
 }
 
 @Composable
-fun ClaimCard(claim: Claim, onClick: () -> Unit) {
+fun ClaimCard(claim: Claim, navController: NavController, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
                     val disruption = claim.disruptionType.replace("_", " ").uppercase()
                     Text(
                         text = disruption,
@@ -158,7 +158,9 @@ fun ClaimCard(claim: Claim, onClick: () -> Unit) {
             HorizontalDivider(color = BackgroundWarmWhite)
             Spacer(modifier = Modifier.height(12.dp))
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("Payout Amount", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                     Text("₹${claim.payoutAmount.toInt()}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = SuccessGreen)
@@ -172,6 +174,20 @@ fun ClaimCard(claim: Claim, onClick: () -> Unit) {
                 color = TextSecondary,
                 modifier = Modifier.padding(top = 8.dp)
             )
+
+            claim.claimReason?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(it, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+            }
+
+            if (!claim.mainCause.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Main cause: ${claim.mainCause}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary
+                )
+            }
         }
     }
 }

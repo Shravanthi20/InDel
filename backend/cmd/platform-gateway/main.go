@@ -8,8 +8,8 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
 	"github.com/Shravanthi20/InDel/backend/internal/handlers/platform"
+	"github.com/Shravanthi20/InDel/backend/internal/middleware"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -22,7 +22,7 @@ func main() {
 
 	// Create Gin router
 	router := gin.Default()
-	router.Use(cors.Default())
+	router.Use(middleware.CORS())
 
 	// Optional DB integration for platform webhooks.
 	cfg := config.Load()
@@ -37,6 +37,12 @@ func main() {
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "platform-gateway"})
+	})
+	router.GET("/api/v1/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"ok": true, "service": "platform-gateway", "time": "mock"})
+	})
+	router.GET("/api/v1/status", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "up", "environment": os.Getenv("INDEL_ENV")})
 	})
 
 	// API routes

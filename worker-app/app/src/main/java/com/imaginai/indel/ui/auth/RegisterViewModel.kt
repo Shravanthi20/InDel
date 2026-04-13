@@ -2,7 +2,10 @@ package com.imaginai.indel.ui.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
+import com.imaginai.indel.data.model.ZonePath
 import com.imaginai.indel.data.repository.AuthRepository
+import com.imaginai.indel.data.repository.WorkerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,8 +14,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val workerRepository: WorkerRepository
 ) : ViewModel() {
+    companion object {
+        private const val TAG = "RegisterViewModel"
+    }
 
     private val _username = MutableStateFlow("")
     val username = _username.asStateFlow()
@@ -29,6 +36,15 @@ class RegisterViewModel @Inject constructor(
     private val _confirmPassword = MutableStateFlow("")
     val confirmPassword = _confirmPassword.asStateFlow()
 
+    private val _zoneLevel = MutableStateFlow("")
+    val zoneLevel = _zoneLevel.asStateFlow()
+
+    private val _zoneName = MutableStateFlow("")
+    val zoneName = _zoneName.asStateFlow()
+
+    private val _availablePaths = MutableStateFlow<List<ZonePath>>(emptyList())
+    val availablePaths = _availablePaths.asStateFlow()
+
     private val _uiState = MutableStateFlow<RegisterUiState>(RegisterUiState.Idle)
     val uiState = _uiState.asStateFlow()
 
@@ -37,6 +53,81 @@ class RegisterViewModel @Inject constructor(
     fun onPhoneChanged(value: String) { _phone.value = value }
     fun onPasswordChanged(value: String) { _password.value = value }
     fun onConfirmPasswordChanged(value: String) { _confirmPassword.value = value }
+
+    fun onZoneLevelChanged(value: String) {
+        _zoneLevel.value = value
+        _zoneName.value = ""
+        _availablePaths.value = emptyList()
+        if (value.isNotBlank()) {
+            fetchZonePaths(value)
+        }
+    }
+
+    private fun fetchZonePaths(level: String) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Fetching zone paths for level=$level")
+                val response = workerRepository.getZonePaths(level.lowercase())
+                Log.d(TAG, "Zone path response: ${response.code()}")
+                
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val paths = mutableListOf<ZonePath>()
+                    
+                    body?.cities?.let { cities ->
+                        Log.d(TAG, "Processing ${cities.size} cities")
+                        cities.forEach { city ->
+                            paths.add(ZonePath(displayName = city, city = city))
+                        }
+                    }
+                    
+                    body?.cityPairs?.let { pairs ->
+                        Log.d(TAG, "Processing ${pairs.size} city pairs")
+                        pairs.forEach { pair ->
+                            paths.add(ZonePath(
+                                displayName = "${pair.from} to ${pair.to}" + (pair.state?.let { " (${it})" } ?: ""),
+                                fromCity = pair.from,
+                                toCity = pair.to
+                            ))
+                        }
+                    }
+
+                    if (paths.size > 10) {
+                        paths.subList(10, paths.size).clear()
+                    }
+                    
+                    // Fallback to existing paths if any
+                    if (paths.isEmpty() && body?.paths != null) {
+                        Log.d(TAG, "Using fallback paths")
+                        paths.addAll(body.paths)
+                        if (paths.size > 10) {
+                            paths.subList(10, paths.size).clear()
+                        }
+                    }
+                    
+                    Log.d(TAG, "Final paths count: ${paths.size}")
+                    _availablePaths.value = paths
+                    if (paths.isEmpty()) {
+                        _uiState.value = RegisterUiState.Error("No zone paths returned for selected level")
+                    } else {
+                        _uiState.value = RegisterUiState.Idle
+                    }
+                } else {
+                    val errorText = response.errorBody()?.string() ?: "Zone path fetch failed"
+                    Log.e(TAG, "fetchZonePaths failed status=${response.code()} body=$errorText")
+                    _uiState.value = RegisterUiState.Error("Unable to load zones (${response.code()})")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchZonePaths exception", e)
+                e.printStackTrace()
+                _uiState.value = RegisterUiState.Error(e.message ?: "Unable to load zones")
+            }
+        }
+    }
+
+    fun onZonePathSelected(path: ZonePath) {
+        _zoneName.value = path.displayName ?: ""
+    }
 
     private fun isValidEmail(email: String): Boolean {
         return email.contains("@") && email.substringAfter("@").contains(".")
@@ -50,8 +141,11 @@ class RegisterViewModel @Inject constructor(
         val emailVal = _email.value.trim()
         val phoneVal = _phone.value.trim()
         val usernameVal = _username.value.trim()
+        val zoneLevelVal = _zoneLevel.value
+        val zoneNameVal = _zoneName.value
 
-        if (usernameVal.isBlank() || emailVal.isBlank() || phoneVal.isBlank() || _password.value.isBlank()) {
+        if (usernameVal.isBlank() || emailVal.isBlank() || phoneVal.isBlank() || 
+            _password.value.isBlank() || zoneLevelVal.isBlank() || zoneNameVal.isBlank()) {
             _uiState.value = RegisterUiState.Error("Please fill all fields")
             return
         }
@@ -78,12 +172,15 @@ class RegisterViewModel @Inject constructor(
                     usernameVal,
                     phoneVal,
                     emailVal,
-                    _password.value
+                    _password.value,
+                    zoneLevelVal,
+                    zoneNameVal
                 )
                 if (response.isSuccessful) {
                     _uiState.value = RegisterUiState.Success
                 } else {
-                    _uiState.value = RegisterUiState.Error("Registration failed")
+                    val errorMsg = response.errorBody()?.string() ?: "Registration failed"
+                    _uiState.value = RegisterUiState.Error(errorMsg)
                 }
             } catch (e: Exception) {
                 _uiState.value = RegisterUiState.Error(e.message ?: "Unknown error")
