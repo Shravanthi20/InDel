@@ -1,5 +1,8 @@
 package com.imaginai.indel.ui.plan
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -23,6 +27,14 @@ import com.imaginai.indel.data.model.DeliveryPlan
 import com.imaginai.indel.data.model.Policy
 import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
+
+private tailrec fun Context.findMainActivity(): com.imaginai.indel.MainActivity? {
+    return when (this) {
+        is com.imaginai.indel.MainActivity -> this
+        is ContextWrapper -> baseContext.findMainActivity()
+        else -> null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +47,7 @@ fun PlanSelectionScreen(
     val selectedExpectedDeliveries by viewModel.selectedExpectedDeliveries.collectAsState()
     val isPaymentRequired by viewModel.isPaymentRequired.collectAsState()
     val currentPolicy by viewModel.currentPolicy.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(uiState) {
         if (uiState is PlanUiState.Skipped) {
@@ -76,7 +89,27 @@ fun PlanSelectionScreen(
                         onExpectedDeliveriesSelected = { viewModel.selectExpectedDeliveries(it) },
                         premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
                         upgradeFeeForSelection = { plan -> viewModel.calculateUpgradeFee(plan) },
-                        onConfirm = { viewModel.confirmSelection() },
+                        onConfirm = { totalPayment ->
+                            val amountInPaise = totalPayment * 100
+                            if (amountInPaise <= 0) {
+                                Toast.makeText(context, "Invalid payment amount", Toast.LENGTH_SHORT).show()
+                                return@PlanContent
+                            }
+
+                            val mainActivity = context.findMainActivity()
+                            if (mainActivity == null) {
+                                Toast.makeText(context, "Unable to open payment gateway", Toast.LENGTH_SHORT).show()
+                                return@PlanContent
+                            }
+
+                            mainActivity.startRazorpayCheckout(amountInPaise, "9876543210") { success, _, error ->
+                                if (success) {
+                                    viewModel.confirmSelection()
+                                } else {
+                                    Toast.makeText(context, error ?: "Payment failed or cancelled", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
                         onSkip = { viewModel.skipPlan() }
                     )
                 }
@@ -176,7 +209,7 @@ fun PlanContent(
     onExpectedDeliveriesSelected: (Int) -> Unit,
     premiumForSelection: (DeliveryPlan, Int?) -> Int,
     upgradeFeeForSelection: (DeliveryPlan) -> Int,
-    onConfirm: () -> Unit,
+    onConfirm: (Int) -> Unit,
     onSkip: () -> Unit
 ) {
     LazyColumn(
@@ -332,11 +365,11 @@ fun PlanContent(
                 if (isPaymentRequired) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
-                            onClick = onConfirm,
+                            onClick = { onConfirm(totalPayment) },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
                         ) {
-                            Text("Pay & Confirm Plan: ₹$totalPayment")
+                            Text("Touch Pay & Confirm Plan: ₹$totalPayment")
                         }
                         Text(
                             if (upgradeFee > 0) {

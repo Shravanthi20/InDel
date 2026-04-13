@@ -1,8 +1,5 @@
 package com.imaginai.indel.ui.claims
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,27 +10,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import androidx.core.content.FileProvider
 import com.imaginai.indel.data.model.Claim
 import com.imaginai.indel.data.model.WalletResponse
 import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
-import com.imaginai.indel.utils.ClaimPdfGenerator
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,46 +131,6 @@ fun ClaimsContent(
 
 @Composable
 fun ClaimCard(claim: Claim, navController: NavController, onClick: () -> Unit) {
-    val context = LocalContext.current
-    var isDownloading by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
-    
-    fun downloadClaimPdf() {
-        isDownloading = true
-        coroutineScope.launch(Dispatchers.Default) {
-            try {
-                val pdfFile = ClaimPdfGenerator.generateClaimPdf(context, claim)
-                if (pdfFile != null) {
-                    coroutineScope.launch(Dispatchers.Main) {
-                        isDownloading = false
-                        try {
-                            val uri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                pdfFile
-                            )
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(uri, "application/pdf")
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Open PDF with"))
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                } else {
-                    coroutineScope.launch(Dispatchers.Main) {
-                        isDownloading = false
-                    }
-                }
-            } catch (e: Exception) {
-                coroutineScope.launch(Dispatchers.Main) {
-                    isDownloading = false
-                }
-            }
-        }
-    }
-    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -236,40 +187,6 @@ fun ClaimCard(claim: Claim, navController: NavController, onClick: () -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary
                 )
-            }
-            
-            // Download Button
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = { downloadClaimPdf() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(36.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BrandOrange,
-                    contentColor = Color.White
-                ),
-                enabled = !isDownloading,
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    if (isDownloading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = Color.White,
-                            strokeWidth = 1.5.dp
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Generating...", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    } else {
-                        Icon(Icons.Default.FileDownload, contentDescription = "Download", modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Download PDF", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
             }
         }
     }

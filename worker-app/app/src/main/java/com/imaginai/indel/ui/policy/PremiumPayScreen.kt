@@ -1,5 +1,7 @@
 package com.imaginai.indel.ui.policy
 
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,6 +20,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.imaginai.indel.ui.theme.BrandBlue
 import com.imaginai.indel.ui.theme.TextSecondary
+
+private tailrec fun Context.findMainActivity(): com.imaginai.indel.MainActivity? {
+    return when (this) {
+        is com.imaginai.indel.MainActivity -> this
+        is ContextWrapper -> baseContext.findMainActivity()
+        else -> null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,10 +91,20 @@ fun PremiumPayScreen(
 
             Button(
                 onClick = { 
-                    val mainActivity = context as? com.imaginai.indel.MainActivity
                     val amountInPaise = (amount.toIntOrNull() ?: 0) * 100
+                    if (amountInPaise <= 0) {
+                        viewModel.setPaymentError("Invalid premium amount")
+                        return@Button
+                    }
+
+                    val mainActivity = context.findMainActivity()
+                    if (mainActivity == null) {
+                        viewModel.setPaymentError("Unable to open payment gateway")
+                        return@Button
+                    }
+
                     viewModel.setLoading(true)
-                    mainActivity?.startRazorpayCheckout(amountInPaise, "9876543210") { success, paymentId, error ->
+                    mainActivity.startRazorpayCheckout(amountInPaise, "9876543210") { success, paymentId, error ->
                         if (success) {
                             viewModel.recordPaymentSuccess(paymentId)
                         } else {
@@ -97,7 +117,7 @@ fun PremiumPayScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
                 enabled = uiState !is PayUiState.Loading && amount != ""
             ) {
-                Text("Pay Now", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Touch Pay", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
 
             if (uiState is PayUiState.Loading) {

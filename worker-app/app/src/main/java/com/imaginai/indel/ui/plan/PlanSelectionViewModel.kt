@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
@@ -114,19 +115,34 @@ class PlanSelectionViewModel @Inject constructor(
                 val premium = calculatePremium(plan, deliveries)
                 val upgradeFee = calculateUpgradeFee(plan)
                 val totalPayment = premium + upgradeFee
-                val response = workerRepository.selectPlan(
+                var response = workerRepository.selectPlan(
                     planId = plan.planId,
                     expectedDeliveries = deliveries,
                     paymentAmountInr = totalPayment,
                 )
 
+                // Backend may require a higher first-activation amount.
+                // If provided, retry once with required_amount_inr.
+                if (!response.isSuccessful) {
+                    val raw = response.errorBody()?.string().orEmpty()
+                    val parsed = parsePlanSelectionError(raw)
+                    if (parsed.errorCode == "insufficient_payment_amount" && parsed.requiredAmountInr != null && parsed.requiredAmountInr > totalPayment) {
+                        response = workerRepository.selectPlan(
+                            planId = plan.planId,
+                            expectedDeliveries = deliveries,
+                            paymentAmountInr = parsed.requiredAmountInr,
+                        )
+                    }
+                }
+
                 if (response.isSuccessful) {
                     val selectedFromApi = response.body()?.plan
+                    val apiDescription: String? = selectedFromApi?.description
                     val selectedPlan = selectedFromApi?.copy(
                         weeklyPremiumInr = premium,
                         weeklyPremiumMinInr = plan.weeklyPremiumMinInr,
                         weeklyPremiumMaxInr = plan.weeklyPremiumMaxInr,
-                        description = if (selectedFromApi.description.isBlank()) plan.description else selectedFromApi.description,
+                        description = if (apiDescription.isNullOrBlank()) plan.description else apiDescription,
                     ) ?: plan.copy(weeklyPremiumInr = premium)
 
                     _selectedPlan.value = selectedPlan
@@ -135,12 +151,37 @@ class PlanSelectionViewModel @Inject constructor(
                     _uiState.value = PlanUiState.SelectionComplete(cachedPlans, selectedPlan)
                     Log.d(TAG, "Plan ${plan.planId} selected with premium Rs.$premium, fee Rs.$upgradeFee and deliveries $deliveries")
                 } else {
-                    _uiState.value = PlanUiState.Error("Failed to confirm plan selection")
+                    val raw = response.errorBody()?.string().orEmpty()
+                    val parsed = parsePlanSelectionError(raw)
+                    val msg = parsed.message
+                        ?: parsed.errorCode
+                        ?: "Failed to confirm plan selection"
+                    _uiState.value = PlanUiState.Error(msg)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error confirming plan selection", e)
                 _uiState.value = PlanUiState.Error(e.message ?: "Failed to confirm plan selection")
             }
+        }
+    }
+
+    private data class PlanSelectionError(
+        val errorCode: String? = null,
+        val message: String? = null,
+        val requiredAmountInr: Int? = null,
+    )
+
+    private fun parsePlanSelectionError(raw: String): PlanSelectionError {
+        if (raw.isBlank()) return PlanSelectionError()
+        return try {
+            val json = JSONObject(raw)
+            PlanSelectionError(
+                errorCode = json.optString("error").ifBlank { null },
+                message = json.optString("message").ifBlank { null },
+                requiredAmountInr = if (json.has("required_amount_inr")) json.optInt("required_amount_inr") else null,
+            )
+        } catch (_: Exception) {
+            PlanSelectionError(message = raw)
         }
     }
 

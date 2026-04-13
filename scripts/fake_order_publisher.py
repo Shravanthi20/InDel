@@ -138,7 +138,7 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
     from_lon = pair.get("from_lon")
     to_lat = pair.get("to_lat")
     to_lon = pair.get("to_lon")
-    delivery_fee_inr = int(distance * 2) if zone_type == "inter-state" else int(distance * 1.2)
+    delivery_fee_inr = int(distance * 2) if zone_type in ("zone_c", "inter-state") else int(distance * 1.2)
     zone_route_path = random_zone_route_path()
     eligibility = determine_zone_and_vehicle(from_city, to_city, CITY_STATE_LOOKUP)
     return {
@@ -160,6 +160,8 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
         "zone_route_path": zone_route_path,
         "delivery_fee_inr": delivery_fee_inr,
         "zone_id": zone_id,
+        "zone_level": "A" if zone_type == "zone_a" else "B" if zone_type == "zone_b" else "C" if zone_type == "zone_c" else "",
+        "source_zone_file": "zone_a.json" if zone_type == "zone_a" else "zone_b.json" if zone_type == "zone_b" else "zone_c.json" if zone_type == "zone_c" else "",
         "status": "assigned",
         "assigned_at": now_iso(),
         "source": "fake-order-publisher",
@@ -182,6 +184,67 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
         # --- Current node ---
         "current_node": from_city,
     }
+
+
+def build_zone_a_pair_dicts(zone_a_cities: list[str]) -> list[dict]:
+    pair_dicts = []
+    for city in zone_a_cities:
+        state = CITY_STATE_LOOKUP.get(city, "Unknown")
+        pair_dicts.append(
+            {
+                "from": city,
+                "to": city,
+                "from_state": state,
+                "to_state": state,
+                "distance_km": 1.0,
+                "from_lat": 0,
+                "from_lon": 0,
+                "to_lat": 0,
+                "to_lon": 0,
+            }
+        )
+    return pair_dicts
+
+
+def build_all_pairs(zone_a_pairs: list[str], zone_b_pairs: list[dict], zone_c_pairs: list[dict]) -> list[tuple[dict, str]]:
+    zone_a_pair_dicts = build_zone_a_pair_dicts(zone_a_pairs)
+    return (
+        [(pair, "zone_a") for pair in zone_a_pair_dicts]
+        + [(pair, "zone_b") for pair in zone_b_pairs]
+        + [(pair, "zone_c") for pair in zone_c_pairs]
+    )
+
+
+def publish_one_cycle(args, all_pairs: list[tuple[dict, str]], cycle_index: int, global_order_index: int) -> tuple[int, int, int]:
+    published_count = 0
+    failed_count = 0
+    order_index = global_order_index
+
+    print(f"\n=== Publish Cycle {cycle_index} ===")
+    print(f"Routes considered: {len(all_pairs)} | Orders per route: {args.orders_per_run}")
+
+    for pair_index, (pair, zone_type) in enumerate(all_pairs):
+        for route_order_index in range(args.orders_per_run):
+            order_index += 1
+            payload = random_order_from_pair(order_index, pair, zone_type, args.zone_id or 1)
+            status, response_text = post_json(args.url, payload, args.timeout_seconds, retries=2)
+            print(
+                f"  -> {payload['order_id']} {payload['from_city']}->{payload['to_city']} "
+                f"[{payload.get('source_zone_file', zone_type)}] status={status}"
+            )
+
+            if status >= 400:
+                print(f"     error={response_text}")
+                failed_count += 1
+            else:
+                published_count += 1
+
+            is_last_order = pair_index == len(all_pairs) - 1 and route_order_index == args.orders_per_run - 1
+            if not is_last_order:
+                time.sleep(0.005)
+
+    print(f"Cycle {cycle_index} done. published={published_count}, failed={failed_count}")
+    return published_count, failed_count, order_index
 def reset_backend_orders(reset_url: str, timeout: int):
     print(f"Resetting backend orders via {reset_url} ...")
     try:
@@ -541,43 +604,47 @@ def main() -> None:
 
     print(f"Publishing to: {args.url}")
     print(f"Available orders URL: {args.available_url}")
-    print(f"Plan: generate 5 orders for the first {MAX_ZONE_NAMES_PER_LEVEL} zone names in each zone level")
-
-    # Convert zone_a city strings into pair dicts
-    zone_a_pair_dicts = [
-        {"from": city, "to": city, "from_state": "", "to_state": "", "distance_km": 1.0, "from_lat": 0, "from_lon": 0, "to_lat": 0, "to_lon": 0}
-        for city in zone_a_pairs
-    ]
-
-    # Generate and publish new orders for the first zone names in each level with throttling
-    all_pairs = (
-        [(pair, "local") for pair in zone_a_pair_dicts] +
-        [(pair, "intra-zone") for pair in zone_b_pairs] +
-        [(pair, "inter-state") for pair in zone_c_pairs]
+    print(
+        f"Zone sources: zone_a.json / zone_b.json / zone_c.json "
+        f"(first {MAX_ZONE_NAMES_PER_LEVEL} route entries from each)."
     )
-    published_count = 0
-    failed_count = 0
-    orders_per_route = ORDERS_PER_ZONE_NAME
-    order_index = 0
-    for pair_index, (pair, zone_type) in enumerate(all_pairs):
-        for route_order_index in range(orders_per_route):
-            order_index += 1
-            payload = random_order_from_pair(order_index, pair, zone_type, args.zone_id or 1)
-            status, response_text = post_json(args.url, payload, args.timeout_seconds, retries=2)
-            print(f"  -> {payload['order_id']} {payload['from_city']}->{payload['to_city']} status={status}")
-            if status >= 400:
-                print(f"     error={response_text}")
-                failed_count += 1
-            else:
-                published_count += 1
+    print(f"Mode: {'continuous' if args.continuous else f'{args.runs} run(s)'} | interval={args.interval_seconds}s | orders-per-run={args.orders_per_run}")
 
-            # Throttle publishing: 5ms delay between orders to allow backend to keep up
-            # This prevents overwhelming the backend while still being reasonably fast
-            is_last_order = pair_index == len(all_pairs) - 1 and route_order_index == orders_per_route - 1
-            if not is_last_order:
-                time.sleep(0.005)
-    
-    print(f"\nDone. {published_count} orders published, {failed_count} failed.")
+    all_pairs = build_all_pairs(zone_a_pairs, zone_b_pairs, zone_c_pairs)
+    if not all_pairs:
+        print("No zone pairs loaded; aborting publish.")
+        return
+
+    total_published = 0
+    total_failed = 0
+    cycle_count = 0
+    order_index = 0
+
+    try:
+        while args.continuous or cycle_count < args.runs:
+            cycle_count += 1
+
+            if args.fetch:
+                available = fetch_available_orders(args.available_url, args.timeout_seconds, limit=20, zone_id=args.zone_id)
+                print(f"\n=== Fetch Cycle {cycle_count} ===")
+                print(f"Fetched {len(available)} currently available orders")
+            else:
+                published, failed, order_index = publish_one_cycle(args, all_pairs, cycle_count, order_index)
+                total_published += published
+                total_failed += failed
+
+            if args.show_deliveries:
+                deliveries = fetch_deliveries(args.deliveries_url, args.timeout_seconds, limit=10, zone_id=args.zone_id)
+                print(f"Recent delivered orders: {len(deliveries)}")
+
+            should_continue = args.continuous or cycle_count < args.runs
+            if should_continue:
+                print(f"Sleeping {args.interval_seconds}s before next cycle...")
+                time.sleep(max(1, args.interval_seconds))
+    except KeyboardInterrupt:
+        print("\nStopped by user.")
+
+    print(f"\nDone. total_published={total_published}, total_failed={total_failed}, cycles={cycle_count}")
 
 if __name__ == "__main__":
     main()
