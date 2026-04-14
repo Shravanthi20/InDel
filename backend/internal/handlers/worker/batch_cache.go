@@ -142,50 +142,6 @@ func refreshBatchSnapshotsForOrder(order map[string]any) {
 	}
 }
 
-func refreshBatchSnapshotsForOrderID(orderID string) {
-	order, ok := findStoredOrder(orderID)
-	if !ok {
-		return
-	}
-	refreshBatchSnapshotsForOrder(order)
-}
-
-func listCachedSnapshotsByStatusAcrossScopes(allow func(string) bool, excludedScopes ...string) []gin.H {
-	excluded := map[string]struct{}{}
-	for _, scope := range excludedScopes {
-		excluded[scope] = struct{}{}
-	}
-
-	store.batchMu.Lock()
-	defer store.batchMu.Unlock()
-
-	if len(store.batchCache) == 0 {
-		return []gin.H{}
-	}
-
-	keys := make([]string, 0)
-	snapshotsByKey := make(map[string]gin.H)
-	for workerID, workerBuckets := range store.batchCache {
-		if _, skip := excluded[workerID]; skip {
-			continue
-		}
-		for key, snapshot := range workerBuckets {
-			status, _ := snapshot["status"].(string)
-			if !allow(status) {
-				continue
-			}
-			snapshotsByKey[workerID+"|"+key] = snapshot
-			keys = append(keys, workerID+"|"+key)
-		}
-	}
-
-	sort.Strings(keys)
-	result := make([]gin.H, 0, len(keys))
-	for _, key := range keys {
-		result = append(result, snapshotsByKey[key])
-	}
-	return result
-}
 
 func readBatchRowsForWorker(workerID string) []batchOrderRow {
 	rows := make([]batchOrderRow, 0)
