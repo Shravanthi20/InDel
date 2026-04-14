@@ -1,3 +1,11 @@
+data class WorkerZone(
+    @SerializedName("zone_level") val zoneLevel: String? = null,
+    @SerializedName("zone_name") val zoneName: String? = null,
+    @SerializedName("zone_id") val zoneId: Int? = null,
+    @SerializedName("city") val city: String? = null,
+    @SerializedName("from_city") val fromCity: String? = null,
+    @SerializedName("to_city") val toCity: String? = null
+)
 package com.imaginai.indel.data.model
 
 import com.google.gson.annotations.SerializedName

@@ -12,27 +12,67 @@ def parse_cities(file_path):
         reader = csv.DictReader(csvfile)
         for row in reader:
             state = row['State'].strip()
-            city = row['Location'].split(' Latitude')[0].strip()
-            cities.append((state, city))
-            states[state].append(city)
+            location = row['Location'].split(' Latitude')[0].strip()
+            lat = float(row['Latitude']) if row['Latitude'] else None
+            lon = float(row['Longitude']) if row['Longitude'] else None
+            city_obj = {
+                'name': location,
+                'state': state,
+                'latitude': lat,
+                'longitude': lon
+            }
+            cities.append(city_obj)
+            states[state].append(city_obj)
     return cities, states
 
-cities, states = parse_cities('Indian Cities Geo Data.csv')
+cities, states = parse_cities(r'C:\Users\gayat\projects\get_into\InDel\Indian Cities Geo Data.csv')
 
-# Zone A: unique city names
-zone_a = sorted(set(city for _, city in cities))
+# Zone A: unique city objects (first 15)
+zone_a = []
+seen = set()
+for city in cities:
+    key = (city['name'], city['state'])
+    if key not in seen:
+        zone_a.append(city)
+        seen.add(key)
+    if len(zone_a) == 15:
+        break
 
-# Zone B: city-to-city pairs in the same state
+# Zone B: city-to-city pairs in the same state (first 15)
 zone_b = []
 for state, city_list in states.items():
-    for c1, c2 in combinations(sorted(set(city_list)), 2):
-        zone_b.append({'from': c1, 'to': c2, 'state': state})
+    city_list = [c for c in city_list if c['latitude'] is not None and c['longitude'] is not None]
+    for c1, c2 in combinations(city_list, 2):
+        zone_b.append({
+            'from': c1['name'],
+            'to': c2['name'],
+            'state': state,
+            'from_lat': c1['latitude'],
+            'from_lon': c1['longitude'],
+            'to_lat': c2['latitude'],
+            'to_lon': c2['longitude']
+        })
+        if len(zone_b) == 15:
+            break
+    if len(zone_b) == 15:
+        break
 
-# Zone C: city-to-city pairs in different states
+# Zone C: city-to-city pairs in different states (first 15)
 zone_c = []
-for (state1, city1), (state2, city2) in combinations(sorted(set(cities)), 2):
-    if state1 != state2:
-        zone_c.append({'from': city1, 'to': city2, 'from_state': state1, 'to_state': state2})
+for c1, c2 in combinations(cities, 2):
+    if c1['state'] != c2['state'] and c1['latitude'] is not None and c1['longitude'] is not None and c2['latitude'] is not None and c2['longitude'] is not None:
+        zone_c.append({
+            'from': c1['name'],
+            'to': c2['name'],
+            'from_state': c1['state'],
+            'to_state': c2['state'],
+            'from_lat': c1['latitude'],
+            'from_lon': c1['longitude'],
+            'to_lat': c2['latitude'],
+            'to_lon': c2['longitude']
+        })
+        if len(zone_c) == 15:
+            break
 
 # Store as JSON for API use
 with open('zone_a.json', 'w', encoding='utf-8') as f:

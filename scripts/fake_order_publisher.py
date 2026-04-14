@@ -47,14 +47,57 @@ ORDERS_PER_ZONE_NAME = 5
 
 
 # Load zone pairs from zone_a.json (same city), zone_b.json (intra-state) and zone_c.json (inter-state)
+import requests
 def load_zone_pairs():
-    base_dir = os.path.dirname(__file__)
-    with open(os.path.join(base_dir, '../zone_a.json'), encoding='utf-8') as f:
-        zone_a = json.load(f)
-    with open(os.path.join(base_dir, '../zone_b.json'), encoding='utf-8') as f:
-        zone_b = json.load(f)
-    with open(os.path.join(base_dir, '../zone_c.json'), encoding='utf-8') as f:
-        zone_c = json.load(f)
+    """
+    Fetches the first 15 zones for each level from the zones API endpoint.
+    """
+    # Go backend endpoint: http://<host>:8001/api/v1/platform/zone-paths?type=a|b|c
+    api_url = os.getenv("ZONES_API_URL", f"http://{DEFAULT_HOST}:8001/api/v1/platform/zone-paths?type=")
+
+    def fetch(level):
+        try:
+            url = f"{api_url}{level}"
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if level == 'a':
+                # Go backend returns {"cities": [...]}
+                cities = data.get("cities", [])
+                # Convert to list of city names for build_zone_a_pair_dicts
+                return [c["city"] if isinstance(c, dict) and "city" in c else c for c in cities][:MAX_ZONE_NAMES_PER_LEVEL]
+            else:
+                # Go backend returns {"zones": [...]}
+                zones = data.get("zones", [])
+                # Each zone is a dict with at least city, state
+                # For zone_b and zone_c, convert to the expected dict format
+                result = []
+                for z in zones[:MAX_ZONE_NAMES_PER_LEVEL]:
+                    # Defensive: handle both string and dict
+                    if isinstance(z, dict):
+                        city = z.get("city") or z.get("zone_name")
+                        state = z.get("zone_state") or z.get("state")
+                        result.append({
+                            "from": city,
+                            "to": city,
+                            "from_state": state,
+                            "to_state": state,
+                            "distance_km": 1.0,
+                            "from_lat": z.get("lat", 0.0),
+                            "from_lon": z.get("lon", 0.0),
+                            "to_lat": z.get("lat", 0.0),
+                            "to_lon": z.get("lon", 0.0),
+                        })
+                    else:
+                        result.append(z)
+                return result
+        except Exception as e:
+            print(f"Failed to fetch zones for level {level}: {e}")
+            return []
+
+    zone_a = fetch('a')
+    zone_b = fetch('b')
+    zone_c = fetch('c')
     return zone_a, zone_b, zone_c
 
 
@@ -189,24 +232,48 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
 
 # Patch: preload zone_b as lookup for lat/lon
 def build_zone_a_pair_dicts(zone_a_cities: list[str], zone_b_by_from: dict) -> list[dict]:
+    """
+    For each city in zone_a, try to find lat/lon from zone_b (if available), else set to 0.0.
+    """
     pair_dicts = []
+    # Try to load city geo info from Indian Cities Geo Data.csv
+    import csv
+    import os
+    geo_lookup = {}
+    csv_path = os.path.join(os.path.dirname(__file__), '../Indian Cities Geo Data.csv')
+    try:
+        with open(csv_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                city_name = row['Location'].replace(' Latitude and Longitude', '').strip()
+                state = row['State'].strip()
+                lat = float(row['Latitude']) if 'Latitude' in row and row['Latitude'] else 0.0
+                lon = float(row['Longitude']) if 'Longitude' in row and row['Longitude'] else 0.0
+                geo_lookup[city_name] = (state, lat, lon)
+    except Exception:
+        pass
+
     for city in zone_a_cities:
-        state = CITY_STATE_LOOKUP.get(city, "Unknown")
-        entry = zone_b_by_from.get(city, {})
-        lat = entry.get("from_lat", 0.0)
-        lon = entry.get("from_lon", 0.0)
+        state, lat, lon = geo_lookup.get(city, (CITY_STATE_LOOKUP.get(city, "Unknown"), 0.0, 0.0))
         pair_dicts.append({
-            "from": city, "to": city,
-            "from_state": state, "to_state": state,
+            "from": city,
+            "to": city,
+            "from_state": state,
+            "to_state": state,
             "distance_km": 1.0,
-            "from_lat": lat, "from_lon": lon,
-            "to_lat": lat, "to_lon": lon,
+            "from_lat": lat,
+            "from_lon": lon,
+            "to_lat": lat,
+            "to_lon": lon,
         })
     return pair_dicts
 
 
 def build_all_pairs(zone_a_pairs: list[str], zone_b_pairs: list[dict], zone_c_pairs: list[dict]) -> list[tuple[dict, str]]:
-    zone_b_by_from = {entry["from"]: entry for entry in zone_b_pairs}
+    """
+    Returns a list of (pair, zone_type) for all levels, matching the new structure.
+    """
+    zone_b_by_from = {entry["from"]: entry for entry in zone_b_pairs if "from" in entry}
     zone_a_pair_dicts = build_zone_a_pair_dicts(zone_a_pairs, zone_b_by_from)
     return (
         [(pair, "zone_a") for pair in zone_a_pair_dicts]
@@ -221,10 +288,11 @@ def publish_one_cycle(args, all_pairs: list[tuple[dict, str]], cycle_index: int,
     order_index = global_order_index
 
     print(f"\n=== Publish Cycle {cycle_index} ===")
-    print(f"Routes considered: {len(all_pairs)} | Orders per route: {args.orders_per_run}")
+    print(f"Routes considered: {len(all_pairs)} | Orders per zone: random 10-30")
 
     for pair_index, (pair, zone_type) in enumerate(all_pairs):
-        for route_order_index in range(args.orders_per_run):
+        num_orders = random.randint(10, 30)
+        for route_order_index in range(num_orders):
             order_index += 1
             payload = random_order_from_pair(order_index, pair, zone_type, args.zone_id or 1)
             status, response_text = post_json(args.url, payload, args.timeout_seconds, retries=2)
@@ -239,7 +307,7 @@ def publish_one_cycle(args, all_pairs: list[tuple[dict, str]], cycle_index: int,
             else:
                 published_count += 1
 
-            is_last_order = pair_index == len(all_pairs) - 1 and route_order_index == args.orders_per_run - 1
+            is_last_order = pair_index == len(all_pairs) - 1 and route_order_index == num_orders - 1
             if not is_last_order:
                 time.sleep(0.005)
 

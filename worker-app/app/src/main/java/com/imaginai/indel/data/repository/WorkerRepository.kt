@@ -9,34 +9,32 @@ import javax.inject.Singleton
 @Singleton
 class WorkerRepository @Inject constructor(
     private val workerApiService: WorkerApiService,
-    private val platformApiService: PlatformApiService
+    private val platformApiService: PlatformApiService,
+    private val preferencesDataStore: com.imaginai.indel.data.local.PreferencesDataStore
 ) {
     // Profile
     suspend fun onboard(
         name: String,
-        zoneLevel: String? = null,
-        zoneName: String? = null,
-        zoneId: Int? = null,
-        city: String? = null,
-        fromCity: String? = null,
-        toCity: String? = null,
         vehicleType: String,
         vehicleName: String? = null,
         upiId: String
-    ) = workerApiService.onboard(
-        OnboardRequest(
-            name = name,
-            zoneLevel = zoneLevel,
-            zoneName = zoneName,
-            zoneId = zoneId,
-            city = city,
-            fromCity = fromCity,
-            toCity = toCity,
-            vehicleType = vehicleType,
-            vehicleName = vehicleName,
-            upiId = upiId
-        )
-    )
+    ) =
+        preferencesDataStore.getWorkerZone().firstOrNull()?.let { zone ->
+            workerApiService.onboard(
+                OnboardRequest(
+                    name = name,
+                    zoneLevel = zone.zoneLevel,
+                    zoneName = zone.zoneName,
+                    zoneId = zone.zoneId,
+                    city = zone.city,
+                    fromCity = zone.fromCity,
+                    toCity = zone.toCity,
+                    vehicleType = vehicleType,
+                    vehicleName = vehicleName,
+                    upiId = upiId
+                )
+            )
+        }
 
     suspend fun getProfile() = workerApiService.getProfile()
 
@@ -44,28 +42,25 @@ class WorkerRepository @Inject constructor(
 
     suspend fun updateProfile(
         name: String,
-        zoneLevel: String,
-        zoneName: String,
-        zoneId: Int? = null,
-        city: String? = null,
-        fromCity: String? = null,
-        toCity: String? = null,
         vehicleType: String,
         upiId: String
-    ) = workerApiService.updateProfile(
-        OnboardRequest(
-            name = name,
-            zoneLevel = zoneLevel,
-            zoneName = zoneName,
-            zoneId = zoneId,
-            city = city,
-            fromCity = fromCity,
-            toCity = toCity,
-            vehicleType = vehicleType,
-            vehicleName = null,
-            upiId = upiId
-        )
-    )
+    ) =
+        preferencesDataStore.getWorkerZone().firstOrNull()?.let { zone ->
+            workerApiService.updateProfile(
+                OnboardRequest(
+                    name = name,
+                    zoneLevel = zone.zoneLevel,
+                    zoneName = zone.zoneName,
+                    zoneId = zone.zoneId,
+                    city = zone.city,
+                    fromCity = zone.fromCity,
+                    toCity = zone.toCity,
+                    vehicleType = vehicleType,
+                    vehicleName = null,
+                    upiId = upiId
+                )
+            )
+        }
 
     // Zones
     suspend fun getZones() = platformApiService.getZones()
@@ -144,8 +139,16 @@ class WorkerRepository @Inject constructor(
     suspend fun skipPlan() = workerApiService.skipPlan()
 
     // Demo / Debug
-    suspend fun triggerDisruption(disruptionType: String, zoneLevel: String, zoneName: String) = 
-        workerApiService.triggerDisruption(DisruptionRequest(disruptionType, zoneLevel, zoneName))
+    suspend fun triggerDisruption(disruptionType: String) =
+        preferencesDataStore.getWorkerZone().firstOrNull()?.let { zone ->
+            workerApiService.triggerDisruption(
+                DisruptionRequest(
+                    disruptionType,
+                    zone.zoneLevel ?: "",
+                    zone.zoneName ?: ""
+                )
+            )
+        }
 
     suspend fun assignOrders(count: Int) = workerApiService.assignOrders(CountRequest(count))
 

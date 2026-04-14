@@ -22,6 +22,25 @@ class PreferencesDataStore @Inject constructor(
         private val AUTH_TOKEN = stringPreferencesKey("auth_token")
         private val WORKER_ID = stringPreferencesKey("worker_id")
         private val POLICY_CACHE = stringPreferencesKey("policy_cache")
+        private val WORKER_ZONE = stringPreferencesKey("worker_zone")
+    }
+
+    // Atomic WorkerZone cache methods (now instance)
+    suspend fun saveWorkerZone(zone: com.imaginai.indel.data.model.WorkerZone) {
+        val json = com.google.gson.Gson().toJson(zone)
+        context.dataStore.edit { preferences ->
+            preferences[WORKER_ZONE] = json
+        }
+    }
+
+    fun getWorkerZone(): Flow<com.imaginai.indel.data.model.WorkerZone?> = context.dataStore.data.map { preferences ->
+        preferences[WORKER_ZONE]?.let { json ->
+            try {
+                com.google.gson.Gson().fromJson(json, com.imaginai.indel.data.model.WorkerZone::class.java)
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 
     val authToken: Flow<String?> = context.dataStore.data.map { preferences ->

@@ -56,130 +56,144 @@ fun PolicyScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
-                )
-            )
-        }
-    ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier.padding(padding)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(BackgroundWarmWhite)
-            ) {
-                when (val state = uiState) {
-                    is PolicyUiState.Loading -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                val uiState by viewModel.uiState.collectAsState()
+                val isRefreshing by viewModel.isRefreshing.collectAsState()
+                val actionError by viewModel.actionError.collectAsState()
+                var showStopConfirm by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) {
+                    viewModel.loadPolicy()
+                }
+
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("Premium Plan", fontWeight = FontWeight.Bold) },
+                            navigationIcon = {
+                                IconButton(onClick = { navController.navigateUp() }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = BrandBlue,
+                                titleContentColor = Color.White,
+                                navigationIconContentColor = Color.White
+                            )
+                        )
+                    }
+                ) { padding ->
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = { viewModel.refresh() },
+                        modifier = Modifier.padding(padding)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(BackgroundWarmWhite)
                         ) {
-                            CircularProgressIndicator(color = BrandBlue)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Loading plan data...", color = TextSecondary, fontSize = 14.sp)
+                            when (val state = uiState) {
+                                is PolicyUiState.Loading -> {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        CircularProgressIndicator(color = BrandBlue)
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text("Loading plan data...", color = TextSecondary, fontSize = 14.sp)
+                                    }
+                                }
+                                is PolicyUiState.Success -> {
+                                    val policy = state.policy
+                                    if (policy.status == "inactive") {
+                                        // Show ML premium, plan details, and only "Start Plan" button
+                                        Column(
+                                            modifier = Modifier.fillMaxSize(),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Text("Your ML-calculated premium: \u20B9${policy.weeklyPremiumInr}", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Button(onClick = { viewModel.startPlanWithPayment(policy) }) {
+                                                Text("Start Plan")
+                                            }
+                                        }
+                                    } else if (policy.status == "active") {
+                                        // Show plan details, next due date, "Premium Payment" and "Stop Plan"
+                                        Column(
+                                            modifier = Modifier.fillMaxSize(),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Text("Plan is ACTIVE", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text("Next due date: ${policy.nextDueDate}", fontSize = 16.sp)
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Button(onClick = { viewModel.payWeeklyPremium() }) {
+                                                Text("Premium Payment")
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Button(onClick = { showStopConfirm = true }) {
+                                                Text("Stop Plan")
+                                            }
+                                        }
+                                    }
+                                }
+                                is PolicyUiState.Error -> ErrorState(state.message) { viewModel.loadPolicy() }
+                            }
+
+                            // Action-level error snackbar
+                            actionError?.let { err ->
+                                LaunchedEffect(err) {
+                                    kotlinx.coroutines.delay(3000)
+                                    viewModel.clearActionError()
+                                }
+                                Snackbar(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(16.dp),
+                                    containerColor = ErrorRed,
+                                    contentColor = Color.White
+                                ) { Text(err) }
+                            }
                         }
                     }
-                    is PolicyUiState.Success -> PremiumPlanContent(
-                        policy = state.policy,
-                        viewModel = viewModel,
-                        onStopPlan = { showStopConfirm = true }
-                    )
-                    is PolicyUiState.PaymentSuccess -> {
-                        PaymentSuccessBanner(
-                            basePremium = state.basePremium,
-                            lateFee = state.lateFee,
-                            totalPaid = state.totalPaid
-                        )
-                        LaunchedEffect(Unit) {
-                            kotlinx.coroutines.delay(2500)
-                            viewModel.loadPolicy()
+                }
+
+                // Stop Plan Confirmation Dialog
+                if (showStopConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showStopConfirm = false },
+                        title = { Text("Stop Premium Plan?", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Text("Are you sure you want to stop the plan?")
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Your coverage will end immediately. To restart, you'll need to pay the activation fee (2× weekly premium).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showStopConfirm = false
+                                    viewModel.stopPlan()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+                            ) { Text("Yes, Stop Plan") }
+                        },
+                        dismissButton = {
+                            OutlinedButton(onClick = { showStopConfirm = false }) {
+                                Text("Keep Plan")
+                            }
                         }
-                    }
-                    is PolicyUiState.PlanStopped -> {
-                        EmptyPlanState(
-                            message = "Plan stopped successfully.",
-                            onRestart = { viewModel.loadPolicy() }
-                        )
-                    }
-                    is PolicyUiState.Error -> ErrorState(state.message) { viewModel.loadPolicy() }
-                }
-
-                // Action-level error snackbar
-                actionError?.let { err ->
-                    LaunchedEffect(err) {
-                        kotlinx.coroutines.delay(3000)
-                        viewModel.clearActionError()
-                    }
-                    Snackbar(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                        containerColor = ErrorRed,
-                        contentColor = Color.White
-                    ) { Text(err) }
-                }
-            }
-        }
-    }
-
-    // ── Stop Plan Confirmation Dialog ──────────────────────────────────────
-    if (showStopConfirm) {
-        AlertDialog(
-            onDismissRequest = { showStopConfirm = false },
-            title = { Text("Stop Premium Plan?", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("Are you sure you want to stop the plan?")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Your coverage will end immediately. To restart, you'll need to pay the activation fee (2× weekly premium).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
                     )
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showStopConfirm = false
-                        viewModel.stopPlan()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
-                ) { Text("Yes, Stop Plan") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showStopConfirm = false }) {
-                    Text("Keep Plan")
-                }
             }
-        )
-    }
-}
-
-// ── Main Content ───────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PremiumPlanContent(
-    policy: Policy,
-    viewModel: PolicyViewModel,
-    onStopPlan: () -> Unit
-) {
-    val isActive = policy.status == "active"
-    val paymentEnabled = policy.nextPaymentEnabled ?: false
-    val isDeactivated = policy.coverageStatus.equals("Deactivated", ignoreCase = true)
-    val isGrace = policy.paymentStatus.equals("Eligible", ignoreCase = true) &&
-            (policy.graceDaysRemaining ?: 999) < (policy.gracePeriodDays ?: 2)
-    val lateFee = policy.lateFeeInr ?: 0
-    val basePremium = policy.weeklyPremiumInr
-    val totalDue = basePremium + lateFee
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

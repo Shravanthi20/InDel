@@ -11,6 +11,7 @@ class AuthRepository @Inject constructor(
     private val authApiService: AuthApiService,
     private val preferencesDataStore: PreferencesDataStore
 ) {
+
     suspend fun register(
         username: String,
         phone: String,
@@ -25,9 +26,16 @@ class AuthRepository @Inject constructor(
             response.body()?.let {
                 preferencesDataStore.saveAuthToken(it.token)
                 preferencesDataStore.saveWorkerId(it.workerId)
+                preferencesDataStore.saveWorkerZone(
+                    com.imaginai.indel.data.model.WorkerZone(
+                        zoneLevel = zoneLevel,
+                        zoneName = zoneName
+                    )
+                )
             }
         }
     }
+
 
     suspend fun login(identifier: String, password: String) =
         authApiService.login(LoginRequest(phone = identifier, password = password)).also { response ->
@@ -35,11 +43,13 @@ class AuthRepository @Inject constructor(
                 response.body()?.let {
                     preferencesDataStore.saveAuthToken(it.token)
                     preferencesDataStore.saveWorkerId(it.workerId)
+                    // WorkerZone must be fetched from profile after login if not present
                 }
             }
         }
 
     suspend fun sendOtp(phone: String) = authApiService.sendOtp(OtpSendRequest(phone))
+
 
     suspend fun verifyOtp(phone: String, otp: String) = 
         authApiService.verifyOtp(OtpVerifyRequest(phone, otp)).also { response ->
@@ -47,6 +57,7 @@ class AuthRepository @Inject constructor(
                 response.body()?.let {
                     preferencesDataStore.saveAuthToken(it.token)
                     preferencesDataStore.saveWorkerId(it.workerId)
+                    // WorkerZone must be fetched from profile after login if not present
                 }
             }
         }

@@ -27,7 +27,6 @@ import com.imaginai.indel.ui.delivery.SessionTrackingScreen
 import com.imaginai.indel.ui.notifications.NotificationsScreen
 import com.imaginai.indel.ui.profile.ProfileEditScreen
 import com.imaginai.indel.ui.payouts.PayoutHistoryScreen
-import com.imaginai.indel.ui.plan.PlanSelectionScreen
 import com.imaginai.indel.ui.debug.DevToolsScreen
 
 sealed class Screen(val route: String) {
@@ -36,7 +35,6 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object OTP : Screen("otp")
     object Onboarding : Screen("onboarding")
-    object PlanSelection : Screen("plan-selection")
     object Landing : Screen("landing")
     object Home : Screen("home")
     object Orders : Screen("orders")
@@ -81,9 +79,6 @@ fun NavGraph() {
         }
         composable(Screen.Onboarding.route) {
             OnboardingScreen(navController)
-        }
-        composable(Screen.PlanSelection.route) {
-            PlanSelectionScreen(navController)
         }
         composable(Screen.Landing.route) {
             LandingScreen(navController)

@@ -178,6 +178,13 @@ class RegisterViewModel @Inject constructor(
                     zoneNameVal
                 )
                 if (response.isSuccessful) {
+                    // Save atomic WorkerZone to cache
+                    authRepository.preferencesDataStore.saveWorkerZone(
+                        com.imaginai.indel.data.model.WorkerZone(
+                            zoneLevel = zoneLevelVal,
+                            zoneName = zoneNameVal
+                        )
+                    )
                     _uiState.value = RegisterUiState.Success
                 } else {
                     val errorMsg = response.errorBody()?.string() ?: "Registration failed"

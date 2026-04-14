@@ -28,7 +28,7 @@ export default function FraudQueue() {
     >
       <div className="grid gap-8">
         <Panel title="Security Flags" subtitle="Sorted by anomaly priority for manual review.">
-          {error ? <p className="text-[10px] font-black uppercase text-rose-600 mb-6 font-bold">{error}</p> : null}
+          {error ? <p className="text-[10px] font-black uppercase text-rose-600 mb-6">{error}</p> : null}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[11px]">
               <thead>

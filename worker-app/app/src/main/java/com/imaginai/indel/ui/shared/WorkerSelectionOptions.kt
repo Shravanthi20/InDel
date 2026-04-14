@@ -29,18 +29,8 @@ private val fourWheelerVehicleOptions: List<String> = listOf(
     "truck"
 )
 
-private val zoneNamesLevelA = listOf("Tambaram", "Chromepet", "Pallavaram", "Selaiyur", "Velachery", "Adyar")
-private val zoneNamesLevelB = listOf("Chennai Central", "Madurai", "Coimbatore", "Trichy", "Salem")
-private val zoneNamesLevelC = listOf("Chennai-Bangalore", "Chennai-Hyderabad", "Chennai-Mumbai", "Chennai-Delhi")
 
-fun zoneNamesForLevel(level: String): List<String> {
-    return when (level.trim().uppercase()) {
-        "A" -> zoneNamesLevelA
-        "B" -> zoneNamesLevelB
-        "C" -> zoneNamesLevelC
-        else -> emptyList()
-    }
-}
+// All zone names must come from backend/cached WorkerZone. No hardcoded lists.
 
 
 fun zoneBandFromLevel(level: String): Char? =
