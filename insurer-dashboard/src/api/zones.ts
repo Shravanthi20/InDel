@@ -1,4 +1,4 @@
-import client from '../../../platform-dashboard/src/api/client';
+import client from './client';
 
 // Get zone paths for a given type (a, b, c)
 export const getZonePaths = (type: 'a' | 'b' | 'c') =>
