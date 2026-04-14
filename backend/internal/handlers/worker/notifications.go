@@ -30,7 +30,7 @@ func GetNotifications(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			type row struct {
 				ID        uint   `gorm:"column:id"`
@@ -90,7 +90,7 @@ func RegisterFCMToken(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			_ = workerDB.Exec(
 				`INSERT INTO fcm_tokens (worker_id, token, device_name)

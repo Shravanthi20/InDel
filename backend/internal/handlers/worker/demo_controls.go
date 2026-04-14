@@ -199,7 +199,7 @@ func calculateDeliveryFee(distanceKm float64, isInterState bool) float64 {
 }
 
 func loadZoneIDs() ([]uint, error) {
-	if !hasDB() {
+	if !HasDB() {
 		return nil, fmt.Errorf("no database connection available")
 	}
 
@@ -300,7 +300,7 @@ func seedDemoOrdersForWorker(workerIDUint uint, count int) {
 		count = 3 // Default to 3 orders
 	}
 
-	if !hasDB() {
+	if !HasDB() {
 		log.Println("seedDemoOrdersForWorker: No database connection available")
 		return
 	}
@@ -387,7 +387,7 @@ func DemoReset(c *gin.Context) {
 	store.mu.Unlock()
 	resetLog = append(resetLog, "Cleared in-memory orders and batches")
 
-	if hasDB() && deleteDB {
+	if HasDB() && deleteDB {
 		if !allowDestructiveDemoDelete() {
 			c.JSON(403, gin.H{"error": "destructive_demo_delete_blocked", "message": "destructive demo delete is disabled in production unless INDEL_ALLOW_DESTRUCTIVE_OPS=true"})
 			return
@@ -415,7 +415,7 @@ func DemoReset(c *gin.Context) {
 		if result3.Error == nil {
 			resetLog = append(resetLog, fmt.Sprintf("Deleted %d orders", result3.RowsAffected))
 		}
-	} else if hasDB() {
+	} else if HasDB() {
 		resetLog = append(resetLog, "Skipped database deletion (set delete_db=true with confirm and reason to enable)")
 	}
 
@@ -438,7 +438,7 @@ func DemoTriggerDisruption(c *gin.Context) {
 	zone := bodyString(body, "zone", "Tambaram, Chennai")
 	msg := disruptionType + " detected in " + zone + ". You are protected."
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			_ = workerDB.Exec("INSERT INTO notifications (worker_id, type, message) VALUES (?, ?, ?)", workerIDUint, "disruption_alert", msg).Error
 		}
@@ -475,7 +475,7 @@ func DemoSimulateOrders(c *gin.Context) {
 		count = 1
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			if zoneIDs, zoneErr := loadZoneIDs(); zoneErr == nil {
 				seedDemoOrdersForZones(workerIDUint, zoneIDs, count)
@@ -510,7 +510,7 @@ func DemoSettleEarnings(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			_ = workerDB.Exec(
 				`UPDATE weekly_earnings_summary
@@ -550,7 +550,7 @@ func DemoResetZone(c *gin.Context) {
 	body := parseBody(c)
 	reason := strings.TrimSpace(bodyString(body, "reason", ""))
 
-	if hasDB() {
+	if HasDB() {
 		if !allowDestructiveDemoDelete() {
 			c.JSON(403, gin.H{"error": "destructive_demo_delete_blocked", "message": "destructive demo delete is disabled in production unless INDEL_ALLOW_DESTRUCTIVE_OPS=true"})
 			return
@@ -640,7 +640,7 @@ func requireRole(c *gin.Context, allowedRoles []string, errorCode string) (strin
 }
 
 func getWorkerRole(workerID string) string {
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, err := parseWorkerID(workerID); err == nil {
 			type userRoleRow struct {
 				Role string `gorm:"column:role"`

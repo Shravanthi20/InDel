@@ -286,7 +286,7 @@ func packRowsIntoBatches(rows []batchOrderRow) [][]batchOrderRow {
 	return result
 }
 
-func rowsToBatches(rows []batchOrderRow, status string) []gin.H {
+func rowsToBatches(rows []batchOrderRow, status string, includeCodes bool) []gin.H {
 	type grouped struct {
 		FromCity  string
 		ToCity    string
@@ -354,7 +354,7 @@ func rowsToBatches(rows []batchOrderRow, status string) []gin.H {
 					"pickupTime":      row.PickedUpAt,
 					"deliveryTime":    row.DeliveredAt,
 				}
-				if strings.EqualFold(strings.TrimSpace(g.ZoneLevel), "A") {
+				if includeCodes && strings.EqualFold(strings.TrimSpace(g.ZoneLevel), "A") {
 					orderPayload["deliveryCode"] = deliveryCodeFromOrderID(orderID)
 				}
 				orders = append(orders, orderPayload)
@@ -369,7 +369,7 @@ func rowsToBatches(rows []batchOrderRow, status string) []gin.H {
 				toCity = fromCity
 			}
 
-			batches = append(batches, gin.H{
+			batchPayload := gin.H{
 				"batchId":         batchID,
 				"batchKey":        fmt.Sprintf("%s#%02d", key, batchIndex+1),
 				"batchGroupKey":   key,
@@ -382,13 +382,17 @@ func rowsToBatches(rows []batchOrderRow, status string) []gin.H {
 				"maxWeight":       maxBatchWeightKg,
 				"orderCount":      len(orders),
 				"status":          batchStatusFromRows(batchRows, status),
-				"pickupCode":      pickupCodeFromBatchID(batchID),
-				"deliveryCode":    deliveryCodeFromBatchID(batchID),
 				"pickupTime":      pickupTime,
 				"deliveryTime":    deliveryTime,
 				"batchEarningInr": totalEarning,
 				"orders":          orders,
-			})
+			}
+			if includeCodes {
+				batchPayload["pickupCode"] = pickupCodeFromBatchID(batchID)
+				batchPayload["deliveryCode"] = deliveryCodeFromBatchID(batchID)
+			}
+
+			batches = append(batches, batchPayload)
 		}
 	}
 
@@ -413,7 +417,7 @@ func AcceptBatch(c *gin.Context) {
 		return
 	}
 
-	if !hasDB() {
+	if !HasDB() {
 		store.mu.Lock()
 
 		now := time.Now().UTC().Format(time.RFC3339)
@@ -619,7 +623,7 @@ func DeliverBatch(c *gin.Context) {
 		return
 	}
 
-	if !hasDB() {
+	if !HasDB() {
 		store.mu.Lock()
 		now := nowISO()
 		providedCode := strings.TrimSpace(req.DeliveryCode)
@@ -1082,11 +1086,11 @@ func GetAssignedBatches(c *gin.Context) {
 	} else {
 		batches = filterAssignedBatchesForScope(batches, workerOrderScope{})
 	}
-	c.JSON(200, gin.H{"batches": batches})
+	c.JSON(200, gin.H{"batches": sanitizeBatchSnapshotsForWorker(batches)})
 }
 
 func GetAvailableBatches(c *gin.Context) {
-	if hasDB() {
+	if HasDB() {
 		refreshBatchCache(availableBatchCacheScope)
 	}
 	limitStr := c.DefaultQuery("limit", "100")
@@ -1107,7 +1111,7 @@ func GetAvailableBatches(c *gin.Context) {
 	if len(batches) > limit {
 		batches = batches[:limit]
 	}
-	c.JSON(200, gin.H{"batches": batches})
+	c.JSON(200, gin.H{"batches": sanitizeBatchSnapshotsForWorker(batches)})
 }
 
 func GetDeliveredBatches(c *gin.Context) {
@@ -1115,9 +1119,9 @@ func GetDeliveredBatches(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if hasDB() {
+	if HasDB() {
 		refreshBatchCache(workerID)
 	}
 	batches := listCachedSnapshotsByStatus(workerID, batchStatusAllowedForDelivered)
-	c.JSON(200, gin.H{"batches": batches})
+	c.JSON(200, gin.H{"batches": sanitizeBatchSnapshotsForWorker(batches)})
 }

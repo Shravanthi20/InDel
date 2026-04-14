@@ -1,16 +1,74 @@
 package platform
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
 
-const zonePathLimit = 10
+const zonePathLimit = 15
+
+// --- City geo lookup (from CSV, loaded once) ---
+var (
+	cityGeoOnce sync.Once
+	cityGeoMap  map[string]struct {
+		State string
+		Lat   float64
+		Lon   float64
+	}
+	cityGeoErr error
+)
+
+func loadCityGeo(csvPath string) (map[string]struct {
+	State    string
+	Lat, Lon float64
+}, error) {
+	m := make(map[string]struct {
+		State    string
+		Lat, Lon float64
+	})
+	f, err := os.Open(csvPath)
+	if err != nil {
+		return m, err
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	records, err := r.ReadAll()
+	if err != nil {
+		return m, err
+	}
+	if len(records) < 1 {
+		return m, fmt.Errorf("empty csv")
+	}
+	header := make(map[string]int)
+	for i, col := range records[0] {
+		header[strings.ToLower(col)] = i
+	}
+	for _, row := range records[1:] {
+		city := strings.TrimSpace(strings.Split(row[header["location"]], " Latitude")[0])
+		state := strings.TrimSpace(row[header["state"]])
+		lat := 0.0
+		lon := 0.0
+		if idx, ok := header["latitude"]; ok {
+			fmt.Sscanf(row[idx], "%f", &lat)
+		}
+		if idx, ok := header["longitude"]; ok {
+			fmt.Sscanf(row[idx], "%f", &lon)
+		}
+		m[city] = struct {
+			State    string
+			Lat, Lon float64
+		}{state, lat, lon}
+	}
+	return m, nil
+}
 
 // CityState is a struct for city/state pairs
 var cityStateList = []struct {
@@ -51,7 +109,8 @@ func GetZonePaths(c *gin.Context) {
 
 		if err := query.Order("city ASC, name ASC").Scan(&rows).Error; err == nil {
 			if typeParam == "a" {
-				cities := make([]string, 0, len(rows))
+				// Always return a list of objects for zone A
+				cities := make([]gin.H, 0, len(rows))
 				seen := map[string]struct{}{}
 				for _, row := range rows {
 					city := strings.TrimSpace(row.City)
@@ -66,7 +125,22 @@ func GetZonePaths(c *gin.Context) {
 						continue
 					}
 					seen[key] = struct{}{}
-					cities = append(cities, city)
+					// Try to get geo info if available
+					geo := struct {
+						State    string
+						Lat, Lon float64
+					}{row.State, 0, 0}
+					if cityGeoMap != nil {
+						if g, ok := cityGeoMap[city]; ok {
+							geo = g
+						}
+					}
+					cities = append(cities, gin.H{
+						"city":  city,
+						"state": geo.State,
+						"lat":   geo.Lat,
+						"lon":   geo.Lon,
+					})
 				}
 				if len(cities) > zonePathLimit {
 					cities = cities[:zonePathLimit]
@@ -110,43 +184,57 @@ func GetZonePaths(c *gin.Context) {
 	var fileName string
 	switch typeParam {
 	case "a":
-		fileName = "/root/zone_a.json"
+		fileName = "zone_a.json"
 	case "b":
-		fileName = "/root/zone_b.json"
+		fileName = "zone_b.json"
 	case "c":
-		fileName = "/root/zone_c.json"
+		fileName = "zone_c.json"
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_type"})
 		return
 	}
 
-	f, err := os.Open(fileName)
-	if err == nil {
-		defer f.Close()
-		var data interface{}
-		if err := json.NewDecoder(f).Decode(&data); err == nil {
-			if typeParam == "a" {
-				if cities, ok := data.([]any); ok && len(cities) > zonePathLimit {
-					data = cities[:zonePathLimit]
+	if typeParam == "a" {
+		// Load city geo lookup once
+		cityGeoOnce.Do(func() {
+			cityGeoMap, cityGeoErr = loadCityGeo("Indian Cities Geo Data.csv")
+		})
+		f, err := os.Open(fileName)
+		if err == nil && cityGeoErr == nil {
+			defer f.Close()
+			var data []string
+			if err := json.NewDecoder(f).Decode(&data); err == nil {
+				limit := zonePathLimit
+				if len(data) < limit {
+					limit = len(data)
 				}
-				c.JSON(http.StatusOK, gin.H{"cities": data})
-				return
-			} else {
-				if pairs, ok := data.([]any); ok && len(pairs) > zonePathLimit {
-					data = pairs[:zonePathLimit]
+				cities := data[:limit]
+				result := make([]gin.H, 0, len(cities))
+				for _, city := range cities {
+					geo, ok := cityGeoMap[city]
+					if !ok {
+						geo = struct {
+							State    string
+							Lat, Lon float64
+						}{"Unknown", 0, 0}
+					}
+					result = append(result, gin.H{
+						"city":  city,
+						"state": geo.State,
+						"lat":   geo.Lat,
+						"lon":   geo.Lon,
+					})
 				}
-				c.JSON(http.StatusOK, gin.H{"zones": data})
+				c.JSON(http.StatusOK, gin.H{"cities": result})
 				return
 			}
 		}
-	}
-	// fallback to old logic if file not found or decode fails
-	if typeParam == "a" {
-		cities := make([]string, 0, len(cityStateList))
+		// fallback to old logic if file not found or decode fails
+		cities := make([]gin.H, 0, len(cityStateList))
 		for _, cs := range cityStateList {
-			cities = append(cities, cs.City)
+			cities = append(cities, gin.H{"city": cs.City, "state": cs.State, "lat": 0, "lon": 0})
 		}
-		sort.Strings(cities)
+		sort.Slice(cities, func(i, j int) bool { return fmt.Sprint(cities[i]["city"]) < fmt.Sprint(cities[j]["city"]) })
 		if len(cities) > zonePathLimit {
 			cities = cities[:zonePathLimit]
 		}

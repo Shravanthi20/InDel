@@ -25,13 +25,15 @@ func setupMockDB() *gorm.DB {
 
 	// Create tables using manual queries representing the schema used in queries
 	db.Exec(`
-		CREATE TABLE policies (worker_id INTEGER, status TEXT);
+		CREATE TABLE users (id INTEGER PRIMARY KEY, phone TEXT);
+		CREATE TABLE policies (id INTEGER PRIMARY KEY AUTOINCREMENT, worker_id INTEGER, plan_id TEXT, premium_amount REAL, status TEXT, created_at DATETIME, updated_at DATETIME);
+		CREATE TABLE active_policies (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER UNIQUE, policy_id INTEGER, zone TEXT, started_at DATETIME, updated_at DATETIME);
 		CREATE TABLE claims (id INTEGER PRIMARY KEY, disruption_id INTEGER, worker_id INTEGER, claim_amount REAL, status TEXT, fraud_verdict TEXT, created_at DATETIME, updated_at DATETIME);
 		CREATE TABLE premium_payments (amount REAL, status TEXT, worker_id INTEGER);
 		CREATE TABLE payouts (amount REAL, status TEXT);
-		CREATE TABLE zones (id INTEGER PRIMARY KEY, city TEXT, name TEXT);
+		CREATE TABLE zones (id INTEGER PRIMARY KEY, city TEXT, name TEXT, level TEXT, state TEXT);
 		CREATE TABLE disruptions (id INTEGER PRIMARY KEY, zone_id INTEGER);
-		CREATE TABLE worker_profiles (worker_id INTEGER, zone_id INTEGER);
+		CREATE TABLE worker_profiles (worker_id INTEGER, zone_id INTEGER, name TEXT);
 		CREATE TABLE claim_fraud_scores (claim_id INTEGER PRIMARY KEY, isolation_forest_score REAL, dbscan_score REAL, final_verdict TEXT, rule_violations TEXT, created_at DATETIME);
 		CREATE TABLE claim_audit_logs (id INTEGER PRIMARY KEY, claim_id INTEGER, action TEXT, notes TEXT, reviewer TEXT, created_at DATETIME);
 	`)
@@ -50,6 +52,9 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 	r.GET("/api/v1/insurer/claims/fraud-queue", h.GetFraudQueue)
 	r.GET("/api/v1/insurer/claims/:id", h.GetClaimDetail)
 	r.POST("/api/v1/insurer/claims/:id/review", h.ReviewClaim)
+	r.GET("/api/v1/insurer/users", h.GetPlanUsers)
+	r.POST("/api/v1/insurer/users/:id/plan/start", h.StartUserPlan)
+	r.POST("/api/v1/insurer/users/:id/plan/end", h.EndUserPlan)
 	return r
 }
 
@@ -227,5 +232,81 @@ func TestFraudQueueSelection(t *testing.T) {
 
 	if len(data) != 2 {
 		t.Errorf("Expected 2 items in fraud queue, got %d", len(data))
+	}
+}
+
+func TestPlanUsersAndWorkflow(t *testing.T) {
+	db := setupMockDB()
+	r := setupRouter(db)
+
+	now := time.Now()
+	db.Exec("INSERT INTO users (id, phone) VALUES (1, '9999999999'), (2, '8888888888')")
+	db.Exec("INSERT INTO zones (id, city, name, state, level) VALUES (1, 'Chennai', 'Tambaram', 'Tamil Nadu', 'A')")
+	db.Exec("INSERT INTO worker_profiles (worker_id, zone_id, name) VALUES (1, 1, 'Alice'), (2, 1, 'Bob')")
+	db.Exec("INSERT INTO policies (id, worker_id, plan_id, premium_amount, status, created_at, updated_at) VALUES (101, 1, 'plan-growth', 24, 'inactive', ?, ?)", now, now)
+
+	listReq, _ := http.NewRequest("GET", "/api/v1/insurer/users", nil)
+	listResp := httptest.NewRecorder()
+	r.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("Expected list status 200, got %v", listResp.Code)
+	}
+
+	var listPayload SuccessResponse
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listPayload); err != nil {
+		t.Fatalf("Failed to parse list payload: %v", err)
+	}
+	listData := listPayload.Data.(map[string]interface{})
+	users := listData["users"].([]interface{})
+	if len(users) != 2 {
+		t.Fatalf("Expected 2 users, got %d", len(users))
+	}
+
+	startReq, _ := http.NewRequest("POST", "/api/v1/insurer/users/1/plan/start", nil)
+	startResp := httptest.NewRecorder()
+	r.ServeHTTP(startResp, startReq)
+	if startResp.Code != http.StatusOK {
+		t.Fatalf("Expected start status 200, got %v", startResp.Code)
+	}
+
+	var startPayload SuccessResponse
+	if err := json.Unmarshal(startResp.Body.Bytes(), &startPayload); err != nil {
+		t.Fatalf("Failed to parse start payload: %v", err)
+	}
+	startData := startPayload.Data.(map[string]interface{})
+	if startData["success"] != true {
+		t.Fatalf("Expected success true, got %v", startData["success"])
+	}
+	startUser := startData["user"].(map[string]interface{})
+	if startUser["status"] != "active" {
+		t.Fatalf("Expected active status after start, got %v", startUser["status"])
+	}
+
+	var activeCount int64
+	db.Raw("SELECT COUNT(*) FROM active_policies WHERE user_id = 1").Scan(&activeCount)
+	if activeCount != 1 {
+		t.Fatalf("Expected active_policies row for user 1, got %d", activeCount)
+	}
+
+	endReq, _ := http.NewRequest("POST", "/api/v1/insurer/users/1/plan/end", nil)
+	endResp := httptest.NewRecorder()
+	r.ServeHTTP(endResp, endReq)
+	if endResp.Code != http.StatusOK {
+		t.Fatalf("Expected end status 200, got %v", endResp.Code)
+	}
+
+	var endPayload SuccessResponse
+	if err := json.Unmarshal(endResp.Body.Bytes(), &endPayload); err != nil {
+		t.Fatalf("Failed to parse end payload: %v", err)
+	}
+	endData := endPayload.Data.(map[string]interface{})
+	endUser := endData["user"].(map[string]interface{})
+	if endUser["status"] != "inactive" {
+		t.Fatalf("Expected inactive status after end, got %v", endUser["status"])
+	}
+
+	db.Raw("SELECT COUNT(*) FROM active_policies WHERE user_id = 1").Scan(&activeCount)
+	if activeCount != 0 {
+		t.Fatalf("Expected active_policies row to be removed, got %d", activeCount)
 	}
 }

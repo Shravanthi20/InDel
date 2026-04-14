@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,7 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -71,8 +69,6 @@ fun BatchDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val batch = viewModel.getBatchById(batchId)
     val coroutineScope = rememberCoroutineScope()
-    val pickupCode = remember(batchId, batch?.pickupCode) { batch?.pickupCode ?: viewModel.pickupCodeForBatch(batchId) }
-    val deliveryCode = remember(batchId, batch?.deliveryCode) { batch?.deliveryCode ?: viewModel.deliveryCodeForBatch(batchId) }
     val isZoneASingleStop = remember(batch?.batchId, batch?.zoneLevel, batch?.fromCity, batch?.toCity) {
         batch?.let { viewModel.isZoneASingleStop(it) } == true
     }
@@ -162,7 +158,7 @@ fun BatchDetailScreen(
                                 Text(
                                     when {
                                         normalizedBatchStatus == "delivered" -> "Batch completed. Earnings are already released."
-                                        normalizedBatchStatus == "picked_up" -> if (isZoneASingleStop) "Fill each order delivery code and tap Make Delivery." else "Enter the delivery code and tap Make Delivery to complete the batch."
+                                        normalizedBatchStatus == "picked_up" -> if (isZoneASingleStop) "Enter each order delivery code and verify one order at a time." else "Enter the delivery code and tap Verify & Move to complete the batch."
                                         else -> "Pick up the batch first before starting delivery."
                                     },
                                     style = MaterialTheme.typography.bodySmall,
@@ -226,24 +222,24 @@ fun BatchDetailScreen(
                             else -> {
                                 BatchActionCard(
                                     batch = batch,
-                                    pickupCode = pickupCode,
-                                    deliveryCode = deliveryCode,
                                     enteredCode = enteredCode,
                                     onEnteredCodeChange = { enteredCode = it.take(4) },
                                     feedbackMessage = feedbackMessage,
                                     onConfirmPickup = {
-                                        if (enteredCode.trim() != pickupCode) {
-                                            feedbackMessage = "Incorrect pickup code"
+                                        val code = enteredCode.trim()
+                                        if (code.isBlank()) {
+                                            feedbackMessage = "Enter pickup code"
                                             return@BatchActionCard
                                         }
                                         isAccepting = true
                                         coroutineScope.launch {
-                                            val accepted = viewModel.acceptBatch(batch, enteredCode.trim())
+                                            val accepted = viewModel.acceptBatch(batch, code)
                                             isAccepting = false
-                                            feedbackMessage = if (accepted) {
+                                            feedbackMessage = if (accepted.success) {
+                                                enteredCode = ""
                                                 "Batch picked up successfully."
                                             } else {
-                                                "Unable to pick up this batch right now."
+                                                accepted.errorMessage ?: "Unable to pick up this batch right now."
                                             }
                                         }
                                     },
@@ -251,11 +247,6 @@ fun BatchDetailScreen(
                                         val code = enteredCode.trim()
                                         if (code.isBlank()) {
                                             feedbackMessage = "Enter delivery code"
-                                            return@BatchActionCard
-                                        }
-
-                                        if (code != deliveryCode) {
-                                            feedbackMessage = "Incorrect delivery code"
                                             return@BatchActionCard
                                         }
 
@@ -278,7 +269,6 @@ fun BatchDetailScreen(
                                     },
                                     isAccepting = isAccepting,
                                     isDelivering = isDelivering,
-                                    showBatchDeliveryCode = true,
                                 )
                             }
                         }
@@ -308,9 +298,7 @@ fun BatchDetailScreen(
                                 if (!nestedOrder.deliveryTime.isNullOrBlank()) {
                                     Text("Delivered: ${nestedOrder.deliveryTime}", style = MaterialTheme.typography.bodySmall, color = SuccessGreen)
                                 }
-                                if (isZoneASingleStop && !nestedOrder.deliveryCode.isNullOrBlank()) {
-                                    Text("Delivery code: ${nestedOrder.deliveryCode}", style = MaterialTheme.typography.bodySmall, color = BrandBlue, fontWeight = FontWeight.Medium)
-                                }
+
                                 Text("Weight: ${formatBatchWeight(nestedOrder.weight)} kg", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                                 Text("Status: ${nestedOrder.status ?: "assigned"}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                                 Divider(modifier = Modifier.padding(top = 8.dp), color = Color(0xFFE9ECEF))
@@ -372,7 +360,6 @@ private fun ZoneABatchDeliverySection(
 
             batch.orders.forEach { order ->
                 val isDelivered = order.status.equals("delivered", ignoreCase = true)
-                val expectedCode = order.deliveryCode.orEmpty()
                 val isExpanded = selectedOrderId == order.orderId || batch.orders.count { it.status.equals("delivered", ignoreCase = true) } == batch.orders.size - 1
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -399,17 +386,12 @@ private fun ZoneABatchDeliverySection(
                             Text("Delivered", color = SuccessGreen, fontWeight = FontWeight.Bold)
                         } else {
                             Text(
-                                if (isExpanded) "Tap code, enter it, and deliver this order." else "Tap to enter delivery code",
+                                if (isExpanded) "Enter the delivery code for this order and verify it." else "Tap to enter delivery code",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
                             if (isExpanded) {
-                                Text(
-                                    "Order code: $expectedCode",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandBlue,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
+
                                 OutlinedTextField(
                                     value = orderDeliveryCodes[order.orderId].orEmpty(),
                                     onValueChange = { orderDeliveryCodes[order.orderId] = it.take(4) },
@@ -431,7 +413,7 @@ private fun ZoneABatchDeliverySection(
                                     shape = RoundedCornerShape(12.dp),
                                     enabled = !isDelivering
                                 ) {
-                                    Text(if (isDelivering) "Checking..." else "Make Delivery")
+                                    Text(if (isDelivering) "Checking..." else "Verify & Move")
                                 }
                                 Text(
                                     "Enter this exact order code to deliver this order. Batch completes when all orders are delivered.",
@@ -473,12 +455,11 @@ private fun ZoneABatchOrdersSection(
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Zone A delivery", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = BrandBlue)
-            Text("Touch an order to reveal its delivery code field, then make delivery for that order.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            Text("Touch an order to reveal its delivery code field, then verify that order.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
 
             batch.orders.forEach { order ->
                 val isDelivered = order.status.equals("delivered", ignoreCase = true)
                 val isExpanded = selectedOrderId == order.orderId
-                val expectedCode = order.deliveryCode.orEmpty()
 
                 Card(
                     modifier = Modifier
@@ -501,7 +482,7 @@ private fun ZoneABatchOrdersSection(
                             Text("Delivered", color = SuccessGreen, fontWeight = FontWeight.Bold)
                         } else {
                             Text(
-                                if (isExpanded) "Code for this order: $expectedCode" else "Tap to enter delivery code",
+                                if (isExpanded) "Enter the delivery code for this order" else "Tap to enter delivery code",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BrandBlue,
                                 fontWeight = FontWeight.SemiBold,
@@ -528,7 +509,7 @@ private fun ZoneABatchOrdersSection(
                                     shape = RoundedCornerShape(12.dp),
                                     enabled = !isDelivering
                                 ) {
-                                    Text(if (isDelivering) "Checking..." else "Make Delivery")
+                                    Text(if (isDelivering) "Checking..." else "Verify & Move")
                                 }
                                 Text("Enter this exact order code to mark the order delivered.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                             }
@@ -586,7 +567,7 @@ private fun BatchLevelDeliverySection(
                 shape = RoundedCornerShape(12.dp),
                 enabled = !isDelivering
             ) {
-                Text(if (isDelivering) "Checking..." else "Make Delivery")
+                Text(if (isDelivering) "Checking..." else "Verify & Move")
             }
             feedbackMessage?.let {
                 Text(
@@ -602,8 +583,6 @@ private fun BatchLevelDeliverySection(
 @Composable
 private fun BatchActionCard(
     batch: DeliveryBatch,
-    pickupCode: String,
-    deliveryCode: String,
     enteredCode: String,
     onEnteredCodeChange: (String) -> Unit,
     feedbackMessage: String?,
@@ -611,10 +590,7 @@ private fun BatchActionCard(
     onConfirmDelivery: () -> Unit,
     isAccepting: Boolean,
     isDelivering: Boolean,
-    showBatchDeliveryCode: Boolean,
 ) {
-    var showPickupDialog by rememberSaveable(batch.batchId) { mutableStateOf(false) }
-    var pickupDialogCode by rememberSaveable(batch.batchId) { mutableStateOf("") }
     val statusLower = batch.status
         .trim()
         .lowercase(Locale.getDefault())
@@ -628,12 +604,12 @@ private fun BatchActionCard(
     }
     val isPickupStage = statusLower == "pending" || statusLower == "assigned" || statusLower == "accepted"
     val isDeliveryStage = statusLower == "picked_up"
-    val expectedCode = if (isPickupStage) pickupCode else deliveryCode
     val actionLabel = when {
-        isPickupStage -> "Pick Up Batch"
-        isDeliveryStage -> "Make Delivery"
+        isPickupStage -> "Verify & Move"
+        isDeliveryStage -> "Verify & Move"
         else -> "Completed"
     }
+    val inputLabel = if (isPickupStage) "Pickup code" else "Delivery code"
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -645,57 +621,45 @@ private fun BatchActionCard(
             Text("Batch status", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             Text(statusLabel, color = BrandBlue, fontWeight = FontWeight.SemiBold)
 
-            if (isDeliveryStage) {
+            if (isPickupStage || isDeliveryStage) {
                 OutlinedTextField(
                     value = enteredCode,
-                    onValueChange = onEnteredCodeChange,
+                    onValueChange = { onEnteredCodeChange(it.take(8)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Delivery code") },
-                    placeholder = { Text("Enter 4-digit code") },
+                    label = { Text(inputLabel) },
+                    placeholder = { Text("Enter code") },
                 )
 
-                if (showBatchDeliveryCode) {
-                    Text(
-                        "Code for this batch: $expectedCode",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                    )
-                } else {
-                    Text(
-                        "Enter the delivery code and tap Make Delivery.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                    )
-                }
+                Text(
+                    if (isPickupStage) {
+                        "Enter the pickup code to move this batch from assigned to picked up."
+                    } else {
+                        "Enter the delivery code to move this batch from picked up to delivered."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
             }
 
             if (feedbackMessage != null) {
                 Text(
                     feedbackMessage,
-                    color = if (feedbackMessage.contains("unable", ignoreCase = true) || feedbackMessage.contains("incorrect", ignoreCase = true)) ErrorRed else SuccessGreen,
+                    color = if (feedbackMessage.contains("unable", ignoreCase = true) || feedbackMessage.contains("incorrect", ignoreCase = true) || feedbackMessage.contains("error", ignoreCase = true)) ErrorRed else SuccessGreen,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
 
             if (isPickupStage) {
                 Button(
-                    onClick = {
-                        pickupDialogCode = ""
-                        showPickupDialog = true
-                    },
+                    onClick = onConfirmPickup,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
                     shape = RoundedCornerShape(12.dp),
                     enabled = !isAccepting,
                 ) {
-                    Text("Pick Up Batch")
+                    Text(if (isAccepting) "Checking..." else actionLabel)
                 }
-                Text(
-                    "Tap Pick Up Batch, enter code in the prompt, and all orders move to picked up.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
             } else if (isDeliveryStage) {
                 Button(
                     onClick = onConfirmDelivery,
@@ -706,11 +670,6 @@ private fun BatchActionCard(
                 ) {
                     Text(if (isDelivering) "Checking..." else actionLabel)
                 }
-                Text(
-                    "Enter the delivery code to complete the batch and release earnings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
             } else {
                 Text(
                     "This batch is already delivered.",
@@ -720,45 +679,7 @@ private fun BatchActionCard(
             }
         }
     }
-
-    if (showPickupDialog) {
-        AlertDialog(
-            onDismissRequest = { showPickupDialog = false },
-            title = { Text("Enter Pickup Code") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = pickupDialogCode,
-                        onValueChange = { pickupDialogCode = it.take(4) },
-                        singleLine = true,
-                        label = { Text("Pickup code") },
-                        placeholder = { Text("4-digit code") },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text("Code for this batch: $pickupCode", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onEnteredCodeChange(pickupDialogCode.trim())
-                        onConfirmPickup()
-                        showPickupDialog = false
-                    },
-                    enabled = !isAccepting && pickupDialogCode.trim().length == 4,
-                ) {
-                    Text(if (isAccepting) "Checking..." else "Confirm")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPickupDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-        )
-    }
 }
-
 private fun compactRouteLabel(zoneLevel: String, fromLabel: String, toLabel: String): String {
     val from = fromLabel.trim()
     val to = toLabel.trim()
@@ -780,3 +701,5 @@ private fun compactRouteLabel(zoneLevel: String, fromLabel: String, toLabel: Str
 private fun formatBatchWeight(weight: Double): String {
     return String.format(Locale.getDefault(), "%.1f", weight)
 }
+
+

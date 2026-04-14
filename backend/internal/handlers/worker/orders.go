@@ -101,7 +101,7 @@ type workerOrderScope struct {
 
 func getWorkerOrderScope(workerIDUint uint) workerOrderScope {
 	scope := workerOrderScope{}
-	if !hasDB() {
+	if !HasDB() {
 		return scope
 	}
 
@@ -139,7 +139,7 @@ func optionalAuthWorkerID(c *gin.Context) (string, bool) {
 		return "", false
 	}
 
-	if hasDB() {
+	if HasDB() {
 		type tokenRow struct {
 			UserID uint `gorm:"column:user_id"`
 		}
@@ -175,7 +175,7 @@ func GetAssignedOrders(c *gin.Context) {
 	pathFilter := strings.TrimSpace(c.Query("path"))
 	pathLike := "%" + strings.ToLower(pathFilter) + "%"
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			type orderRow struct {
 				ID             uint    `gorm:"column:id"`
@@ -263,7 +263,7 @@ func GetOrders(c *gin.Context) {
 	pathFilter := strings.TrimSpace(c.Query("path"))
 	pathLike := "%" + strings.ToLower(pathFilter) + "%"
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			type orderRow struct {
 				ID             uint    `gorm:"column:id"`
@@ -346,7 +346,7 @@ func updateOrderStatus(c *gin.Context, newStatus string, message string) {
 	}
 	orderID := c.Param("order_id")
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseWorkerErr := parseWorkerID(workerID)
 		orderNumID, parseOrderErr := parseOrderID(orderID)
 		if parseWorkerErr == nil && parseOrderErr == nil {
@@ -471,7 +471,7 @@ func GetAvailableOrders(c *gin.Context) {
 		limit = l
 	}
 
-	if hasDB() {
+	if HasDB() {
 		var workerScope workerOrderScope
 		if workerID, ok := optionalAuthWorkerID(c); ok {
 			if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
@@ -624,7 +624,7 @@ func GetDeliveries(c *gin.Context) {
 		limit = l
 	}
 
-	if hasDB() {
+	if HasDB() {
 		type deliveryRow struct {
 			ID             uint    `gorm:"column:id"`
 			OrderValue     float64 `gorm:"column:order_value"`

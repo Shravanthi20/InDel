@@ -122,7 +122,7 @@ func IngestDemoOrder(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerID == 0 {
 			type firstUserRow struct {
 				ID uint `gorm:"column:id"`

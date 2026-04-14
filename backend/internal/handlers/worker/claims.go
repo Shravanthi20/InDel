@@ -16,7 +16,7 @@ func GetClaims(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			type claimRow struct {
 				ClaimID        uint    `gorm:"column:claim_id"`
@@ -93,7 +93,7 @@ func GetClaimDetail(c *gin.Context) {
 	}
 	claimID := c.Param("claim_id")
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			claimNumStr := strings.TrimPrefix(strings.TrimSpace(claimID), "clm-")

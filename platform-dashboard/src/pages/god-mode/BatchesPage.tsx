@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { deliveryCodeFromBatchId, deliveryCodeFromOrderId, pickupCodeFromBatchId, useGodMode, type BatchRow, type ZoneRecord } from './state'
+import { useGodMode, type BatchRow, type ZoneRecord } from './state'
 
 function compactRouteLabel(zoneLevel?: string, fromCity?: string, toCity?: string) {
   const from = (fromCity || '').trim()
@@ -66,6 +66,8 @@ export default function BatchesPage() {
     availableBatches,
     assignedBatches,
     zones,
+    generatingBatches,
+    generateBatches,
     showCodes,
     setShowCodes,
     loading,
@@ -109,7 +111,7 @@ export default function BatchesPage() {
           <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">God Mode tools</p>
           <h2 className="mt-1 text-2xl font-bold text-slate-900">Batch browser by zone</h2>
           <p className="mt-2 text-sm text-slate-600">
-            Inspect available and assigned batches, then narrow the list by zone name.
+            Generate simulation orders, inspect every batch state, and reveal pickup or delivery codes only in admin mode.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -120,6 +122,15 @@ export default function BatchesPage() {
             className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
           >
             {checkingIntegrationSelfTest ? 'Running integration test...' : 'Run integration self-test'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void generateBatches()}
+            disabled={loading || generatingBatches}
+            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500"
+          >
+            {generatingBatches ? 'Generating fake orders...' : 'Generate Fake Orders'}
           </button>
 
           <button
@@ -276,8 +287,8 @@ function BatchGroup({
         <div className="grid gap-4 xl:grid-cols-2">
           {batches.map((batch) => {
             const orderCount = batch.orderCount ?? batch.orders?.length ?? 0
-            const pickupCode = pickupCodeFromBatchId(batch.batchId)
-            const deliveryCode = deliveryCodeFromBatchId(batch.batchId)
+            const pickupCode = batch.pickupCode || '----'
+            const deliveryCode = batch.deliveryCode || '----'
             const zoneASingleStop = isZoneASingleStop(batch.zoneLevel, batch.fromCity, batch.toCity)
             const routeLabel = compactRouteLabel(batch.zoneLevel, batch.fromCity, batch.toCity)
             const zoneNames = batchZoneNames(batch, zones)
@@ -319,7 +330,7 @@ function BatchGroup({
                     <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Zone A order delivery codes</div>
                     <div className="mt-2 grid gap-2">
                       {(batch.orders || []).map((order) => {
-                        const orderDeliveryCode = order.deliveryCode || deliveryCodeFromOrderId(order.orderId)
+                        const orderDeliveryCode = order.deliveryCode || '----'
                         const orderRoute = compactRouteLabel(
                           batch.zoneLevel,
                           order.pickupArea || batch.fromCity,
@@ -366,3 +377,7 @@ function CodeCard({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+
+
+
+

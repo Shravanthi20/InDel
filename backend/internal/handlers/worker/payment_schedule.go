@@ -78,7 +78,7 @@ func evaluatePaymentSchedule(lastPayment time.Time, now time.Time) paymentSchedu
 }
 
 func ensureWorkerPaymentsTable() {
-	if !hasDB() {
+	if !HasDB() {
 		return
 	}
 
@@ -185,7 +185,7 @@ func paymentLockError(state paymentScheduleState) string {
 }
 
 func syncPolicyStatusWithPaymentState(workerID uint, state paymentScheduleState) {
-	if !hasDB() {
+	if !HasDB() {
 		return
 	}
 

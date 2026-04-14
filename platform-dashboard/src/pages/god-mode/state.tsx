@@ -6,6 +6,7 @@ import {
   getWorkers,
   getAssignedBatches,
   getAvailableBatches,
+  getSimulationBatches,
   getDisruptions,
   getOrders,
   getZoneLevels,
@@ -76,6 +77,8 @@ export type BatchOrder = {
   deliveryAddress?: string
   deliveryCode?: string
   status?: string
+  pickupTime?: string
+  deliveryTime?: string
 }
 
 export type BatchRow = {
@@ -87,6 +90,8 @@ export type BatchRow = {
   targetWeight?: number
   orderCount?: number
   status?: string
+  pickupCode?: string
+  deliveryCode?: string
   orders?: BatchOrder[]
 }
 
@@ -438,6 +443,25 @@ export function deliveryCodeFromOrderId(orderId: string) {
   return String(1000 + seed).padStart(4, '0')
 }
 
+function normalizeBatchWorkflowStatus(status?: string) {
+  return (status || '').trim().toLowerCase().replace(/\s+/g, '_')
+}
+
+function applySimulationBatchSnapshot(
+  allBatches: BatchRow[],
+  setAvailableBatches: (batches: BatchRow[]) => void,
+  setAssignedBatches: (batches: BatchRow[]) => void,
+) {
+  const available = allBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
+  const assigned = allBatches.filter((batch) => {
+    const status = normalizeBatchWorkflowStatus(batch.status)
+    return status === 'picked_up' || status === 'delivered'
+  })
+
+  setAvailableBatches(available)
+  setAssignedBatches(assigned)
+}
+
 type GodModeContextValue = {
   godModeEnabled: boolean
   setGodModeEnabled: (enabled: boolean) => void
@@ -556,11 +580,10 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         assignedBatches: 'pending',
       })
 
-      const [zonesResponse, zoneHealthResponse, availableResponse, assignedResponse] = await Promise.allSettled([
+      const [zonesResponse, zoneHealthResponse, simulationResponse] = await Promise.allSettled([
         getZones(),
         getZoneHealth(),
-        getAvailableBatches(),
-        getAssignedBatches(),
+        getSimulationBatches(),
       ])
 
       if (!mounted) {
@@ -569,8 +592,8 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
 
       setEndpointStatus({
         zoneHealth: zoneHealthResponse.status === 'fulfilled' ? 'ok' : 'failed',
-        availableBatches: availableResponse.status === 'fulfilled' ? 'ok' : 'failed',
-        assignedBatches: assignedResponse.status === 'fulfilled' ? 'ok' : (isAuthDenied(assignedResponse.reason) ? 'pending' : 'failed'),
+        availableBatches: simulationResponse.status === 'fulfilled' ? 'ok' : 'failed',
+        assignedBatches: simulationResponse.status === 'fulfilled' ? 'ok' : 'failed',
       })
 
       if (zonesResponse.status === 'fulfilled') {
@@ -585,17 +608,11 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         setCommittedResult(computeResult(mapped, policyInputs, 'ALL ZONES', 0, 'api-mock'))
       }
 
-      if (availableResponse.status === 'fulfilled') {
-        setAvailableBatches(availableResponse.value.data?.batches || [])
+      if (simulationResponse.status === 'fulfilled') {
+        applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
       }
 
-      if (assignedResponse.status === 'fulfilled') {
-        setAssignedBatches(assignedResponse.value.data?.batches || [])
-      } else if (isAuthDenied(assignedResponse.reason)) {
-        setAssignedBatches([])
-      }
-
-      if (zoneHealthResponse.status === 'rejected' && availableResponse.status === 'rejected' && zonesResponse.status === 'rejected') {
+      if (zoneHealthResponse.status === 'rejected' && simulationResponse.status === 'rejected' && zonesResponse.status === 'rejected') {
         setError('Unable to load God Mode context')
       }
 
@@ -689,22 +706,16 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshBatchContext = async () => {
-    const [zonesResponse, availableResponse, assignedResponse] = await Promise.allSettled([
+    const [zonesResponse, simulationResponse] = await Promise.allSettled([
       getZones(),
-      getAvailableBatches(),
-      getAssignedBatches(),
+      getSimulationBatches(),
     ])
 
     if (zonesResponse.status === 'fulfilled') {
       setZones((zonesResponse.value.data?.zones || []) as ZoneRecord[])
     }
-    if (availableResponse.status === 'fulfilled') {
-      setAvailableBatches(availableResponse.value.data?.batches || [])
-    }
-    if (assignedResponse.status === 'fulfilled') {
-      setAssignedBatches(assignedResponse.value.data?.batches || [])
-    } else if (isAuthDenied(assignedResponse.reason)) {
-      setAssignedBatches([])
+    if (simulationResponse.status === 'fulfilled') {
+      applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
     }
   }
 
@@ -725,22 +736,31 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     const targetZoneId = affectedZoneIds[0] ?? zones[0]?.zone_id ?? 1
 
     try {
-      const zoneLevelForApi = zoneLevel === 'ALL' ? undefined : zoneLevel
-      const response = await postAddBatches({
-        count: 6,
-        zone_id: targetZoneId,
-        zone_level: zoneLevelForApi,
-        from_city: fromCity,
-        to_city: toCity,
-        from_state: fromState || undefined,
-        to_state: toState || undefined,
-      })
+      let successMessage = 'Generate Fake Orders completed.'
 
-      const createdOrders = Number(response.data?.created_orders ?? 0)
-      const estimatedBatches = Number(response.data?.estimated_batches ?? 0)
-      const successMessage = createdOrders > 0
-        ? `Added ${createdOrders} orders and formed ${estimatedBatches || 'new'} optimized batches.`
-        : 'Add Batches completed.'
+      if (zoneLevel === 'ALL') {
+        const response = await postSimulateOrders({ count: 6 })
+        const createdOrders = Number(response.data?.data?.count ?? response.data?.count ?? 0)
+        successMessage = createdOrders > 0
+          ? `Generated ${createdOrders} fake orders across all zones.`
+          : 'Generated fake orders across all zones.'
+      } else {
+        const response = await postAddBatches({
+          count: 6,
+          zone_id: targetZoneId,
+          zone_level: zoneLevel,
+          from_city: fromCity,
+          to_city: toCity,
+          from_state: fromState || undefined,
+          to_state: toState || undefined,
+        })
+
+        const createdOrders = Number(response.data?.created_orders ?? 0)
+        const estimatedBatches = Number(response.data?.estimated_batches ?? 0)
+        successMessage = createdOrders > 0
+          ? `Generated ${createdOrders} fake orders and formed ${estimatedBatches || 'new'} optimized batches.`
+          : 'Generated fake orders for the selected zone.'
+      }
 
       await refreshBatchContext()
       setNotice({ tone: 'success', message: successMessage })
@@ -796,11 +816,10 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
 
       await Promise.allSettled(claimRequests)
 
-      const [zonesResponse, zoneHealthResponse, availableResponse, assignedResponse] = await Promise.allSettled([
+      const [zonesResponse, zoneHealthResponse, simulationResponse] = await Promise.allSettled([
         getZones(),
         getZoneHealth(),
-        getAvailableBatches(),
-        getAssignedBatches(),
+        getSimulationBatches(),
       ])
 
       if (zonesResponse.status === 'fulfilled') {
@@ -812,13 +831,8 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         setApiInputs(mapped)
         setManualInputs(mapped)
       }
-      if (availableResponse.status === 'fulfilled') {
-        setAvailableBatches(availableResponse.value.data?.batches || [])
-      }
-      if (assignedResponse.status === 'fulfilled') {
-        setAssignedBatches(assignedResponse.value.data?.batches || [])
-      } else if (isAuthDenied(assignedResponse.reason)) {
-        setAssignedBatches([])
+      if (simulationResponse.status === 'fulfilled') {
+        applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
       }
 
       setCommittedResult(preview)
@@ -840,17 +854,19 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     setNotice(null)
 
     try {
-      const availableResponse = await getAvailableBatches()
-      let freshAvailable = (availableResponse.data?.batches || []) as BatchRow[]
-      setAvailableBatches(freshAvailable)
+      const simulationResponse = await getSimulationBatches()
+      let freshAllBatches = (simulationResponse.data?.batches || []) as BatchRow[]
+      applySimulationBatchSnapshot(freshAllBatches, setAvailableBatches, setAssignedBatches)
+      let freshAvailable = freshAllBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
 
       let candidate = freshAvailable.find((batch) => (batch.orders?.length || 0) > 0)
       if (!candidate) {
         // Try to self-heal: seed orders and batches, then retry once.
         await generateBatches()
-        const retryAvailableResponse = await getAvailableBatches()
-        freshAvailable = (retryAvailableResponse.data?.batches || []) as BatchRow[]
-        setAvailableBatches(freshAvailable)
+        const retrySimulationResponse = await getSimulationBatches()
+        freshAllBatches = (retrySimulationResponse.data?.batches || []) as BatchRow[]
+        applySimulationBatchSnapshot(freshAllBatches, setAvailableBatches, setAssignedBatches)
+        freshAvailable = freshAllBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
         candidate = freshAvailable.find((batch) => (batch.orders?.length || 0) > 0)
       }
 
@@ -880,13 +896,13 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      const pickupCode = pickupCodeFromBatchId(batchId)
+      const pickupCode = candidate.pickupCode || pickupCodeFromBatchId(batchId)
       const pickupRes = await putAcceptBatch(batchId, { orderIds, pickupCode })
 
       const isZoneA = (candidate.zoneLevel || '').trim().toUpperCase() === 'A'
       const deliveryCode = isZoneA
-        ? deliveryCodeFromOrderId(orderIds[0])
-        : deliveryCodeFromBatchId(batchId)
+        ? (candidate.orders || []).find((order) => order.orderId === orderIds[0])?.deliveryCode || deliveryCodeFromOrderId(orderIds[0])
+        : candidate.deliveryCode || deliveryCodeFromBatchId(batchId)
       const deliverRes = await putDeliverBatch(batchId, { deliveryCode })
 
       await refreshBatchContext()
@@ -954,6 +970,7 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
       await runCheck('GET /api/v1/worker/orders', async () => { await getOrders() })
       await runCheck('GET /api/v1/worker/batches', async () => { await getAvailableBatches() })
       await runCheck('GET /api/v1/worker/batches/assigned', async () => { await getAssignedBatches() })
+      await runCheck('GET /api/v1/demo/batches', async () => { await getSimulationBatches() })
       await runCheck('POST /api/v1/demo/simulate-orders', async () => { await postSimulateOrders({ count: 1 }) })
       await runCheck('POST /api/v1/platform/demo/add-batches', async () => {
         await postAddBatches({
@@ -1079,10 +1096,9 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     totalNotifications += Number(payload?.notifications_created || 0)
     })
 
-    const [zoneHealthResponse, availableResponse, assignedResponse] = await Promise.allSettled([
+    const [zoneHealthResponse, simulationResponse] = await Promise.allSettled([
     getZoneHealth(),
-    getAvailableBatches(),
-    getAssignedBatches(),
+    getSimulationBatches(),
     ])
 
     if (zoneHealthResponse.status === 'fulfilled') {
@@ -1091,11 +1107,8 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     setApiInputs(mapped)
     setManualInputs(mapped)
     }
-    if (availableResponse.status === 'fulfilled') {
-    setAvailableBatches(availableResponse.value.data?.batches || [])
-    }
-    if (assignedResponse.status === 'fulfilled') {
-    setAssignedBatches(assignedResponse.value.data?.batches || [])
+    if (simulationResponse.status === 'fulfilled') {
+    applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
     }
 
     setCommittedResult(computeResult(sourceInputs, policyInputs, scopeLabel, targetZoneIds.length, 'god-mode-override'))
@@ -1180,3 +1193,16 @@ export function useGodMode() {
   }
   return context
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

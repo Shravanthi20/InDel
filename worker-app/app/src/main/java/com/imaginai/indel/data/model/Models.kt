@@ -110,10 +110,40 @@ data class ZonePath(
     @SerializedName("to_city") val toCity: String? = null
 )
 
+// Zone A cities from backend: each entry has city, state, lat, lon
+data class ZonePathCity(
+    @SerializedName("city") val city: String,
+    @SerializedName("state") val state: String? = null,
+    @SerializedName("lat") val lat: Double? = null,
+    @SerializedName("lon") val lon: Double? = null
+)
+
+// Zone B/C entries from backend: zone_name, zone_state, city, level
+data class ZonePathEntry(
+    @SerializedName("zone_id") val zoneId: Int? = null,
+    @SerializedName("zone_name") val zoneName: String,
+    @SerializedName("zone_state") val zoneState: String? = null,
+    @SerializedName("city") val city: String? = null,
+    @SerializedName("level") val level: String? = null
+)
+
+// Updated to match actual backend response shape
 data class ZonePathResponse(
-    @SerializedName("cities") val cities: List<String>? = null,
+    @SerializedName("cities") val cities: List<ZonePathCity>? = null,  // Zone A: [{city,state,lat,lon}]
+    @SerializedName("zones") val zones: List<ZonePathEntry>? = null,   // Zone B/C: [{zone_name,zone_state,...}]
     @SerializedName("city_pairs") val cityPairs: List<CityPair>? = null,
     @SerializedName("paths") val paths: List<ZonePath>? = null
+)
+
+// Zone level options (A/B/C) from /platform/zone-levels
+data class ZoneLevelOption(
+    @SerializedName("level") val level: String,
+    @SerializedName("label") val label: String,
+    @SerializedName("description") val description: String? = null
+)
+
+data class ZoneLevelResponse(
+    @SerializedName("levels") val levels: List<ZoneLevelOption>
 )
 
 data class SessionResponse(

@@ -15,7 +15,7 @@ func GetPremium(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			quote, _ := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC())
 			amount := 65.0 // Mid-level default if no quote exists
@@ -33,6 +33,7 @@ func GetPremium(c *gin.Context) {
 				for _, item := range quote.Explainability {
 					breakdown = append(breakdown, gin.H{"feature": item.Feature, "impact": item.Impact})
 				}
+				fmt.Printf("[PREMIUM] ML used for worker %v: amount=%.2f, model=%s\n", workerID, amount, modelVersion)
 			} else {
 				// Static breakdown if no quote available
 				breakdown = []gin.H{
@@ -40,6 +41,7 @@ func GetPremium(c *gin.Context) {
 					{"feature": "order_drop_volatility", "impact": 0.31},
 					{"feature": "historical_disruptions", "impact": 0.27},
 				}
+				fmt.Printf("[PREMIUM] Fallback used for worker %v: amount=%.2f\n", workerID, amount)
 			}
 			c.JSON(200, gin.H{
 				"weekly_premium_inr": int(amount),
@@ -81,7 +83,7 @@ func PayPremium(c *gin.Context) {
 		amount = defaultAmount
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			now := time.Now().UTC()
 			checkoutID := fmt.Sprintf("chk_%d_%d", workerIDUint, now.Unix())

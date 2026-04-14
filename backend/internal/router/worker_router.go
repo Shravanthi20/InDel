@@ -30,6 +30,9 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1.POST("/worker/plans/select", worker.SelectPlan)
 	v1.POST("/worker/plans/skip", worker.SkipPlan)
 
+	// Disruption payout (worker-facing: gates on active plan + zone + risk score)
+	v1.POST("/worker/disruptions/trigger", worker.TriggerDisruptionPayout)
+
 	v1.GET("/worker/earnings", worker.GetEarnings)
 	v1.GET("/worker/earnings/history", worker.GetEarningsHistory)
 	v1.GET("/worker/earnings/baseline", worker.GetEarningsBaseline)
@@ -80,5 +83,6 @@ func SetupWorkerRoutes(router *gin.Engine) {
 	v1.POST("/demo/orders/ingest", worker.IngestDemoOrder)
 	v1.GET("/demo/orders/search", worker.SearchDemoOrders)
 	v1.GET("/demo/orders/available", worker.GetAvailableOrders)
+	v1.GET("/demo/batches", worker.GetSimulationBatches)
 	v1.GET("/demo/deliveries", worker.GetDeliveries)
 }

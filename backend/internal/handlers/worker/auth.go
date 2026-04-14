@@ -70,7 +70,7 @@ func VerifyOTP(c *gin.Context) {
 	}
 	workerID := "worker-001"
 
-	if hasDB() {
+	if HasDB() {
 		var user models.User
 		err := workerDB.Where("phone = ?", phone).First(&user).Error
 		if err == gorm.ErrRecordNotFound {
@@ -86,7 +86,7 @@ func VerifyOTP(c *gin.Context) {
 	}
 	store.data.TokenToWorkerID[token] = workerID
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			_ = workerDB.Exec(
 				`INSERT INTO auth_tokens (user_id, token, expires_at)
@@ -133,7 +133,7 @@ func Register(c *gin.Context) {
 	}
 
 	workerID := fmt.Sprintf("worker-%s", phone)
-	if hasDB() {
+	if HasDB() {
 		var existing models.User
 		err := workerDB.Where("phone = ? OR email = ?", phone, email).First(&existing).Error
 		if err == gorm.ErrRecordNotFound {
@@ -156,7 +156,7 @@ func Register(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "token_generation_failed"})
 		return
 	}
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
 		_ = workerDB.Exec(
 			`INSERT INTO auth_tokens (user_id, token, expires_at)
@@ -183,7 +183,7 @@ func Register(c *gin.Context) {
 	}
 
 	// ─── DB Seeding for Demo "Real Data" ──────────────────────────────
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
 
 		// 1. Ensure a default zone exists.
@@ -256,7 +256,7 @@ func Login(c *gin.Context) {
 
 	var workerID string
 
-	if hasDB() {
+	if HasDB() {
 		var user models.User
 		query := workerDB.Where("phone = ?", phone)
 		if phone == "" && email != "" {
@@ -283,7 +283,7 @@ func Login(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "token_generation_failed"})
 		return
 	}
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
 		_ = workerDB.Exec(
 			`INSERT INTO auth_tokens (user_id, token, expires_at)
@@ -298,7 +298,7 @@ func Login(c *gin.Context) {
 	store.mu.Unlock()
 
 	// ─── DB Seeding for Order Refill ──────────────────────────────
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
 
 		// 1. Get user's zone.

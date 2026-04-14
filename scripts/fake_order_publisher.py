@@ -42,7 +42,7 @@ LAST_NAMES = ["Kumar", "Reddy", "Sharma", "Patel", "Iyer", "Verma", "Gupta", "Ra
 PAYMENT_METHODS = ["upi", "cod", "card"]
 PACKAGE_SIZES = ["small", "medium", "large"]
 ZONES = {}
-MAX_ZONE_NAMES_PER_LEVEL = 10
+MAX_ZONE_NAMES_PER_LEVEL = 15
 ORDERS_PER_ZONE_NAME = 5
 
 
@@ -186,28 +186,28 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
     }
 
 
-def build_zone_a_pair_dicts(zone_a_cities: list[str]) -> list[dict]:
+
+# Patch: preload zone_b as lookup for lat/lon
+def build_zone_a_pair_dicts(zone_a_cities: list[str], zone_b_by_from: dict) -> list[dict]:
     pair_dicts = []
     for city in zone_a_cities:
         state = CITY_STATE_LOOKUP.get(city, "Unknown")
-        pair_dicts.append(
-            {
-                "from": city,
-                "to": city,
-                "from_state": state,
-                "to_state": state,
-                "distance_km": 1.0,
-                "from_lat": 0,
-                "from_lon": 0,
-                "to_lat": 0,
-                "to_lon": 0,
-            }
-        )
+        entry = zone_b_by_from.get(city, {})
+        lat = entry.get("from_lat", 0.0)
+        lon = entry.get("from_lon", 0.0)
+        pair_dicts.append({
+            "from": city, "to": city,
+            "from_state": state, "to_state": state,
+            "distance_km": 1.0,
+            "from_lat": lat, "from_lon": lon,
+            "to_lat": lat, "to_lon": lon,
+        })
     return pair_dicts
 
 
 def build_all_pairs(zone_a_pairs: list[str], zone_b_pairs: list[dict], zone_c_pairs: list[dict]) -> list[tuple[dict, str]]:
-    zone_a_pair_dicts = build_zone_a_pair_dicts(zone_a_pairs)
+    zone_b_by_from = {entry["from"]: entry for entry in zone_b_pairs}
+    zone_a_pair_dicts = build_zone_a_pair_dicts(zone_a_pairs, zone_b_by_from)
     return (
         [(pair, "zone_a") for pair in zone_a_pair_dicts]
         + [(pair, "zone_b") for pair in zone_b_pairs]

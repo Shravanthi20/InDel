@@ -16,7 +16,7 @@ func GetPolicy(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			var p models.Policy
@@ -130,7 +130,7 @@ func EnrollPolicy(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			premiumAmount := 22.0
 			if quote, err := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC()); err == nil && quote != nil && quote.WeeklyPremiumINR > 0 {
@@ -138,6 +138,18 @@ func EnrollPolicy(c *gin.Context) {
 			}
 			policy := models.Policy{WorkerID: workerIDUint, Status: "active", PremiumAmount: premiumAmount}
 			if err := workerDB.Create(&policy).Error; err == nil {
+				// Fetch worker's zone for active_policies
+				var profile models.WorkerProfile
+				if err := workerDB.Where("worker_id = ?", workerIDUint).First(&profile).Error; err == nil {
+					var zone models.Zone
+					if err := workerDB.Where("id = ?", profile.ZoneID).First(&zone).Error; err == nil {
+						// Insert into active_policies
+						_ = workerDB.Exec(
+							"INSERT INTO active_policies (user_id, policy_id, zone, started_at, updated_at) VALUES (?, ?, ?, NOW(), NOW()) ON CONFLICT (user_id) DO UPDATE SET policy_id = EXCLUDED.policy_id, zone = EXCLUDED.zone, updated_at = NOW()",
+							workerIDUint, policy.ID, zone.Name,
+						).Error
+					}
+				}
 				c.JSON(200, gin.H{"message": "policy_enrolled", "policy": gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", policy.ID),
 					"status":             policy.Status,
@@ -168,9 +180,11 @@ func PausePolicy(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			_ = workerDB.Exec("UPDATE policies SET status='paused', updated_at=CURRENT_TIMESTAMP WHERE worker_id = ?", workerIDUint).Error
+			// Remove from active_policies when pausing
+			_ = workerDB.Exec("DELETE FROM active_policies WHERE user_id = ?", workerIDUint).Error
 			c.JSON(200, gin.H{"message": "policy_paused", "policy": gin.H{"status": "paused"}})
 			return
 		}
@@ -194,9 +208,11 @@ func CancelPolicy(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			_ = workerDB.Exec("UPDATE policies SET status='cancelled', updated_at=CURRENT_TIMESTAMP WHERE worker_id = ?", workerIDUint).Error
+			// Remove from active_policies
+			_ = workerDB.Exec("DELETE FROM active_policies WHERE user_id = ?", workerIDUint).Error
 			c.JSON(200, gin.H{"message": "policy_cancelled", "policy": gin.H{"status": "cancelled"}})
 			return
 		}

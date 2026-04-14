@@ -172,7 +172,7 @@ func bodyBool(body map[string]any, key string, fallback bool) bool {
 }
 
 func getPremiumProfileFromDB(workerID string) map[string]any {
-	if !hasDB() {
+	if !HasDB() {
 		return nil
 	}
 
@@ -219,7 +219,7 @@ func getPremiumProfileFromDB(workerID string) map[string]any {
 }
 
 func enrichPremiumProfileWithZoneGeo(profile map[string]any, zoneID uint) {
-	if profile == nil || !hasDB() || zoneID == 0 {
+	if profile == nil || !HasDB() || zoneID == 0 {
 		return
 	}
 
@@ -246,7 +246,7 @@ func enrichPremiumProfileWithZoneGeo(profile map[string]any, zoneID uint) {
 }
 
 func getPremiumEstimate(workerID string, profile map[string]any) (int, string) {
-	if !hasDB() {
+	if !HasDB() {
 		return 35, "fallback"
 	}
 
@@ -358,7 +358,7 @@ func SelectPlan(c *gin.Context) {
 	requiredPayment := premiumAmount
 	isInitialActivation := false
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			var currentPolicy models.Policy
@@ -391,7 +391,7 @@ func SelectPlan(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			now := time.Now().UTC()
@@ -558,7 +558,7 @@ func SkipPlan(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			policy := models.Policy{
 				WorkerID:      workerIDUint,

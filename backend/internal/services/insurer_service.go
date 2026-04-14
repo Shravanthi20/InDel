@@ -55,8 +55,200 @@ type MoneyExchangeSummary struct {
 	ZoneBreakdown    []ZoneMoneyExchange `json:"zone_breakdown"`
 }
 
+type UserPlanStatus struct {
+	UserID    uint   `json:"id"`
+	Name      string `json:"name"`
+	Phone     string `json:"phone"`
+	Zone      string `json:"zone"`
+	Status    string `json:"status"`
+	PolicyID  *uint  `json:"policy_id,omitempty"`
+	PlanID    string `json:"plan_id,omitempty"`
+	StartedAt string `json:"started_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
 func NewInsurerService(db *gorm.DB, kp *kafka.Producer) *InsurerService {
 	return &InsurerService{DB: db, KafkaProducer: kp}
+}
+
+func (s *InsurerService) ListUserPlanStatuses() ([]UserPlanStatus, error) {
+	if s.DB == nil {
+		return []UserPlanStatus{}, nil
+	}
+
+	rows := make([]UserPlanStatus, 0)
+	err := s.DB.Raw(`
+		SELECT
+			u.id AS id,
+			COALESCE(NULLIF(TRIM(wp.name), ''), u.phone, 'User') AS name,
+			COALESCE(u.phone, '') AS phone,
+			COALESCE(z.name, 'Unknown') AS zone,
+			CASE WHEN ap.user_id IS NOT NULL THEN 'active' ELSE 'inactive' END AS status,
+			lp.id AS policy_id,
+			COALESCE(lp.plan_id, '') AS plan_id,
+			COALESCE(CAST(ap.started_at AS text), '') AS started_at,
+			COALESCE(CAST(COALESCE(ap.updated_at, lp.updated_at, lp.created_at) AS text), '') AS updated_at
+		FROM users u
+		LEFT JOIN worker_profiles wp ON wp.worker_id = u.id
+		LEFT JOIN zones z ON z.id = wp.zone_id
+		LEFT JOIN active_policies ap ON ap.user_id = u.id
+		LEFT JOIN policies lp ON lp.id = (
+			SELECT p2.id
+			FROM policies p2
+			WHERE p2.worker_id = u.id
+			ORDER BY p2.id DESC
+			LIMIT 1
+		)
+		ORDER BY u.id ASC
+	`).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+func (s *InsurerService) GetUserPlanStatus(userID uint) (*UserPlanStatus, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("database unavailable")
+	}
+
+	rows := make([]UserPlanStatus, 0, 1)
+	err := s.DB.Raw(`
+		SELECT
+			u.id AS id,
+			COALESCE(NULLIF(TRIM(wp.name), ''), u.phone, 'User') AS name,
+			COALESCE(u.phone, '') AS phone,
+			COALESCE(z.name, 'Unknown') AS zone,
+			CASE WHEN ap.user_id IS NOT NULL THEN 'active' ELSE 'inactive' END AS status,
+			lp.id AS policy_id,
+			COALESCE(lp.plan_id, '') AS plan_id,
+			COALESCE(CAST(ap.started_at AS text), '') AS started_at,
+			COALESCE(CAST(COALESCE(ap.updated_at, lp.updated_at, lp.created_at) AS text), '') AS updated_at
+		FROM users u
+		LEFT JOIN worker_profiles wp ON wp.worker_id = u.id
+		LEFT JOIN zones z ON z.id = wp.zone_id
+		LEFT JOIN active_policies ap ON ap.user_id = u.id
+		LEFT JOIN policies lp ON lp.id = (
+			SELECT p2.id
+			FROM policies p2
+			WHERE p2.worker_id = u.id
+			ORDER BY p2.id DESC
+			LIMIT 1
+		)
+		WHERE u.id = ?
+		LIMIT 1
+	`, userID).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	return &rows[0], nil
+}
+
+func (s *InsurerService) StartUserPlan(userID uint) (*UserPlanStatus, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("database unavailable")
+	}
+
+	err := s.DB.Transaction(func(tx *gorm.DB) error {
+		type userContext struct {
+			ID   uint
+			Zone string
+		}
+
+		var ctx userContext
+		if err := tx.Raw(`
+			SELECT u.id, COALESCE(z.name, 'Unknown') AS zone
+			FROM users u
+			LEFT JOIN worker_profiles wp ON wp.worker_id = u.id
+			LEFT JOIN zones z ON z.id = wp.zone_id
+			WHERE u.id = ?
+			LIMIT 1
+		`, userID).Scan(&ctx).Error; err != nil {
+			return err
+		}
+		if ctx.ID == 0 {
+			return fmt.Errorf("user not found")
+		}
+
+		var latest models.Policy
+		err := tx.Where("worker_id = ?", userID).Order("id DESC").First(&latest).Error
+		if err != nil {
+			if err != gorm.ErrRecordNotFound {
+				return err
+			}
+			latest = models.Policy{
+				WorkerID:      userID,
+				Status:        "active",
+				PremiumAmount: 22,
+			}
+			if err := tx.Create(&latest).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.Model(&models.Policy{}).
+				Where("worker_id = ? AND id <> ? AND status = ?", userID, latest.ID, "active").
+				Updates(map[string]interface{}{"status": "inactive", "updated_at": time.Now().UTC()}).
+				Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.Policy{}).
+				Where("id = ?", latest.ID).
+				Updates(map[string]interface{}{"status": "active", "updated_at": time.Now().UTC()}).
+				Error; err != nil {
+				return err
+			}
+		}
+
+		return tx.Exec(`
+			INSERT INTO active_policies (user_id, policy_id, zone, started_at, updated_at)
+			VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			ON CONFLICT (user_id) DO UPDATE SET
+				policy_id = EXCLUDED.policy_id,
+				zone = EXCLUDED.zone,
+				updated_at = CURRENT_TIMESTAMP
+		`, userID, latest.ID, ctx.Zone).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetUserPlanStatus(userID)
+}
+
+func (s *InsurerService) EndUserPlan(userID uint) (*UserPlanStatus, error) {
+	if s.DB == nil {
+		return nil, fmt.Errorf("database unavailable")
+	}
+
+	err := s.DB.Transaction(func(tx *gorm.DB) error {
+		var exists int64
+		if err := tx.Table("users").Where("id = ?", userID).Count(&exists).Error; err != nil {
+			return err
+		}
+		if exists == 0 {
+			return fmt.Errorf("user not found")
+		}
+
+		now := time.Now().UTC()
+		if err := tx.Model(&models.Policy{}).
+			Where("worker_id = ? AND status = ?", userID, "active").
+			Updates(map[string]interface{}{"status": "inactive", "updated_at": now}).
+			Error; err != nil {
+			return err
+		}
+
+		return tx.Exec("DELETE FROM active_policies WHERE user_id = ?", userID).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetUserPlanStatus(userID)
 }
 
 // GetOverview returns KPI overview

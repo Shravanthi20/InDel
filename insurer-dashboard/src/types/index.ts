@@ -23,6 +23,18 @@ export interface Worker {
   total_earnings: number
 }
 
+export interface PlanUser {
+  id: number
+  name: string
+  phone: string
+  zone: string
+  status: 'active' | 'inactive' | string
+  policy_id?: number
+  plan_id?: string
+  started_at?: string
+  updated_at?: string
+}
+
 // --- Zone Path API Types ---
 export interface ZoneACitiesResponse {
   cities: string[];

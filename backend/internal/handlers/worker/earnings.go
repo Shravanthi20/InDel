@@ -9,7 +9,7 @@ func GetEarnings(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			var baseline float64 = 0
 			var actual float64 = 0
@@ -72,7 +72,7 @@ func GetEarningsHistory(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			var baseline float64 = 0
 			_ = workerDB.Raw("SELECT baseline_amount FROM earnings_baseline WHERE worker_id = ?", workerIDUint).Scan(&baseline).Error
@@ -107,7 +107,7 @@ func GetEarningsBaseline(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			var baseline float64 = 0
 			_ = workerDB.Raw("SELECT baseline_amount FROM earnings_baseline WHERE worker_id = ?", workerIDUint).Scan(&baseline).Error

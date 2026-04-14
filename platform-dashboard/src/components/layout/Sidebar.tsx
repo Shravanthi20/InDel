@@ -12,6 +12,7 @@ const platformNav = [
 
 const opsNav = [
   { to: '/batches', label: 'View Batches', icon: Sparkles },
+  { to: '/god-mode/batch-simulation', label: 'Batch Simulation', icon: ShieldCheck },
   { to: '/synthetic-data', label: 'Synthetic Data', icon: Database },
   { to: '/disruptions', label: 'Chaos Engine', icon: Zap },
   { to: '/weekly-cycle', label: 'Weekly Cycle', icon: CalendarClock },

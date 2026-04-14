@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from './context/ThemeContext'
+import PlanStatusDashboard from './pages/PlanStatusDashboard'
 import Layout from './components/layout/Sidebar'
 import Overview from './pages/Overview'
 import LossRatio from './pages/LossRatio'
@@ -63,6 +64,7 @@ function AppContent() {
       <Layout>
         <Routes>
           <Route path="/" element={<Overview />} />
+          <Route path="/plan-status" element={<PlanStatusDashboard />} />
           <Route path="/loss-ratio" element={<LossRatio />} />
           <Route path="/claims" element={<Claims />} />
           <Route path="/fraud-queue" element={<FraudQueue />} />

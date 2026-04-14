@@ -19,4 +19,8 @@ func SetupInsurerRoutes(router *gin.Engine, svc *services.InsurerService) {
 	v1.GET("/forecast", h.GetForecast)
 	v1.GET("/pool/health", h.GetPoolHealth)
 	v1.GET("/money-exchange", h.GetMoneyExchange)
+	v1.GET("/users", h.GetPlanUsers)
+	v1.POST("/users/:id/plan/start", h.StartUserPlan)
+	v1.POST("/users/:id/plan/end", h.EndUserPlan)
+	v1.GET("/plan-stats", h.GetPlanUsers)
 }

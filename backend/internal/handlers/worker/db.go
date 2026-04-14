@@ -16,8 +16,14 @@ func SetDB(db *gorm.DB) {
 	workerDB = db
 }
 
-func hasDB() bool {
+// HasDB returns true if the workerDB is set (exported for other packages)
+func HasDB() bool {
 	return workerDB != nil
+}
+
+// GetDB returns the workerDB instance (exported for other packages)
+func GetDB() *gorm.DB {
+	return workerDB
 }
 
 func parseWorkerID(workerID string) (uint, error) {
@@ -32,7 +38,7 @@ func parseWorkerID(workerID string) (uint, error) {
 
 // EnsureDemoSeed inserts minimum worker demo data if DB is empty.
 func EnsureDemoSeed() error {
-	if !hasDB() {
+	if !HasDB() {
 		return nil
 	}
 
