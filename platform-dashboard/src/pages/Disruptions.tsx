@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Activity, AlertTriangle, Radio, ShieldAlert, WifiOff, CloudRain, Zap, RefreshCw, Terminal, PlayCircle, Settings2 } from 'lucide-react'
 import { getZoneHealth, getDisruptions, postTriggerDemo, postExternalSignal } from '../api/platform'
+import { getZones } from '../api/zones'
 
 interface ZoneHealth {
   zone_id: number
@@ -37,18 +38,31 @@ interface HistoryEvent {
 
 export default function Disruptions() {
   const [healths, setHealths] = useState<ZoneHealth[]>([])
+  const [zones, setZones] = useState<any[]>([])
+  const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null)
   const [disruptions, setDisruptions] = useState<Disruption[]>([])
   const [history, setHistory] = useState<HistoryEvent[]>([])
   const lastSignatureRef = useRef<string>("")
+  const zonesInitializedRef = useRef(false)
   const [loadingAction, setLoadingAction] = useState(false)
   const [actionStatus, setActionStatus] = useState("")
   const [delaying, setDelaying] = useState<string | null>(null)
 
   const fetchData = async () => {
     try {
-      const [hRes, dRes] = await Promise.all([getZoneHealth(), getDisruptions()])
+      const [hRes, dRes, zRes] = await Promise.all([getZoneHealth(), getDisruptions(), getZones()])
       setHealths(hRes.data.data)
       setDisruptions(dRes.data.data)
+      setZones(zRes.data?.zones ?? [])
+      
+      // Only auto-select first zone on initial load, then preserve user selection
+      if (!zonesInitializedRef.current && zRes.data?.zones?.length > 0) {
+        const firstZoneId = zRes.data.zones[0]?.zone_id
+        if (firstZoneId) {
+          setSelectedZoneId(firstZoneId)
+          zonesInitializedRef.current = true
+        }
+      }
     } catch (e) {
       console.error('Failed to fetch platform status', e)
     }
@@ -92,6 +106,18 @@ export default function Disruptions() {
 
   const formatSignal = (s: string) => 
     s.replace("_", " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+
+  const formatZoneLabel = (zone: any) => {
+    const zoneName = String(zone?.zone_name || zone?.name || `Zone ${zone?.zone_id ?? ''}`).trim()
+    const zoneState = String(zone?.state || '').trim()
+    const zoneCity = String(zone?.city || '').trim()
+
+    if (zoneState) return `${zoneName} - ${zoneState}`
+    if (zoneCity && !zoneName.toLowerCase().includes(zoneCity.toLowerCase())) {
+      return `${zoneName} - ${zoneCity}`
+    }
+    return zoneName
+  }
 
   const handleExternalSignal = async (zone_id: number, type: string, active: boolean) => {
     if (loadingAction || delaying) return;
@@ -267,14 +293,29 @@ export default function Disruptions() {
             <div className="space-y-10">
               <section className="space-y-4">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Statistical Ingress</div>
+                <div className="space-y-3">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">Zone</label>
+                  <select
+                    value={selectedZoneId ? String(selectedZoneId) : ''}
+                    onChange={(e) => setSelectedZoneId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-3 text-sm text-slate-900 dark:text-white"
+                  >
+                    <option value="">Select Zone</option>
+                    {zones.map((zone) => (
+                      <option key={zone.zone_id} value={String(zone.zone_id)}>
+                        {formatZoneLabel(zone)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
-                  disabled={loadingAction}
-                  onClick={() => handleOrderDrop(1)}
+                  disabled={loadingAction || !selectedZoneId}
+                  onClick={() => selectedZoneId && handleOrderDrop(selectedZoneId)}
                   className="w-full flex items-center justify-between p-4 rounded-xl border border-orange-200 dark:border-orange-500/40 bg-orange-50/50 dark:bg-orange-500/10 hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-all text-left group"
                 >
                   <div className="max-w-[180px]">
                      <div className="text-[11px] font-black uppercase text-orange-600 dark:text-orange-400">Collapse Demand</div>
-                     <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-1">Force order drop in Zone 1 to test engine anomaly detection.</p>
+                     <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-1">Force order drop in the selected zone to test engine anomaly detection.</p>
                   </div>
                   <PlayCircle className="h-5 w-5 text-orange-400 group-hover:scale-110 transition-transform" />
                 </button>
@@ -283,12 +324,12 @@ export default function Disruptions() {
               <section className="space-y-4 pt-8 border-t border-slate-100 dark:border-slate-800">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">External Signals</div>
                 <div className="grid grid-cols-2 gap-3">
-                  <SignalButton label="Rain" icon={CloudRain} active={delaying === 'weather_rain'} onClick={() => handleExternalSignal(1, 'weather_rain', true)} />
-                  <SignalButton label="Curfew" icon={ShieldAlert} active={delaying === 'zone_curfew'} onClick={() => handleExternalSignal(1, 'zone_curfew', true)} />
-                  <SignalButton label="AQI" icon={Radio} active={delaying === 'aqi_hazardous'} onClick={() => handleExternalSignal(1, 'aqi_hazardous', true)} />
+                  <SignalButton label="Rain" icon={CloudRain} active={delaying === 'weather_rain'} onClick={() => selectedZoneId && handleExternalSignal(selectedZoneId, 'weather_rain', true)} />
+                  <SignalButton label="Curfew" icon={ShieldAlert} active={delaying === 'zone_curfew'} onClick={() => selectedZoneId && handleExternalSignal(selectedZoneId, 'zone_curfew', true)} />
+                  <SignalButton label="AQI" icon={Radio} active={delaying === 'aqi_hazardous'} onClick={() => selectedZoneId && handleExternalSignal(selectedZoneId, 'aqi_hazardous', true)} />
                   <button 
-                    disabled={loadingAction}
-                    onClick={() => handleExternalSignal(1, 'all_signals', false)}
+                    disabled={loadingAction || !selectedZoneId}
+                    onClick={() => selectedZoneId && handleExternalSignal(selectedZoneId, 'all_signals', false)}
                     className="h-14 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-none">
                      <RefreshCw className="h-4 w-4" />
                   </button>
@@ -296,8 +337,8 @@ export default function Disruptions() {
               </section>
 
               <button
-                disabled={loadingAction}
-                onClick={() => handleReset(1)}
+                disabled={loadingAction || !selectedZoneId}
+                onClick={() => selectedZoneId && handleReset(selectedZoneId)}
                 className="w-full py-4 rounded-xl border-2 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center justify-center gap-2 group"
               >
                 <RefreshCw className={`h-4 w-4 text-slate-400 ${loadingAction ? 'animate-spin' : ''}`} />

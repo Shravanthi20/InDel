@@ -252,12 +252,12 @@ services:
       args:
         VITE_PLATFORM_API_URL: ${PLATFORM_API_URL:-http://localhost:8004}
     ports:
-      - "5174:5174"
+      - "5175:5175"
     depends_on:
       api-gateway:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:5174 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:5175 >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20

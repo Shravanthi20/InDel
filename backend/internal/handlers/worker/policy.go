@@ -24,6 +24,7 @@ func GetPolicy(c *gin.Context) {
 			if err == nil {
 				now := time.Now().UTC()
 				quote, _ := services.QuotePremium(workerDB, workerIDUint, now)
+				zoneSummary := getWorkerZoneSummary(workerIDUint)
 				premiumAmount := int(p.PremiumAmount)
 				source := "stored_policy"
 				riskScore := 0.0
@@ -87,13 +88,20 @@ func GetPolicy(c *gin.Context) {
 					paymentState.RequiredAmountINR = requiredAmount
 				}
 
+				zoneLabel := "Tambaram, Chennai"
+				if zoneSummary.ZoneName != "" && zoneSummary.City != "" {
+					zoneLabel = formatZoneDisplay(zoneSummary.ZoneName, zoneSummary.City)
+				} else if zoneSummary.ZoneName != "" {
+					zoneLabel = zoneSummary.ZoneName
+				}
+
 				policy := gin.H{
 					"policy_id":          fmt.Sprintf("pol-%03d", p.ID),
 					"plan_id":            p.PlanID,
 					"status":             effectiveStatus,
 					"weekly_premium_inr": premiumAmount,
 					"coverage_ratio":     coverageRatio,
-					"zone":               "Tambaram, Chennai",
+					"zone":               zoneLabel,
 					"next_due_date":      dueDate,
 					"risk_score":         riskScore,
 					"pricing_source":     source,

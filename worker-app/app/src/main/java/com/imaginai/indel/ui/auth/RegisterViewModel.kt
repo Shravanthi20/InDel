@@ -66,52 +66,72 @@ class RegisterViewModel @Inject constructor(
     private fun fetchZonePaths(level: String) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Fetching zone paths for level=$level")
+                Log.d(TAG, "Fetching platform zones for registration level=$level")
                 val response = workerRepository.getZonePaths(level.lowercase())
-                Log.d(TAG, "Zone path response: ${response.code()}")
-                
                 if (response.isSuccessful) {
                     val body = response.body()
                     val paths = mutableListOf<ZonePath>()
-                    
-                    body?.cities?.let { cities ->
-                        Log.d(TAG, "Processing ${cities.size} cities")
-                        cities.forEach { city ->
-                            val displayName = city.city + (city.state?.let { " ($it)" } ?: "")
-                            paths.add(ZonePath(displayName = displayName, city = city.city))
+
+                    body?.zones?.forEach { zone ->
+                        val zoneLabel = buildString {
+                            append(zone.zoneName)
+                            zone.zoneState?.takeIf { it.isNotBlank() }?.let {
+                                append(" ($it)")
+                            }
                         }
-                    }
-                    
-                    body?.cityPairs?.let { pairs ->
-                        Log.d(TAG, "Processing ${pairs.size} city pairs")
-                        pairs.forEach { pair ->
-                            paths.add(ZonePath(
-                                displayName = "${pair.from} to ${pair.to}" + (pair.state?.let { " (${it})" } ?: ""),
-                                fromCity = pair.from,
-                                toCity = pair.to
-                            ))
-                        }
+                        paths.add(
+                            ZonePath(
+                                id = zone.zoneId?.toString(),
+                                displayName = zoneLabel,
+                                city = zone.city ?: zone.zoneName
+                            )
+                        )
                     }
 
-                    if (paths.size > 10) {
-                        paths.subList(10, paths.size).clear()
-                    }
-                    
-                    // Fallback to existing paths if any
-                    if (paths.isEmpty() && body?.paths != null) {
-                        Log.d(TAG, "Using fallback paths")
-                        paths.addAll(body.paths)
-                        if (paths.size > 10) {
-                            paths.subList(10, paths.size).clear()
+                    body?.cities?.forEach { city ->
+                        val cityLabel = buildString {
+                            append(city.city)
+                            city.state?.takeIf { it.isNotBlank() }?.let {
+                                append(" ($it)")
+                            }
                         }
+                        paths.add(
+                            ZonePath(
+                                displayName = cityLabel,
+                                city = city.city
+                            )
+                        )
                     }
-                    
-                    Log.d(TAG, "Final paths count: ${paths.size}")
-                    _availablePaths.value = paths
-                    if (paths.isEmpty()) {
-                        _uiState.value = RegisterUiState.Error("No zone paths returned for selected level")
+
+                    body?.cityPairs?.forEach { pair ->
+                        val pairState = pair.state
+                            ?: listOfNotNull(pair.fromState, pair.toState).distinct().joinToString(" / ")
+                        val pairLabel = buildString {
+                            append(pair.from)
+                            append(" to ")
+                            append(pair.to)
+                            pairState.takeIf { it.isNotBlank() }?.let {
+                                append(" ($it)")
+                            }
+                        }
+                        paths.add(
+                            ZonePath(
+                                displayName = pairLabel,
+                                fromCity = pair.from,
+                                toCity = pair.to
+                            )
+                        )
+                    }
+
+                    if (paths.isEmpty() && body?.paths != null) {
+                        paths.addAll(body.paths)
+                    }
+
+                    _availablePaths.value = paths.distinctBy { it.displayName.orEmpty() }
+                    _uiState.value = if (_availablePaths.value.isEmpty()) {
+                        RegisterUiState.Error("No zones returned for selected level")
                     } else {
-                        _uiState.value = RegisterUiState.Idle
+                        RegisterUiState.Idle
                     }
                 } else {
                     val errorText = response.errorBody()?.string() ?: "Zone path fetch failed"

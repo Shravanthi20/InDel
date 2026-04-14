@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.imaginai.indel.data.model.Policy
 import com.imaginai.indel.data.model.ShapImpact
+import com.imaginai.indel.ui.navigation.Screen
 import com.imaginai.indel.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -88,6 +89,7 @@ fun PolicyScreen(
                     }
                     is PolicyUiState.Success -> PremiumPlanContent(
                         policy = state.policy,
+                        navController = navController,
                         viewModel = viewModel,
                         onStopPlan = { showStopConfirm = true }
                     )
@@ -169,6 +171,7 @@ fun PolicyScreen(
 @Composable
 private fun PremiumPlanContent(
     policy: Policy,
+    navController: NavController,
     viewModel: PolicyViewModel,
     onStopPlan: () -> Unit
 ) {
@@ -244,7 +247,7 @@ private fun PremiumPlanContent(
                         lateFee = lateFee,
                         totalDue = totalDue,
                         paymentStatus = policy.paymentStatus,
-                        onClick = { viewModel.payWeeklyPremium() }
+                        onClick = { navController.navigate(Screen.PremiumPay.route) }
                     )
                     // Stop Plan
                     OutlinedButton(

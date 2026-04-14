@@ -9,29 +9,132 @@ import (
 	"gorm.io/gorm"
 )
 
+type workerZoneSummary struct {
+	ZoneID    uint
+	ZoneLevel string
+	ZoneName  string
+	City      string
+	State     string
+}
+
+type normalizedZoneInput struct {
+	Level string
+	Name  string
+	City  string
+	State string
+}
+
+func normalizeZoneLevel(zoneLevel string) string {
+	return strings.ToUpper(strings.TrimSpace(zoneLevel))
+}
+
+func zoneDefaultsForLevel(zoneLevel string) (city string, state string) {
+	switch normalizeZoneLevel(zoneLevel) {
+	case "B":
+		return "Tamil Nadu", "Tamil Nadu"
+	case "C":
+		return "Chennai", "Tamil Nadu"
+	default:
+		return "Chennai", "Tamil Nadu"
+	}
+}
+
+func normalizeZoneInput(zoneLevel, zoneName string) normalizedZoneInput {
+	level := normalizeZoneLevel(zoneLevel)
+	rawName := strings.TrimSpace(zoneName)
+	city, state := zoneDefaultsForLevel(level)
+	name := rawName
+
+	if idx := strings.LastIndex(rawName, " ("); idx > 0 && strings.HasSuffix(rawName, ")") {
+		name = strings.TrimSpace(rawName[:idx])
+		parsedState := strings.TrimSpace(strings.TrimSuffix(rawName[idx+2:], ")"))
+		if parsedState != "" {
+			state = parsedState
+		}
+	}
+
+	if strings.Contains(rawName, " to ") {
+		name = rawName
+		parts := strings.SplitN(rawName, " to ", 2)
+		if len(parts) == 2 {
+			city = strings.TrimSpace(parts[0])
+		}
+	}
+
+	if name != "" && city == "Chennai" && !strings.Contains(strings.ToLower(name), "chennai") {
+		city = name
+	}
+
+	return normalizedZoneInput{
+		Level: level,
+		Name:  name,
+		City:  city,
+		State: state,
+	}
+}
+
+func formatZoneDisplay(zoneName, city string) string {
+	name := strings.TrimSpace(zoneName)
+	city = strings.TrimSpace(city)
+	if name == "" {
+		return city
+	}
+	if city == "" {
+		return name
+	}
+	nameLower := strings.ToLower(name)
+	cityLower := strings.ToLower(city)
+	if strings.Contains(nameLower, cityLower) || strings.Contains(name, "(") || strings.Contains(name, ",") || strings.Contains(nameLower, " to ") {
+		return name
+	}
+	return fmt.Sprintf("%s, %s", name, city)
+}
+
 // ensureZoneIDByLevelAndName finds or creates a zone by level and name
 func ensureZoneIDByLevelAndName(zoneLevel, zoneName string) uint {
 	if !HasDB() {
 		return 0
 	}
-	level := strings.TrimSpace(zoneLevel)
-	name := strings.TrimSpace(zoneName)
+	normalized := normalizeZoneInput(zoneLevel, zoneName)
+	level := normalized.Level
+	name := normalized.Name
 	if level == "" || name == "" {
 		return 0
 	}
 	var zone models.Zone
 	if err := workerDB.Where("level = ? AND name = ?", level, name).First(&zone).Error; err == nil {
+		updates := map[string]any{}
+		if normalized.City != "" && !strings.EqualFold(strings.TrimSpace(zone.City), strings.TrimSpace(normalized.City)) {
+			updates["city"] = normalized.City
+		}
+		if normalized.State != "" && !strings.EqualFold(strings.TrimSpace(zone.State), strings.TrimSpace(normalized.State)) {
+			updates["state"] = normalized.State
+		}
+		if len(updates) > 0 {
+			_ = workerDB.Model(&zone).Updates(updates).Error
+		}
 		return zone.ID
 	}
-	// Default city/state for demo
-	city := "Chennai"
-	state := "Tamil Nadu"
-	newZone := models.Zone{Level: level, Name: name, City: city, State: state, RiskRating: 0.5}
+	newZone := models.Zone{Level: level, Name: name, City: normalized.City, State: normalized.State, RiskRating: 0.5}
 	if err := workerDB.Create(&newZone).Error; err == nil {
 		return newZone.ID
 	}
 	_ = workerDB.Where("level = ? AND name = ?", level, name).First(&zone).Error
 	return zone.ID
+}
+
+func getWorkerZoneSummary(workerID uint) workerZoneSummary {
+	if !HasDB() || workerID == 0 {
+		return workerZoneSummary{}
+	}
+
+	var row workerZoneSummary
+	_ = workerDB.Table("worker_profiles wp").
+		Select("COALESCE(z.id, 0) AS zone_id, COALESCE(z.level, '') AS zone_level, COALESCE(z.name, '') AS zone_name, COALESCE(z.city, '') AS city, COALESCE(z.state, '') AS state").
+		Joins("LEFT JOIN zones z ON z.id = wp.zone_id").
+		Where("wp.worker_id = ?", workerID).
+		Scan(&row).Error
+	return row
 }
 
 // Onboard completes worker onboarding
@@ -109,6 +212,8 @@ func GetProfile(c *gin.Context) {
 				WorkerID    uint
 				Phone       string
 				Name        string
+				ZoneID      uint
+				ZoneLevel   string
 				ZoneName    string
 				City        string
 				VehicleType string
@@ -117,7 +222,7 @@ func GetProfile(c *gin.Context) {
 
 			var row profileResp
 			err := workerDB.Table("users u").
-				Select("u.id as worker_id, u.phone, wp.name, z.name as zone_name, z.city, wp.vehicle_type, wp.upi_id").
+				Select("u.id as worker_id, u.phone, wp.name, COALESCE(z.id, 0) as zone_id, COALESCE(z.level, '') as zone_level, z.name as zone_name, z.city, wp.vehicle_type, wp.upi_id").
 				Joins("LEFT JOIN worker_profiles wp ON wp.worker_id = u.id").
 				Joins("LEFT JOIN zones z ON z.id = wp.zone_id").
 				Where("u.id = ?", workerIDUint).
@@ -146,9 +251,11 @@ func GetProfile(c *gin.Context) {
 					"worker_id":        fmt.Sprintf("%d", row.WorkerID),
 					"name":             name,
 					"phone":            row.Phone,
-					"zone":             fmt.Sprintf("%s, %s", zoneName, city),
-					"zone_level":       city,
+					"zone":             formatZoneDisplay(zoneName, city),
+					"zone_level":       row.ZoneLevel,
 					"zone_name":        zoneName,
+					"zone_id":          row.ZoneID,
+					"city":             city,
 					"vehicle_type":     row.VehicleType,
 					"upi_id":           row.UPIId,
 					"coverage_status":  "active",

@@ -17,5 +17,5 @@ RUN npm install -g serve
 WORKDIR /app
 COPY --from=0 /app/dist ./dist
 
-EXPOSE 5174
-CMD ["serve", "-s", "dist", "-l", "5174"]
+EXPOSE 5175
+CMD ["serve", "-s", "dist", "-l", "5175"]

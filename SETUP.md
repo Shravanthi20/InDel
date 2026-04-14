@@ -249,7 +249,7 @@ npm run dev
 
 Expected local URL (Vite):
 
-- http://127.0.0.1:5174 (or next available port shown in terminal)
+- http://127.0.0.1:5175 (or next available port shown in terminal)
 
 If required, set API endpoints in `insurer-dashboard/.env`:
 

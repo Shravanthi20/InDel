@@ -27,6 +27,8 @@ export default function Zones() {
    const [zoneLevel, setZoneLevel] = useState<'a' | 'b' | 'c' | ''>('');
    const [zoneOptions, setZoneOptions] = useState<any[]>([]);
    const [zoneName, setZoneName] = useState<string>('');
+   const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
+   const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null);
    const [zoneCache] = useState<{ [k: string]: any[] }>({});
 
    useEffect(() => {
@@ -49,11 +51,15 @@ export default function Zones() {
       if (!zoneLevel) {
          setZoneOptions([]);
          setZoneName('');
+         setSelectedZoneId(null);
+         setSelectedZoneIndex(null);
          return;
       }
       if (zoneCache[zoneLevel]) {
          setZoneOptions(zoneCache[zoneLevel]);
          setZoneName('');
+         setSelectedZoneId(null);
+         setSelectedZoneIndex(null);
          return;
       }
       getZonePaths(zoneLevel).then((res: any) => {
@@ -95,6 +101,9 @@ export default function Zones() {
                        setZoneLevel(e.target.value as 'a' | 'b' | 'c' | '');
                        setSelectedDisruption('');
                        setDisruptionStatus('');
+                       setSelectedZoneId(null);
+                       setSelectedZoneIndex(null);
+                       setZoneName('');
                      }}
                   >
                      <option value="">Select Level</option>
@@ -107,17 +116,39 @@ export default function Zones() {
                   <label className="block text-xs font-bold mb-1">Zone Name</label>
                   <select
                      className="rounded border px-3 py-2 text-sm"
-                     value={zoneName}
+                     value={selectedZoneIndex !== null ? String(selectedZoneIndex) : ''}
                      onChange={e => {
-                       setZoneName(e.target.value);
+                       const idx = e.target.value === '' ? null : Number(e.target.value);
+                       if (idx === null) {
+                          setSelectedZoneIndex(null);
+                          setSelectedZoneId(null);
+                          setZoneName('');
+                          setSelectedDisruption('');
+                          setDisruptionStatus('');
+                          return;
+                       }
+                       const selected = zoneOptions[idx];
+                       const label = ((selected.zone_name || selected.city || '') as string).trim();
+                       setSelectedZoneIndex(idx);
+                       setZoneName(label);
                        setSelectedDisruption('');
                        setDisruptionStatus('');
+
+                       let zoneId = selected.zone_id ?? 0;
+                       if (!zoneId) {
+                          const found = zones.find((z: any) => {
+                             const zoneLabel = ((z.zone_name || z.city || '') as string).trim();
+                             return zoneLabel.toLowerCase() === label.toLowerCase();
+                          });
+                          zoneId = found?.zone_id ?? 0;
+                       }
+                       setSelectedZoneId(zoneId || null);
                      }}
                      disabled={!zoneLevel || zoneOptions.length === 0}
                   >
                      <option value="">{zoneLevel ? 'Select Zone' : 'Select Level First'}</option>
                      {zoneOptions.map((z, idx) => (
-                        <option key={z.city || z.zone_name || idx} value={z.city || z.zone_name}>
+                        <option key={z.zone_id || z.city || z.zone_name || idx} value={idx}>
                            {(z.city || z.zone_name) + (z.state ? ', ' + z.state : '')}
                         </option>
                      ))}
@@ -140,16 +171,23 @@ export default function Zones() {
                <div>
                  <button
                    className="rounded bg-orange-600 text-white px-4 py-2 font-bold text-xs disabled:opacity-50"
-                   disabled={!zoneLevel || !zoneName || !selectedDisruption}
+                   disabled={!zoneLevel || !zoneName || !selectedDisruption || !selectedZoneId}
                    onClick={async () => {
                      setDisruptionStatus('');
                      try {
+                       const zoneId = selectedZoneId || (() => {
+                         const zone = zones.find(z => {
+                           const label = ((z.zone_name || z.city || '') as string).trim();
+                           return label.toLowerCase() === zoneName.toLowerCase();
+                         });
+                         return zone?.zone_id || 0;
+                       })();
+                       if (!zoneId) {
+                         setDisruptionStatus('Unable to resolve zone');
+                         return;
+                       }
                        await postTriggerDemo({
-                         zone_id: (() => {
-                           // Try to find the zone_id from the selected zone
-                           const zone = zones.find(z => (z.city === zoneName || z.zone_name === zoneName));
-                           return zone?.zone_id || 0;
-                         })(),
+                         zone_id: zoneId,
                          force_order_drop: true,
                          external_signal: selectedDisruption,
                        });

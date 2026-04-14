@@ -126,6 +126,9 @@ func Register(c *gin.Context) {
 	phone := bodyString(body, "phone", "")
 	email := bodyString(body, "email", "")
 	password := bodyString(body, "password", "")
+	normalizedZone := normalizeZoneInput(bodyString(body, "zone_level", ""), bodyString(body, "zone_name", ""))
+	zoneLevel := normalizedZone.Level
+	zoneName := normalizedZone.Name
 
 	if username == "" || phone == "" || email == "" || password == "" {
 		c.JSON(400, gin.H{"error": "username_phone_email_password_required"})
@@ -169,37 +172,78 @@ func Register(c *gin.Context) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
+	zoneDisplay := zoneName
+	if zoneDisplay == "" {
+		zoneDisplay = "Tambaram"
+	}
+
 	if _, exists := store.data.WorkerProfiles[workerID]; !exists {
 		store.data.WorkerProfiles[workerID] = map[string]any{
 			"worker_id":       workerID,
 			"name":            username,
 			"phone":           phone,
-			"zone":            "Tambaram, Chennai",
+			"zone":            zoneDisplay,
+			"zone_level":      zoneLevel,
+			"zone_name":       zoneName,
 			"vehicle_type":    "bike",
 			"upi_id":          "new@upi",
 			"coverage_status": "active",
 			"enrolled":        true,
 		}
 	}
+	store.data.WorkerProfiles[workerID]["name"] = username
+	store.data.WorkerProfiles[workerID]["phone"] = phone
+	store.data.WorkerProfiles[workerID]["zone"] = zoneDisplay
+	store.data.WorkerProfiles[workerID]["zone_level"] = zoneLevel
+	store.data.WorkerProfiles[workerID]["zone_name"] = zoneName
+	store.data.WorkerProfiles[workerID]["coverage_status"] = "active"
+	store.data.WorkerProfiles[workerID]["enrolled"] = true
 
 	// ─── DB Seeding for Demo "Real Data" ──────────────────────────────
 	if HasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
 
-		// 1. Ensure a default zone exists.
-		zoneName := "Tambaram"
-		_ = workerDB.Exec(
-			"INSERT INTO zones (name, city, state, risk_rating) VALUES (?, ?, ?, ?) ON CONFLICT (name) DO NOTHING",
-			zoneName, "Chennai", "Tamil Nadu", 0.62,
-		)
+		// 1. Ensure the selected zone exists.
+		resolvedZoneLevel := zoneLevel
+		resolvedZoneName := zoneName
+		if resolvedZoneLevel == "" {
+			resolvedZoneLevel = "A"
+		}
+		if resolvedZoneName == "" {
+			resolvedZoneName = "Tambaram"
+		}
+		zoneID := ensureZoneIDByLevelAndName(resolvedZoneLevel, resolvedZoneName)
 		var zone models.Zone
-		_ = workerDB.Where("name = ?", zoneName).First(&zone).Error
+		if zoneID != 0 {
+			_ = workerDB.Where("id = ?", zoneID).First(&zone).Error
+		}
+		if zone.ID == 0 {
+			normalizedFallback := normalizeZoneInput(resolvedZoneLevel, resolvedZoneName)
+			zone = models.Zone{
+				Name:       normalizedFallback.Name,
+				Level:      normalizedFallback.Level,
+				City:       normalizedFallback.City,
+				State:      normalizedFallback.State,
+				RiskRating: 0.62,
+			}
+			_ = workerDB.Create(&zone).Error
+		}
+		if zone.City != "" {
+			store.data.WorkerProfiles[workerID]["zone"] = formatZoneDisplay(zone.Name, zone.City)
+		}
+		store.data.WorkerProfiles[workerID]["zone_level"] = resolvedZoneLevel
+		store.data.WorkerProfiles[workerID]["zone_name"] = zone.Name
 
 		// 2. Create Worker Profile in DB (Starting at 0 earnings).
 		_ = workerDB.Exec(
 			`INSERT INTO worker_profiles (worker_id, name, zone_id, vehicle_type, upi_id, aqi_zone, total_earnings_lifetime)
 			 VALUES (?, ?, ?, ?, ?, ?, ?)
-			 ON CONFLICT (worker_id) DO NOTHING`,
+			 ON CONFLICT (worker_id) DO UPDATE SET
+			 name = EXCLUDED.name,
+			 zone_id = EXCLUDED.zone_id,
+			 vehicle_type = EXCLUDED.vehicle_type,
+			 upi_id = EXCLUDED.upi_id,
+			 aqi_zone = EXCLUDED.aqi_zone`,
 			workerIDUint, username, zone.ID, "bike", "demo@upi", "AQI-Medium", 0,
 		)
 
@@ -300,12 +344,32 @@ func Login(c *gin.Context) {
 	// ─── DB Seeding for Order Refill ──────────────────────────────
 	if HasDB() {
 		workerIDUint, _ := parseWorkerID(workerID)
+		zoneSummary := getWorkerZoneSummary(workerIDUint)
+		if zoneSummary.ZoneName != "" {
+			store.mu.Lock()
+			profile := store.data.WorkerProfiles[workerID]
+			if profile == nil {
+				profile = map[string]any{"worker_id": workerID}
+			}
+			if zoneSummary.City != "" {
+				profile["zone"] = formatZoneDisplay(zoneSummary.ZoneName, zoneSummary.City)
+			} else {
+				profile["zone"] = zoneSummary.ZoneName
+			}
+			profile["zone_level"] = zoneSummary.ZoneLevel
+			profile["zone_name"] = zoneSummary.ZoneName
+			store.data.WorkerProfiles[workerID] = profile
+			store.mu.Unlock()
+		}
 
 		// 1. Get user's zone.
 		var zoneID uint
 		_ = workerDB.Raw("SELECT zone_id FROM worker_profiles WHERE worker_id = ?", workerIDUint).Scan(&zoneID).Error
 		if zoneID == 0 {
-			zoneID = 1 // default to zone 1
+			zoneID = zoneSummary.ZoneID
+		}
+		if zoneID == 0 {
+			zoneID = 1 // final fallback only when no saved worker zone exists
 		}
 
 		// 2. Seed 50 Available Orders in this Zone.

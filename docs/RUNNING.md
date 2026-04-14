@@ -5,12 +5,12 @@ This guide covers the updated stack with:
 - backend gateways (`core`, `worker-gateway`, `insurer-gateway`, `platform-gateway`)
 - ML services (`premium-ml`, `fraud-ml`, `forecast-ml`)
 - unified API gateway (`api-gateway` on `:8004`)
-- Platform Dashboard (`platform-dashboard` on `:5174`)
+- Platform Dashboard (`platform-dashboard` on `:5175`)
 
 ## Prerequisites
 
 - Docker Desktop (with Compose v2)
-- Ports available: `5174`, `8000`, `8001`, `8002`, `8003`, `8004`, `9001`, `9002`, `9003`
+- Ports available: `5175`, `8000`, `8001`, `8002`, `8003`, `8004`, `9001`, `9002`, `9003`
 
 ## 1. Start Demo Stack (Recommended)
 
@@ -74,7 +74,7 @@ foreach ($u in $urls) {
 
 ## 4. Open Platform Dashboard
 
-- Dashboard UI: `http://localhost:5174`
+- Dashboard UI: `http://localhost:5175`
 - Unified API gateway: `http://localhost:8004`
 
 The dashboard is built with `VITE_PLATFORM_API_URL=http://localhost:8004` in Compose.

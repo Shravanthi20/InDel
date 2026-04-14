@@ -48,7 +48,9 @@ fun readEnvValue(key: String): String? {
     }
 }
 
-val apiBaseUrl = readEnvValue("API_BASE_URL") ?: "http://${getHostIpAddress()}:8001/"
+val apiBaseUrl = readEnvValue("API_BASE_URL")
+    ?: readEnvValue("PLATFORM_API_URL")
+    ?: "http://${getHostIpAddress()}:8003/"
 val razorpayKeyId = readEnvValue("RAZORPAY_KEY_ID") ?: ""
 
 println(">>> InDel Build: Using API_BASE_URL=$apiBaseUrl")

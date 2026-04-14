@@ -38,7 +38,7 @@ func ResetEngineForTests() {
 	engineMu.Lock()
 	zoneSignals = make(map[uint]*ZoneSignalState)
 	engineMu.Unlock()
-	
+
 	idCacheMu.Lock()
 	processedOrderIds = make(map[string]time.Time)
 	idCacheMu.Unlock()
@@ -118,7 +118,7 @@ func SetExternalSignal(zoneID uint, signalType string, isActive bool) {
 // calculateZoneStats provides a single-source-of-truth for health metrics
 func calculateZoneStats(state *ZoneSignalState) (int, float64, float64, string) {
 	now := time.Now()
-	
+
 	// 1. Data Availability Guardrail (Warm-up)
 	// System remains "Healthy" until it has seen at least 3 orders total (Reduced for demo)
 	if state.TotalOrdersEver <= 3 {
@@ -132,7 +132,7 @@ func calculateZoneStats(state *ZoneSignalState) (int, float64, float64, string) 
 			currentWindow = append(currentWindow, t)
 		}
 	}
-	
+
 	current := len(currentWindow)
 	var orderDrop float64
 	if state.BaselineOrders > 0 {
@@ -164,7 +164,7 @@ func evaluateDisruption(zoneID uint, state *ZoneSignalState) {
 	defer state.mu.Unlock()
 
 	now := time.Now()
-	
+
 	// Increment total orders (capped for safety)
 	if state.TotalOrdersEver < 1000 {
 		state.TotalOrdersEver++
@@ -198,11 +198,15 @@ func evaluateDisruption(zoneID uint, state *ZoneSignalState) {
 		orderDrop = (state.BaselineOrders - float64(current)) / state.BaselineOrders
 	}
 	// Clamp again
-	if orderDrop < 0 { orderDrop = 0 }
-	if orderDrop > 1 { orderDrop = 1 }
+	if orderDrop < 0 {
+		orderDrop = 0
+	}
+	if orderDrop > 1 {
+		orderDrop = 1
+	}
 
-    // Print to logs so we can see the exact math!
-    log.Printf("[DECISION ENGINE] Zone %d | Output: %s | Window: %d / %.0f (Drop: %.1f%%)", zoneID, strings.ToUpper(status), current, state.BaselineOrders, orderDrop*100)
+	// Print to logs so we can see the exact math!
+	log.Printf("[DECISION ENGINE] Zone %d | Output: %s | Window: %d / %.0f (Drop: %.1f%%)", zoneID, strings.ToUpper(status), current, state.BaselineOrders, orderDrop*100)
 
 	// 3. Multi-Signal Validation
 	hasExternalSignals := len(state.ActiveSignals) > 0
@@ -251,10 +255,10 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 	}
 
 	disruption := models.Disruption{
-		ZoneID:          zoneID,
-		Type:            triggerStr,
-		Severity:        severity,
-		Confidence:      confidence, // Use calculated confidence here
+		ZoneID:     zoneID,
+		Type:       triggerStr,
+		Severity:   severity,
+		Confidence: confidence, // Use calculated confidence here
 
 		Status:          "confirmed",
 		StartTime:       &now,
@@ -362,7 +366,7 @@ func GetDisruptions(c *gin.Context) {
 
 	results := make([]map[string]interface{}, 0, len(records))
 	for _, r := range records {
-		
+
 		// Parse triggers back into the standardized `signals` array for the API contract
 		signalsArr := make([]map[string]interface{}, 0)
 		triggerParts := strings.Split(r.Type, " + ")
@@ -378,7 +382,7 @@ func GetDisruptions(c *gin.Context) {
 				"value":  val,
 			})
 		}
-		
+
 		// Recalculate the official confidence metric (drop severity + signal weight)
 		officialConfidence := r.Confidence + (float64(len(triggerParts)-1) * 0.1)
 		if officialConfidence > 1.0 {
@@ -386,15 +390,15 @@ func GetDisruptions(c *gin.Context) {
 		}
 
 		results = append(results, map[string]interface{}{
-			"disruption_id": fmt.Sprintf("dis_%d", r.ID),
-			"zone_id":       fmt.Sprintf("zone_%d", r.ZoneID), 
-			"type":          r.Type, 
-			"severity":      strings.ToLower(r.Severity),
-			"confidence":    officialConfidence,
-			"status":        "confirmed",
-			"claims_generated": r.ClaimsGenerated,
-			"claims_in_review": r.ClaimsInReview,
-			"payouts_processed": r.PayoutsProcessed,
+			"disruption_id":       fmt.Sprintf("dis_%d", r.ID),
+			"zone_id":             fmt.Sprintf("zone_%d", r.ZoneID),
+			"type":                r.Type,
+			"severity":            strings.ToLower(r.Severity),
+			"confidence":          officialConfidence,
+			"status":              "confirmed",
+			"claims_generated":    r.ClaimsGenerated,
+			"claims_in_review":    r.ClaimsInReview,
+			"payouts_processed":   r.PayoutsProcessed,
 			"payout_amount_total": r.PayoutAmountTotal,
 			"automation_status": func() string {
 				switch {
@@ -408,8 +412,8 @@ func GetDisruptions(c *gin.Context) {
 					return "detected"
 				}
 			}(),
-			"signals":       signalsArr,
-			"started_at":    r.CreatedAt.UTC().Format(time.RFC3339Nano),
+			"signals":    signalsArr,
+			"started_at": r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		})
 	}
 
@@ -432,11 +436,16 @@ func TriggerDemoDisruption(c *gin.Context) {
 		return
 	}
 
+	if req.ZoneID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "zone_id is required"})
+		return
+	}
+
 	state := getOrCreateZoneState(req.ZoneID)
 	state.mu.Lock()
 	// Set the Reset Marker
 	state.LastResetAt = time.Now()
-	
+
 	if req.ForceOrderDrop {
 		// Force the engine into a post-warm-up demand crash so the UI can
 		// move from healthy -> anomalous -> disrupted when external signals land.
@@ -451,7 +460,7 @@ func TriggerDemoDisruption(c *gin.Context) {
 		state.TotalOrdersEver = 0
 		state.LastResetAt = time.Now()
 	}
-	
+
 	if req.ExternalSignal != "" {
 		state.ActiveSignals[req.ExternalSignal] = true
 	} else {
@@ -487,16 +496,16 @@ func ExternalSignalWebhook(c *gin.Context) {
 	}
 
 	isActive := strings.ToLower(req.Status) == "active"
-	
+
 	if req.Source == "all_signals" {
-	    // Clear all signals. True/false doesn't matter, we just clear everything.
+		// Clear all signals. True/false doesn't matter, we just clear everything.
 		state := getOrCreateZoneState(req.ZoneID)
 		state.mu.Lock()
 		state.ActiveSignals = make(map[string]bool)
 		state.mu.Unlock()
 		evaluateDisruption(req.ZoneID, state)
 	} else {
-	    SetExternalSignal(req.ZoneID, req.Source, isActive)
+		SetExternalSignal(req.ZoneID, req.Source, isActive)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -135,6 +135,24 @@ func getOrBootstrapPaymentSchedule(workerID uint, now time.Time) (paymentSchedul
 	`, workerID).Scan(&fallback).Error
 
 	if fallback.PaymentDate.IsZero() {
+		var policyFallback struct {
+			Status    string    `gorm:"column:status"`
+			CreatedAt time.Time `gorm:"column:created_at"`
+		}
+		_ = workerDB.Raw(`
+			SELECT status, created_at
+			FROM policies
+			WHERE worker_id = ?
+			ORDER BY id DESC
+			LIMIT 1
+		`, workerID).Scan(&policyFallback).Error
+
+		if strings.EqualFold(policyFallback.Status, "active") && !policyFallback.CreatedAt.IsZero() {
+			state := evaluatePaymentSchedule(policyFallback.CreatedAt, now)
+			_ = upsertPaymentSchedule(workerID, policyFallback.CreatedAt, state.NextPaymentEnabled, state.CoverageStatus)
+			return state, nil
+		}
+
 		return paymentScheduleState{
 			PaymentStatus:      "Eligible",
 			DaysSinceLastPay:   0,
