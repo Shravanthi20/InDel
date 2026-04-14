@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
 from datetime import datetime
@@ -24,6 +24,7 @@ scorer = FraudScorer()
 
 class WorkerHistory(BaseModel):
     total_claims_last_8_weeks: int = 0
+    approved_claims_last_8_weeks: int = 0
     avg_claim_amount: float = 0.0
     earnings_variance: float = 0.0
     zone_change_count: int = 0
@@ -37,10 +38,13 @@ class FraudRequest(BaseModel):
     claim_amount: float
     baseline_earnings: float
     disruption_type: str
+    disruption_hours: float = 4.0
     gps_in_zone: bool = True
+    distance_from_zone_center: float = 0.5
     deliveries_during_disruption: int = 0
     zone_avg_claim_amount: Optional[float] = None
-    worker_history: WorkerHistory = WorkerHistory()
+    zone_risk_score: float = 0.5
+    worker_history: WorkerHistory = Field(default_factory=WorkerHistory)
 
 class FraudSignal(BaseModel):
     name: str
@@ -50,7 +54,7 @@ class FraudSignal(BaseModel):
 class FraudResponse(BaseModel):
     claim_id: int
     fraud_score: float          # 0.0 = clean, 1.0 = definite fraud
-    verdict: str                # "clear" | "review" | "flagged" | "auto_reject"
+    verdict: str                # "safe" | "review" | "flagged"
     signals: List[FraudSignal]
     confidence: float
     routing: str                # "auto_approve" | "manual_review" | "auto_reject"
@@ -61,7 +65,12 @@ class FraudResponse(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "fraud-ml", "layers": ["isolation_forest", "dbscan", "rules"]}
+    return {
+        "status": "ok", 
+        "service": "fraud-ml", 
+        "layers": ["isolation_forest", "dbscan", "rules"], 
+        "models_loaded": scorer.models_loaded
+    }
 
 # ─── Score endpoint ──────────────────────────────────────────────────────────
 
