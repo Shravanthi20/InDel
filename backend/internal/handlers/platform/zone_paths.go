@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -57,10 +58,14 @@ func loadCityGeo(csvPath string) (map[string]struct {
 		lat := 0.0
 		lon := 0.0
 		if idx, ok := header["latitude"]; ok {
-			fmt.Sscanf(row[idx], "%f", &lat)
+			if parsed, err := strconv.ParseFloat(strings.TrimSpace(row[idx]), 64); err == nil {
+				lat = parsed
+			}
 		}
 		if idx, ok := header["longitude"]; ok {
-			fmt.Sscanf(row[idx], "%f", &lon)
+			if parsed, err := strconv.ParseFloat(strings.TrimSpace(row[idx]), 64); err == nil {
+				lon = parsed
+			}
 		}
 		m[city] = struct {
 			State    string

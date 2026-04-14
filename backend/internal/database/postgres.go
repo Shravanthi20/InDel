@@ -34,6 +34,7 @@ func Migrate(db *gorm.DB) error {
 		&models.Notification{},
 		&models.Zone{},
 		&models.Policy{},
+		&models.ActivePolicy{},
 		&models.Claim{},
 		&models.EarningsRecord{},
 		&models.Order{},

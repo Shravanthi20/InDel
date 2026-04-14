@@ -115,7 +115,6 @@ temp.txt
 zones.txt
 *.tmp
 *.bak
-*.txt
 
 # Frontend / package managers
 node_modules/

@@ -283,11 +283,10 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 	// This ensures claims are only generated for workers currently enrolled in the protection policy
 	if err := s.DB.Table("worker_profiles wp").
 		Select("wp.worker_id, COALESCE(eb.baseline_amount, 5000.0) AS baseline_amount, COALESCE(wes.total_earnings, 0) AS actual_earnings").
-		Joins("INNER JOIN active_policies ap ON ap.user_id = wp.worker_id").
 		Joins("INNER JOIN policies p ON p.worker_id = wp.worker_id AND p.status = 'active'").
 		Joins("LEFT JOIN earnings_baseline eb ON eb.worker_id = wp.worker_id").
 		Joins("LEFT JOIN weekly_earnings_summary wes ON wes.worker_id = wp.worker_id AND wes.week_start = ?", weekStart).
-		Where("wp.zone_id = ? AND ap.zone = ?", disruption.ZoneID, disruption.ZoneID).
+		Where("wp.zone_id = ?", disruption.ZoneID).
 		Scan(&workers).Error; err != nil {
 		return nil, err
 	}

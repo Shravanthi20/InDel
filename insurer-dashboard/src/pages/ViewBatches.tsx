@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getAssignedBatches, getAvailableBatches } from '../api/insurer'
-import { getZonePaths } from '../../platform-dashboard/src/api/platform'
+import client from '../api/client'
 import { PageShell, Panel } from './OperationsShared'
-
-// No longer needed: ZoneRow
 
 type BatchRow = {
   batchId: string
@@ -15,27 +13,32 @@ type BatchRow = {
   totalWeight?: number
 }
 
-type ZoneLevel = 'A' | 'B' | 'C' | 'ALL'
+type ZoneRow = {
+  city?: string
+  state?: string
+  zone_name?: string
+}
+
+type ZonePathResponse = {
+  cities?: ZoneRow[]
+  zones?: ZoneRow[]
+}
 
 function normalize(value?: string) {
   return (value || '').trim().toLowerCase()
 }
 
-function zoneLabel(zone: ZoneRow) {
-  return `${zone.name}${zone.city ? ` • ${zone.city}` : ''}${zone.state ? `, ${zone.state}` : ''}`
+function getZonePaths(type: 'a' | 'b' | 'c') {
+  return client.get<ZonePathResponse>(`/api/v1/platform/zone-paths?type=${type}`)
 }
 
-function batchMatchesZone(batch: BatchRow, zone: ZoneRow) {
-  const tokens = [zone.name, zone.city, zone.state].map(normalize).filter(Boolean)
-  const fields = [batch.fromCity, batch.toCity, batch.zoneLevel].map(normalize).filter(Boolean)
-  return tokens.some((token) => fields.some((field) => field.includes(token) || token.includes(field)))
-}
+export default function ViewBatches() {
 
   const [availableBatches, setAvailableBatches] = useState<BatchRow[]>([])
   const [assignedBatches, setAssignedBatches] = useState<BatchRow[]>([])
   const [zoneLevel, setZoneLevel] = useState<'a' | 'b' | 'c' | ''>('')
-  const [zoneOptions, setZoneOptions] = useState<any[]>([])
-  const [zoneCache] = useState<{ [k: string]: any[] }>({})
+  const [zoneOptions, setZoneOptions] = useState<ZoneRow[]>([])
+  const [zoneCache] = useState<{ [k: string]: ZoneRow[] }>({})
   const [selectedZone, setSelectedZone] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -72,7 +75,7 @@ function batchMatchesZone(batch: BatchRow, zone: ZoneRow) {
       setSelectedZone('')
       return
     }
-    getZonePaths(zoneLevel).then(res => {
+    getZonePaths(zoneLevel).then((res) => {
       const cities = res.data.cities || res.data.zones || []
       setZoneOptions(cities)
       zoneCache[zoneLevel] = cities
@@ -117,7 +120,7 @@ function batchMatchesZone(batch: BatchRow, zone: ZoneRow) {
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={zoneLevel}
-            onChange={e => setZoneLevel(e.target.value as 'a' | 'b' | 'c' | '')}
+            onChange={(e) => setZoneLevel(e.target.value as 'a' | 'b' | 'c' | '')}
             className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
           >
             <option value="">Select zone level</option>
@@ -127,7 +130,7 @@ function batchMatchesZone(batch: BatchRow, zone: ZoneRow) {
           </select>
           <select
             value={selectedZone}
-            onChange={e => setSelectedZone(e.target.value)}
+            onChange={(e) => setSelectedZone(e.target.value)}
             disabled={!zoneLevel || zoneOptions.length === 0}
             className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
           >
