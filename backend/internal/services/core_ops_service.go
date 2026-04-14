@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -291,12 +292,17 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 		return nil, err
 	}
 
+	log.Printf("[CLAIMS] disruptionID=%d | workers found in zone=%d", disruptionID, len(workers))
+
 	generated := 0
 	skipped := 0
 	generatedClaimIDs := make([]uint, 0)
 
 	for _, worker := range workers {
+		log.Printf("[CLAIMS] evaluating workerID=%d baseline=%.2f actual=%.2f", worker.WorkerID, worker.BaselineAmount, worker.ActualEarnings)
+
 		if worker.BaselineAmount <= 0 {
+			log.Printf("[CLAIMS] SKIP workerID=%d reason=zero_baseline", worker.WorkerID)
 			skipped++
 			continue
 		}
@@ -306,15 +312,30 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 			return nil, err
 		}
 		if existingCount > 0 {
+			log.Printf("[CLAIMS] SKIP workerID=%d reason=claim_already_exists", worker.WorkerID)
 			skipped++
 			continue
 		}
 
-		// Compare the worker's baseline against observed weekly earnings so the
-		// seeded demo fixtures still produce claims when the disruption impacts income.
-		loss := math.Max(worker.BaselineAmount-worker.ActualEarnings, 0)
+		// NEW REALISTIC FORMULA FROM README:
+		// Expected = HourlyBaseline * DurationHours
+		// HourlyBaseline = WeeklyBaseline / 40.0 (Assuming 40-hour work week)
+		// For demo: default duration to 4 hours if missing.
+		durationHours := 4.0
+		if disruption.StartTime != nil && disruption.EndTime != nil {
+			durationHours = disruption.EndTime.Sub(*disruption.StartTime).Hours()
+		} else if disruption.ConfirmedAt != nil {
+			// If only ConfirmedAt is present, let's assume it lasts 4 hours.
+			durationHours = 4.0
+		}
+		
+		hourlyBaseline := worker.BaselineAmount / 40.0
+		expectedEarnings := hourlyBaseline * durationHours
+		loss := math.Max(expectedEarnings-worker.ActualEarnings, 0)
+		log.Printf("[CLAIMS] workerID=%d expectedEarnings=%.2f actualEarnings=%.2f rawLoss=%.2f", worker.WorkerID, expectedEarnings, worker.ActualEarnings, loss)
 
 		if loss <= 0 {
+			log.Printf("[CLAIMS] SKIP workerID=%d reason=zero_loss", worker.WorkerID)
 			skipped++
 			continue
 		}
@@ -329,11 +350,14 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 			fraudVerdict = "review"
 			fraudScore = 0.66 // Higher fraud score for large claims
 		}
+		log.Printf("[CLAIMS] workerID=%d claimAmount=%.2f status=%s", worker.WorkerID, round2(loss*0.85), status)
 
 		claim := models.Claim{DisruptionID: disruptionID, WorkerID: worker.WorkerID, ClaimAmount: round2(loss * 0.85), Status: status, FraudVerdict: fraudVerdict, CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
 		if err := s.DB.Create(&claim).Error; err != nil {
+			log.Printf("[CLAIMS] ERROR creating claim for workerID=%d: %v", worker.WorkerID, err)
 			return nil, err
 		}
+		log.Printf("[CLAIMS] ✅ claim created claimID=%d workerID=%d amount=%.2f", claim.ID, worker.WorkerID, claim.ClaimAmount)
 
 		score := models.ClaimFraudScore{ClaimID: claim.ID, IsolationForestScore: fraudScore, DbscanScore: fraudScore, FinalVerdict: fraudVerdict, RuleViolations: "[]"}
 		if err := s.DB.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "claim_id"}}, DoUpdates: clause.AssignmentColumns([]string{"isolation_forest_score", "dbscan_score", "final_verdict", "rule_violations"})}).Create(&score).Error; err != nil {
@@ -354,53 +378,72 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 }
 
 func (s *CoreOpsService) AutoProcessDisruption(disruptionID uint, now time.Time) (*AutoProcessDisruptionResult, error) {
+	log.Printf("[AUTO] ▶ AutoProcessDisruption START disruptionID=%d", disruptionID)
+
 	if s.DB == nil {
+		log.Printf("[AUTO] ❌ DB is nil, aborting")
 		return nil, fmt.Errorf("db unavailable")
 	}
 
 	var disruption models.Disruption
 	if err := s.DB.First(&disruption, disruptionID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
+			log.Printf("[AUTO] ❌ disruption %d not found in DB", disruptionID)
 			return nil, fmt.Errorf("disruption not found")
 		}
 		return nil, err
 	}
+	log.Printf("[AUTO] disruption loaded: zoneID=%d type=%s severity=%s", disruption.ZoneID, disruption.Type, disruption.Severity)
 
 	notified, err := s.notifyWorkersForDisruption(disruption, now)
 	if err != nil {
+		log.Printf("[AUTO] ❌ notifyWorkers failed: %v", err)
 		return nil, err
 	}
+	log.Printf("[AUTO] STEP 1 ✅ workers notified=%d", notified)
 
 	claimsResult, err := s.generateClaimsForDisruption(disruptionID, now)
 	if err != nil {
+		log.Printf("[AUTO] ❌ generateClaims failed: %v", err)
 		return nil, err
 	}
+	log.Printf("[AUTO] STEP 2 ✅ claims generated=%d skipped=%d checked=%d", claimsResult.ClaimsGenerated, claimsResult.ClaimsSkipped, claimsResult.WorkersChecked)
 
 	targetClaims, err := s.loadApprovedClaimsNeedingPayout(disruptionID)
 	if err != nil {
+		log.Printf("[AUTO] ❌ loadApprovedClaims failed: %v", err)
 		return nil, err
 	}
+	log.Printf("[AUTO] STEP 3 ✅ approved claims needing payout=%d", len(targetClaims))
 
 	queued := 0
 	for _, claim := range targetClaims {
+		log.Printf("[AUTO] PAYOUT TRIGGERED FOR CLAIM: claimID=%d workerID=%d amount=%.2f", claim.ID, claim.WorkerID, claim.ClaimAmount)
 		result, err := s.QueueClaimPayout(claim.ID)
 		if err != nil {
+			log.Printf("[AUTO] ❌ QueueClaimPayout failed claimID=%d: %v", claim.ID, err)
 			return nil, err
 		}
+		log.Printf("[AUTO] QueueClaimPayout claimID=%d → status=%s payoutID=%s", claim.ID, result.Status, result.PayoutID)
 		if result.Status == "queued" {
 			queued++
 		}
 	}
+	log.Printf("[AUTO] STEP 4 ✅ payouts queued=%d", queued)
 
 	targetPayoutIDs, err := s.loadProcessablePayoutIDsForDisruption(disruptionID, now)
 	if err != nil {
+		log.Printf("[AUTO] ❌ loadProcessablePayoutIDs failed: %v", err)
 		return nil, err
 	}
+	log.Printf("[AUTO] STEP 5 payoutIDs to process: %v", targetPayoutIDs)
 
 	processResult, err := s.processPayoutsByID(targetPayoutIDs, now)
 	if err != nil {
+		log.Printf("[AUTO] ❌ processPayouts failed: %v", err)
 		return nil, err
 	}
+	log.Printf("[AUTO] STEP 6 ✅ payouts processed=%d succeeded=%d failed=%d", processResult.Processed, processResult.Succeeded, processResult.Failed)
 
 	var manualReviewClaims int64
 	if err := s.DB.Model(&models.Claim{}).Where("disruption_id = ? AND status = ?", disruptionID, "manual_review").Count(&manualReviewClaims).Error; err != nil {
@@ -411,6 +454,8 @@ func (s *CoreOpsService) AutoProcessDisruption(disruptionID uint, now time.Time)
 	if processResult.Failed > 0 {
 		status = "partial_failure"
 	}
+
+	log.Printf("[AUTO] ◀ AutoProcessDisruption DONE disruptionID=%d status=%s", disruptionID, status)
 
 	return &AutoProcessDisruptionResult{
 		DisruptionID:       fmt.Sprintf("dis_%d", disruptionID),

@@ -224,6 +224,7 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 	cooldown := time.Now().Add(-60 * time.Second)
 	platformDB.Model(&models.Disruption{}).Where("zone_id = ? AND created_at > ?", zoneID, cooldown).Count(&existing)
 	if existing > 0 {
+		log.Printf("[DISRUPTION] SKIPPED zone=%d reason=cooldown_active existing=%d (wait 60s)", zoneID, existing)
 		return // Still active
 	}
 

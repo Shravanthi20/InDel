@@ -6,6 +6,11 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      '/api/v1/forecast': {
+        target: 'http://localhost:9003',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/v1\/forecast/, '/forecast'),
+      },
       '/api': {
         target: process.env.VITE_PLATFORM_API_URL || 'http://192.168.1.6:8004',
         changeOrigin: true

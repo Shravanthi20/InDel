@@ -1,4 +1,5 @@
 import client from './client'
+import axios from 'axios'
 
 export type ZoneLevelOption = {
   level: 'A' | 'B' | 'C'
@@ -76,3 +77,8 @@ export const generateClaimsForDisruption = (disruptionId: number) =>
 export const postExternalSignal = (data: {zone_id: number, source: string, status: string}) =>
   client.post('/api/v1/platform/webhooks/external-signal', data)
 
+// Forecast ML — uses a localhost-relative client so Vite proxy routes it to
+// port 9003 (forecast-ml container) regardless of VITE_PLATFORM_API_URL.
+const forecastClient = axios.create({ baseURL: 'http://localhost:9003' })
+export const getForecast = (zone_id: number) =>
+  forecastClient.post('/forecast', { zone_id })
