@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getZonePaths } from '../../platform-dashboard/src/api/platform';
+import { getZonePaths } from '../api/zones';
 
+export default function Register() {
   const [zoneLevel, setZoneLevel] = useState<'a' | 'b' | 'c' | ''>('');
   const [zoneOptions, setZoneOptions] = useState<any[]>([]);
   const [selectedZone, setSelectedZone] = useState('');
@@ -23,7 +24,7 @@ import { getZonePaths } from '../../platform-dashboard/src/api/platform';
       zoneCache[zoneLevel] = cities;
       setSelectedZone('');
     }).catch(() => setZoneOptions([]));
-  }, [zoneLevel]);
+  }, [zoneLevel, zoneCache]);
 
   return (
     <form className="max-w-md mx-auto mt-8 p-4 border rounded">
