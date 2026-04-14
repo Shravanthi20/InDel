@@ -447,19 +447,14 @@ function normalizeBatchWorkflowStatus(status?: string) {
   return (status || '').trim().toLowerCase().replace(/\s+/g, '_')
 }
 
-function applySimulationBatchSnapshot(
-  allBatches: BatchRow[],
+function applyWorkerBatchSnapshot(
+  availableBatchRows: BatchRow[],
+  assignedBatchRows: BatchRow[],
   setAvailableBatches: (batches: BatchRow[]) => void,
   setAssignedBatches: (batches: BatchRow[]) => void,
 ) {
-  const available = allBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
-  const assigned = allBatches.filter((batch) => {
-    const status = normalizeBatchWorkflowStatus(batch.status)
-    return status === 'picked_up' || status === 'delivered'
-  })
-
-  setAvailableBatches(available)
-  setAssignedBatches(assigned)
+  setAvailableBatches(availableBatchRows)
+  setAssignedBatches(assignedBatchRows)
 }
 
 type GodModeContextValue = {
@@ -580,10 +575,11 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         assignedBatches: 'pending',
       })
 
-      const [zonesResponse, zoneHealthResponse, simulationResponse] = await Promise.allSettled([
+      const [zonesResponse, zoneHealthResponse, availableResponse, assignedResponse] = await Promise.allSettled([
         getZones(),
         getZoneHealth(),
-        getSimulationBatches(),
+        getAvailableBatches(),
+        getAssignedBatches(),
       ])
 
       if (!mounted) {
@@ -592,8 +588,8 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
 
       setEndpointStatus({
         zoneHealth: zoneHealthResponse.status === 'fulfilled' ? 'ok' : 'failed',
-        availableBatches: simulationResponse.status === 'fulfilled' ? 'ok' : 'failed',
-        assignedBatches: simulationResponse.status === 'fulfilled' ? 'ok' : 'failed',
+        availableBatches: availableResponse.status === 'fulfilled' ? 'ok' : 'failed',
+        assignedBatches: assignedResponse.status === 'fulfilled' ? 'ok' : 'failed',
       })
 
       if (zonesResponse.status === 'fulfilled') {
@@ -608,11 +604,17 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         setCommittedResult(computeResult(mapped, policyInputs, 'ALL ZONES', 0, 'api-mock'))
       }
 
-      if (simulationResponse.status === 'fulfilled') {
-        applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
+      if (availableResponse.status === 'fulfilled' || assignedResponse.status === 'fulfilled') {
+        const availableRows = availableResponse.status === 'fulfilled'
+          ? ((availableResponse.value.data?.batches || []) as BatchRow[])
+          : []
+        const assignedRows = assignedResponse.status === 'fulfilled'
+          ? ((assignedResponse.value.data?.batches || []) as BatchRow[])
+          : []
+        applyWorkerBatchSnapshot(availableRows, assignedRows, setAvailableBatches, setAssignedBatches)
       }
 
-      if (zoneHealthResponse.status === 'rejected' && simulationResponse.status === 'rejected' && zonesResponse.status === 'rejected') {
+      if (zoneHealthResponse.status === 'rejected' && availableResponse.status === 'rejected' && assignedResponse.status === 'rejected' && zonesResponse.status === 'rejected') {
         setError('Unable to load God Mode context')
       }
 
@@ -706,16 +708,28 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshBatchContext = async () => {
-    const [zonesResponse, simulationResponse] = await Promise.allSettled([
+    const [zonesResponse, availableResponse, assignedResponse] = await Promise.allSettled([
       getZones(),
-      getSimulationBatches(),
+      getAvailableBatches(),
+      getAssignedBatches(),
     ])
 
     if (zonesResponse.status === 'fulfilled') {
       setZones((zonesResponse.value.data?.zones || []) as ZoneRecord[])
     }
-    if (simulationResponse.status === 'fulfilled') {
-      applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
+    setEndpointStatus((current) => ({
+      ...current,
+      availableBatches: availableResponse.status === 'fulfilled' ? 'ok' : 'failed',
+      assignedBatches: assignedResponse.status === 'fulfilled' ? 'ok' : 'failed',
+    }))
+    if (availableResponse.status === 'fulfilled' || assignedResponse.status === 'fulfilled') {
+      const availableRows = availableResponse.status === 'fulfilled'
+        ? ((availableResponse.value.data?.batches || []) as BatchRow[])
+        : []
+      const assignedRows = assignedResponse.status === 'fulfilled'
+        ? ((assignedResponse.value.data?.batches || []) as BatchRow[])
+        : []
+      applyWorkerBatchSnapshot(availableRows, assignedRows, setAvailableBatches, setAssignedBatches)
     }
   }
 
@@ -816,10 +830,11 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
 
       await Promise.allSettled(claimRequests)
 
-      const [zonesResponse, zoneHealthResponse, simulationResponse] = await Promise.allSettled([
+      const [zonesResponse, zoneHealthResponse, availableResponse, assignedResponse] = await Promise.allSettled([
         getZones(),
         getZoneHealth(),
-        getSimulationBatches(),
+        getAvailableBatches(),
+        getAssignedBatches(),
       ])
 
       if (zonesResponse.status === 'fulfilled') {
@@ -831,8 +846,14 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
         setApiInputs(mapped)
         setManualInputs(mapped)
       }
-      if (simulationResponse.status === 'fulfilled') {
-        applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
+      if (availableResponse.status === 'fulfilled' || assignedResponse.status === 'fulfilled') {
+        const availableRows = availableResponse.status === 'fulfilled'
+          ? ((availableResponse.value.data?.batches || []) as BatchRow[])
+          : []
+        const assignedRows = assignedResponse.status === 'fulfilled'
+          ? ((assignedResponse.value.data?.batches || []) as BatchRow[])
+          : []
+        applyWorkerBatchSnapshot(availableRows, assignedRows, setAvailableBatches, setAssignedBatches)
       }
 
       setCommittedResult(preview)
@@ -854,19 +875,23 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     setNotice(null)
 
     try {
-      const simulationResponse = await getSimulationBatches()
-      let freshAllBatches = (simulationResponse.data?.batches || []) as BatchRow[]
-      applySimulationBatchSnapshot(freshAllBatches, setAvailableBatches, setAssignedBatches)
-      let freshAvailable = freshAllBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
+      const availableResponse = await getAvailableBatches()
+      const assignedResponse = await getAssignedBatches()
+      let freshAvailableBatches = (availableResponse.data?.batches || []) as BatchRow[]
+      const freshAssignedBatches = (assignedResponse.data?.batches || []) as BatchRow[]
+      applyWorkerBatchSnapshot(freshAvailableBatches, freshAssignedBatches, setAvailableBatches, setAssignedBatches)
+      let freshAvailable = freshAvailableBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
 
       let candidate = freshAvailable.find((batch) => (batch.orders?.length || 0) > 0)
       if (!candidate) {
         // Try to self-heal: seed orders and batches, then retry once.
         await generateBatches()
-        const retrySimulationResponse = await getSimulationBatches()
-        freshAllBatches = (retrySimulationResponse.data?.batches || []) as BatchRow[]
-        applySimulationBatchSnapshot(freshAllBatches, setAvailableBatches, setAssignedBatches)
-        freshAvailable = freshAllBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
+        const retryAvailableResponse = await getAvailableBatches()
+        const retryAssignedResponse = await getAssignedBatches()
+        freshAvailableBatches = (retryAvailableResponse.data?.batches || []) as BatchRow[]
+        const retryAssignedBatches = (retryAssignedResponse.data?.batches || []) as BatchRow[]
+        applyWorkerBatchSnapshot(freshAvailableBatches, retryAssignedBatches, setAvailableBatches, setAssignedBatches)
+        freshAvailable = freshAvailableBatches.filter((batch) => normalizeBatchWorkflowStatus(batch.status) === 'assigned')
         candidate = freshAvailable.find((batch) => (batch.orders?.length || 0) > 0)
       }
 
@@ -1096,9 +1121,10 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     totalNotifications += Number(payload?.notifications_created || 0)
     })
 
-    const [zoneHealthResponse, simulationResponse] = await Promise.allSettled([
+    const [zoneHealthResponse, availableResponse, assignedResponse] = await Promise.allSettled([
     getZoneHealth(),
-    getSimulationBatches(),
+    getAvailableBatches(),
+    getAssignedBatches(),
     ])
 
     if (zoneHealthResponse.status === 'fulfilled') {
@@ -1107,8 +1133,14 @@ export function GodModeProvider({ children }: { children: ReactNode }) {
     setApiInputs(mapped)
     setManualInputs(mapped)
     }
-    if (simulationResponse.status === 'fulfilled') {
-    applySimulationBatchSnapshot((simulationResponse.value.data?.batches || []) as BatchRow[], setAvailableBatches, setAssignedBatches)
+    if (availableResponse.status === 'fulfilled' || assignedResponse.status === 'fulfilled') {
+    const availableRows = availableResponse.status === 'fulfilled'
+      ? ((availableResponse.value.data?.batches || []) as BatchRow[])
+      : []
+    const assignedRows = assignedResponse.status === 'fulfilled'
+      ? ((assignedResponse.value.data?.batches || []) as BatchRow[])
+      : []
+    applyWorkerBatchSnapshot(availableRows, assignedRows, setAvailableBatches, setAssignedBatches)
     }
 
     setCommittedResult(computeResult(sourceInputs, policyInputs, scopeLabel, targetZoneIds.length, 'god-mode-override'))

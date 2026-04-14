@@ -15,6 +15,10 @@ type orderAssignedRequest struct {
 	WorkerID        uint    `json:"worker_id"`
 	ZoneID          uint    `json:"zone_id"`
 	OrderValue      float64 `json:"order_value"`
+	FromCity        string  `json:"from_city"`
+	ToCity          string  `json:"to_city"`
+	FromState       string  `json:"from_state"`
+	ToState         string  `json:"to_state"`
 	PickupArea      string  `json:"pickup_area"`
 	DropArea        string  `json:"drop_area"`
 	DistanceKM      float64 `json:"distance_km"`
@@ -33,6 +37,74 @@ type orderCompletedRequest struct {
 type orderCancelledRequest struct {
 	OrderID string      `json:"order_id"`
 	ZoneID  interface{} `json:"zone_id"`
+}
+
+func routeMatchesLocalZone(pickupArea, dropArea string) bool {
+	return strings.EqualFold(strings.TrimSpace(pickupArea), strings.TrimSpace(dropArea))
+}
+
+func normalizeAssignmentZoneLevel(raw string) string {
+	compact := strings.ToUpper(strings.TrimSpace(raw))
+	compact = strings.NewReplacer("_", "", "-", "", " ", "").Replace(compact)
+	switch compact {
+	case "A", "ZONEA", "LOCAL", "SAMECITY":
+		return "A"
+	case "B", "ZONEB", "INTRAZONE", "INTRASTATE":
+		return "B"
+	case "C", "ZONEC", "INTERSTATE":
+		return "C"
+	default:
+		return ""
+	}
+}
+
+func routeLevelRank(level string) int {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
+	case "A":
+		return 1
+	case "B":
+		return 2
+	case "C":
+		return 3
+	default:
+		return 0
+	}
+}
+
+func inferAssignmentRouteLevel(fromCity, toCity, fromState, toState, pickupArea, dropArea string) string {
+	fromCity = strings.TrimSpace(fromCity)
+	toCity = strings.TrimSpace(toCity)
+	fromState = strings.TrimSpace(fromState)
+	toState = strings.TrimSpace(toState)
+	pickupArea = strings.TrimSpace(pickupArea)
+	dropArea = strings.TrimSpace(dropArea)
+
+	if fromCity != "" || toCity != "" {
+		if strings.EqualFold(fromCity, toCity) {
+			return "A"
+		}
+		if fromState != "" && toState != "" && strings.EqualFold(fromState, toState) {
+			return "B"
+		}
+		return "C"
+	}
+
+	if routeMatchesLocalZone(pickupArea, dropArea) {
+		return "A"
+	}
+	return "B"
+}
+
+func workerCanTakeAssignment(workerLevel, routeLevel string) bool {
+	workerRank := routeLevelRank(workerLevel)
+	if workerRank == 0 {
+		workerRank = 1
+	}
+	routeRank := routeLevelRank(routeLevel)
+	if routeRank == 0 {
+		routeRank = 1
+	}
+	return routeRank <= workerRank
 }
 
 // GetZones returns active zones with risk rating.
@@ -148,13 +220,45 @@ func OrderAssignedWebhook(c *gin.Context) {
 	}
 
 	if hasDB() {
+		type workerZoneRow struct {
+			Level string `gorm:"column:level"`
+		}
+		var zoneRow workerZoneRow
+		profileErr := platformDB.Raw(
+			`SELECT COALESCE(z.level, '') AS level
+			 FROM worker_profiles wp
+			 LEFT JOIN zones z ON z.id = wp.zone_id
+			 WHERE wp.worker_id = ?
+			 LIMIT 1`,
+			req.WorkerID,
+		).Scan(&zoneRow).Error
+		workerZoneLevel := normalizeAssignmentZoneLevel(zoneRow.Level)
+		if profileErr == nil && workerZoneLevel != "" {
+			routeLevel := inferAssignmentRouteLevel(req.FromCity, req.ToCity, req.FromState, req.ToState, req.PickupArea, req.DropArea)
+			if !workerCanTakeAssignment(workerZoneLevel, routeLevel) {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error":   "worker_zone_mismatch",
+					"message": fmt.Sprintf("zone %s workers can only be assigned %s or lower routes", workerZoneLevel, workerZoneLevel),
+				})
+				return
+			}
+		}
+
 		var createdOrderID uint
 		err := platformDB.Raw(
-			`INSERT INTO orders (worker_id, zone_id, order_value, status, pickup_area, drop_area, distance_km, vehicle_type, vehicle_capacity, allowed_zones, updated_at)
-			 VALUES (?, ?, ?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+			`INSERT INTO orders (worker_id, zone_id, order_value, status, from_city, to_city, from_state, to_state, pickup_area, drop_area, distance_km, vehicle_type, vehicle_capacity, allowed_zones, updated_at)
+			 VALUES (?, ?, ?, 'assigned', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 			 RETURNING id`,
-			req.WorkerID, req.ZoneID, req.OrderValue, req.PickupArea, req.DropArea, req.DistanceKM, req.VehicleType, req.VehicleCapacity, req.AllowedZones,
+			req.WorkerID, req.ZoneID, req.OrderValue, req.FromCity, req.ToCity, req.FromState, req.ToState, req.PickupArea, req.DropArea, req.DistanceKM, req.VehicleType, req.VehicleCapacity, req.AllowedZones,
 		).Scan(&createdOrderID).Error
+		if err != nil && strings.Contains(strings.ToLower(err.Error()), "from_city") {
+			err = platformDB.Raw(
+				`INSERT INTO orders (worker_id, zone_id, order_value, status, pickup_area, drop_area, distance_km, vehicle_type, vehicle_capacity, allowed_zones, updated_at)
+				 VALUES (?, ?, ?, 'assigned', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+				 RETURNING id`,
+				req.WorkerID, req.ZoneID, req.OrderValue, req.PickupArea, req.DropArea, req.DistanceKM, req.VehicleType, req.VehicleCapacity, req.AllowedZones,
+			).Scan(&createdOrderID).Error
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "order_create_failed"})
 			return

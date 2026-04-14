@@ -94,9 +94,10 @@ func zonePathDisplay(zonePath []string) string {
 }
 
 type workerOrderScope struct {
-	ZoneID   uint
-	ZoneName string
-	ZoneCity string
+	ZoneID    uint
+	ZoneName  string
+	ZoneCity  string
+	ZoneLevel string
 }
 
 func getWorkerOrderScope(workerIDUint uint) workerOrderScope {
@@ -106,14 +107,15 @@ func getWorkerOrderScope(workerIDUint uint) workerOrderScope {
 	}
 
 	type scopeRow struct {
-		ZoneID   uint   `gorm:"column:zone_id"`
-		ZoneName string `gorm:"column:zone_name"`
-		ZoneCity string `gorm:"column:zone_city"`
+		ZoneID    uint   `gorm:"column:zone_id"`
+		ZoneName  string `gorm:"column:zone_name"`
+		ZoneCity  string `gorm:"column:zone_city"`
+		ZoneLevel string `gorm:"column:zone_level"`
 	}
 
 	var row scopeRow
 	err := workerDB.Raw(`
-		SELECT wp.zone_id, COALESCE(z.name, '') AS zone_name, COALESCE(z.city, '') AS zone_city
+		SELECT wp.zone_id, COALESCE(z.name, '') AS zone_name, COALESCE(z.city, '') AS zone_city, COALESCE(z.level, '') AS zone_level
 		FROM worker_profiles wp
 		LEFT JOIN zones z ON z.id = wp.zone_id
 		WHERE wp.worker_id = ?
@@ -126,7 +128,44 @@ func getWorkerOrderScope(workerIDUint uint) workerOrderScope {
 	scope.ZoneID = row.ZoneID
 	scope.ZoneName = strings.TrimSpace(row.ZoneName)
 	scope.ZoneCity = strings.TrimSpace(row.ZoneCity)
+	scope.ZoneLevel = normalizeZoneLevelValue(row.ZoneLevel, "", "", "", "")
 	return scope
+}
+
+func workerAllowedRouteLevel(scope workerOrderScope) string {
+	if scope.ZoneLevel != "" {
+		return scope.ZoneLevel
+	}
+	return "A"
+}
+
+func zoneLevelRank(level string) int {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
+	case "A":
+		return 1
+	case "B":
+		return 2
+	case "C":
+		return 3
+	default:
+		return 0
+	}
+}
+
+func workerCanHandleRouteLevel(workerLevel, routeLevel string) bool {
+	workerRank := zoneLevelRank(workerLevel)
+	if workerRank == 0 {
+		workerRank = 1
+	}
+	routeRank := zoneLevelRank(routeLevel)
+	if routeRank == 0 {
+		routeRank = 1
+	}
+	return routeRank <= workerRank
+}
+
+func inferOrderRouteLevel(fromCity, toCity, fromState, toState string) string {
+	return normalizeZoneLevelValue("", fromCity, toCity, fromState, toState)
 }
 
 func optionalAuthWorkerID(c *gin.Context) (string, bool) {
@@ -177,6 +216,8 @@ func GetAssignedOrders(c *gin.Context) {
 
 	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			assignedScope := getWorkerOrderScope(workerIDUint)
+			assignedLevel := workerAllowedRouteLevel(assignedScope)
 			type orderRow struct {
 				ID             uint    `gorm:"column:id"`
 				OrderValue     float64 `gorm:"column:order_value"`
@@ -208,6 +249,10 @@ func GetAssignedOrders(c *gin.Context) {
 
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
+				routeLevel := inferOrderRouteLevel(row.FromCity, row.ToCity, row.FromState, row.ToState)
+				if !workerCanHandleRouteLevel(assignedLevel, routeLevel) {
+					continue
+				}
 				zonePath := decodeZonePath(row.ZoneRoutePath)
 				deliveryFee := row.DeliveryFeeInr
 				if deliveryFee <= 0 {
@@ -241,11 +286,25 @@ func GetAssignedOrders(c *gin.Context) {
 
 	store.mu.RLock()
 	assigned := make([]map[string]any, 0)
+	var scope workerOrderScope
+	if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+		scope = getWorkerOrderScope(workerIDUint)
+	}
+	workerLevel := workerAllowedRouteLevel(scope)
 	for _, order := range store.data.Orders {
 		if worker, ok := order["worker_id"]; ok && fmt.Sprintf("%v", worker) != workerID {
 			continue
 		}
 		if order["status"] == "assigned" || order["status"] == "accepted" || order["status"] == "picked_up" {
+			routeLevel := inferOrderRouteLevel(
+				fmt.Sprintf("%v", order["from_city"]),
+				fmt.Sprintf("%v", order["to_city"]),
+				fmt.Sprintf("%v", order["from_state"]),
+				fmt.Sprintf("%v", order["to_state"]),
+			)
+			if !workerCanHandleRouteLevel(workerLevel, routeLevel) {
+				continue
+			}
 			assigned = append(assigned, order)
 		}
 	}
@@ -265,6 +324,8 @@ func GetOrders(c *gin.Context) {
 
 	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			workerScope := getWorkerOrderScope(workerIDUint)
+			workerLevel := workerAllowedRouteLevel(workerScope)
 			type orderRow struct {
 				ID             uint    `gorm:"column:id"`
 				OrderValue     float64 `gorm:"column:order_value"`
@@ -305,6 +366,10 @@ func GetOrders(c *gin.Context) {
 			}
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
+				routeLevel := inferOrderRouteLevel(row.FromCity, row.ToCity, row.FromState, row.ToState)
+				if !workerCanHandleRouteLevel(workerLevel, routeLevel) {
+					continue
+				}
 				zonePath := decodeZonePath(row.ZoneRoutePath)
 				deliveryFee := row.DeliveryFeeInr
 				if deliveryFee <= 0 {
@@ -335,6 +400,28 @@ func GetOrders(c *gin.Context) {
 	store.mu.RLock()
 	orders := append([]map[string]any{}, store.data.Orders...)
 	store.mu.RUnlock()
+
+	if len(orders) > 0 {
+		workerScope := workerOrderScope{}
+		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			workerScope = getWorkerOrderScope(workerIDUint)
+		}
+		workerLevel := workerAllowedRouteLevel(workerScope)
+		filtered := make([]map[string]any, 0, len(orders))
+		for _, order := range orders {
+			routeLevel := inferOrderRouteLevel(
+				fmt.Sprintf("%v", order["from_city"]),
+				fmt.Sprintf("%v", order["to_city"]),
+				fmt.Sprintf("%v", order["from_state"]),
+				fmt.Sprintf("%v", order["to_state"]),
+			)
+			if !workerCanHandleRouteLevel(workerLevel, routeLevel) {
+				continue
+			}
+			filtered = append(filtered, order)
+		}
+		orders = filtered
+	}
 
 	c.JSON(200, gin.H{"orders": orders})
 }
@@ -480,6 +567,7 @@ func GetAvailableOrders(c *gin.Context) {
 		}
 		zoneNameLower := strings.ToLower(workerScope.ZoneName)
 		zoneCityLower := strings.ToLower(workerScope.ZoneCity)
+		workerLevel := workerAllowedRouteLevel(workerScope)
 
 		type availableOrderRow struct {
 			ID             uint    `gorm:"column:id"`
@@ -554,6 +642,10 @@ func GetAvailableOrders(c *gin.Context) {
 		if err == nil {
 			orders := make([]gin.H, 0, len(rows))
 			for _, row := range rows {
+				routeLevel := inferOrderRouteLevel(row.FromCity, row.ToCity, row.FromState, row.ToState)
+				if !workerCanHandleRouteLevel(workerLevel, routeLevel) {
+					continue
+				}
 				zonePath := decodeZonePath(row.ZoneRoutePath)
 				deliveryFee := row.DeliveryFeeInr
 				if deliveryFee <= 0 {
@@ -596,8 +688,24 @@ func GetAvailableOrders(c *gin.Context) {
 	defer store.mu.RUnlock()
 
 	available := make([]map[string]any, 0)
+	var workerScope workerOrderScope
+	if workerID, ok := optionalAuthWorkerID(c); ok {
+		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			workerScope = getWorkerOrderScope(workerIDUint)
+		}
+	}
+	workerLevel := workerAllowedRouteLevel(workerScope)
 	for _, order := range store.data.Orders {
 		if order["status"] == "assigned" {
+			routeLevel := inferOrderRouteLevel(
+				fmt.Sprintf("%v", order["from_city"]),
+				fmt.Sprintf("%v", order["to_city"]),
+				fmt.Sprintf("%v", order["from_state"]),
+				fmt.Sprintf("%v", order["to_state"]),
+			)
+			if !workerCanHandleRouteLevel(workerLevel, routeLevel) {
+				continue
+			}
 			available = append(available, order)
 		}
 		if len(available) >= limit {

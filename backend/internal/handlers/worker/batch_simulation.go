@@ -66,6 +66,25 @@ func sanitizeBatchSnapshotsForWorker(snapshots []gin.H) []gin.H {
 	return sanitized
 }
 
+func normalizeSimulationBatchStatus(status string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(status), " ", "_"))
+}
+
+func filterSimulationBatchesByStatus(batches []gin.H, statusFilter string) []gin.H {
+	if statusFilter == "" {
+		return batches
+	}
+
+	filtered := make([]gin.H, 0, len(batches))
+	for _, batch := range batches {
+		status, _ := batch["status"].(string)
+		if normalizeSimulationBatchStatus(status) == statusFilter {
+			filtered = append(filtered, batch)
+		}
+	}
+	return filtered
+}
+
 func GetSimulationBatches(c *gin.Context) {
 	if _, ok := requireDemoOperationRole(c); !ok {
 		return
@@ -75,18 +94,23 @@ func GetSimulationBatches(c *gin.Context) {
 		refreshBatchCache(availableBatchCacheScope)
 	}
 
-	all := append([]gin.H{}, listCachedSnapshots(availableBatchCacheScope)...)
 	statusFilter := strings.ToLower(strings.TrimSpace(c.Query("status")))
+	available := sanitizeBatchSnapshotsForWorker(listCachedSnapshotsByStatus(availableBatchCacheScope, batchStatusAllowedForAvailable))
+	assigned := sanitizeBatchSnapshotsForWorker(listCachedSnapshotsByStatus(availableBatchCacheScope, func(status string) bool {
+		return batchStatusAllowedForAssigned(status) || batchStatusAllowedForDelivered(status)
+	}))
+	all := append([]gin.H{}, available...)
+	all = append(all, assigned...)
+
 	if statusFilter != "" {
-		filtered := make([]gin.H, 0, len(all))
-		for _, batch := range all {
-			status, _ := batch["status"].(string)
-			if strings.ToLower(strings.ReplaceAll(strings.TrimSpace(status), " ", "_")) == statusFilter {
-				filtered = append(filtered, batch)
-			}
-		}
-		all = filtered
+		available = filterSimulationBatchesByStatus(available, statusFilter)
+		assigned = filterSimulationBatchesByStatus(assigned, statusFilter)
+		all = filterSimulationBatchesByStatus(all, statusFilter)
 	}
 
-	c.JSON(200, gin.H{"batches": all})
+	c.JSON(200, gin.H{
+		"batches":           all,
+		"available_batches": available,
+		"assigned_batches":  assigned,
+	})
 }

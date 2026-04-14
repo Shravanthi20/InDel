@@ -2,16 +2,31 @@ package worker
 
 import (
 	"fmt"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-var batchMaterializationDelay = 10 * time.Second
+var batchMaterializationDelay = loadBatchMaterializationDelay()
 
 const availableBatchCacheScope = "__available__"
+
+func loadBatchMaterializationDelay() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("INDEL_BATCH_MATERIALIZATION_DELAY_SECONDS"))
+	if raw == "" {
+		return 10 * time.Second
+	}
+
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds < 0 {
+		return 10 * time.Second
+	}
+	return time.Duration(seconds) * time.Second
+}
 
 func batchGroupKeyFromFields(fromCity, toCity, fromState, toState string) string {
 	zoneLevel := inferBatchZoneLevel(fromCity, toCity, fromState, toState)
@@ -113,6 +128,63 @@ func refreshBatchCache(workerID string) {
 		}
 	}
 	store.batchCache[workerID] = updated
+}
+
+func refreshBatchSnapshotsForOrder(order map[string]any) {
+	if order == nil {
+		return
+	}
+
+	refreshBatchSnapshotForOrder(availableBatchCacheScope, order)
+	workerID := strings.TrimSpace(fmt.Sprintf("%v", order["worker_id"]))
+	if workerID != "" && workerID != "0" {
+		refreshBatchSnapshotForOrder(workerID, order)
+	}
+}
+
+func refreshBatchSnapshotsForOrderID(orderID string) {
+	order, ok := findStoredOrder(orderID)
+	if !ok {
+		return
+	}
+	refreshBatchSnapshotsForOrder(order)
+}
+
+func listCachedSnapshotsByStatusAcrossScopes(allow func(string) bool, excludedScopes ...string) []gin.H {
+	excluded := map[string]struct{}{}
+	for _, scope := range excludedScopes {
+		excluded[scope] = struct{}{}
+	}
+
+	store.batchMu.Lock()
+	defer store.batchMu.Unlock()
+
+	if len(store.batchCache) == 0 {
+		return []gin.H{}
+	}
+
+	keys := make([]string, 0)
+	snapshotsByKey := make(map[string]gin.H)
+	for workerID, workerBuckets := range store.batchCache {
+		if _, skip := excluded[workerID]; skip {
+			continue
+		}
+		for key, snapshot := range workerBuckets {
+			status, _ := snapshot["status"].(string)
+			if !allow(status) {
+				continue
+			}
+			snapshotsByKey[workerID+"|"+key] = snapshot
+			keys = append(keys, workerID+"|"+key)
+		}
+	}
+
+	sort.Strings(keys)
+	result := make([]gin.H, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, snapshotsByKey[key])
+	}
+	return result
 }
 
 func readBatchRowsForWorker(workerID string) []batchOrderRow {

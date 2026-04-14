@@ -278,18 +278,39 @@ func seedDemoOrdersForZones(workerIDUint uint, zoneIDs []uint, count int) {
 			continue
 		}
 		log.Printf("seedDemoOrdersForZones: order %d -> zone %d %s → %s | %.1f km | ₹%.2f\n", i+1, zoneID, pair.FromCity, pair.ToCity, pair.DistanceKm, deliveryFee)
-		scheduleBatchMaterialization(availableBatchCacheScope, map[string]any{
-			"from_city":  pair.FromCity,
-			"to_city":    pair.ToCity,
-			"from_state": pair.FromState,
-			"to_state":   pair.ToState,
+		seedOrder, _ := parseDemoOrderPayload(map[string]any{
+			"order_id":                fmt.Sprintf("ord-seed-%d-%d", workerIDUint, i+1),
+			"customer_name":           "Demo Customer",
+			"customer_id":             fmt.Sprintf("cust-seed-%d-%d", workerIDUint, i+1),
+			"customer_contact_number": fmt.Sprintf("+91%010d", 9000000000+int(workerIDUint)+i),
+			"address":                 pair.FromCity,
+			"payment_method":          "cod",
+			"order_value":             orderValue,
+			"payment_amount":          orderValue,
+			"package_size":            "medium",
+			"package_weight_kg":       1.0,
+			"zone_id":                 zoneID,
+			"from_city":               pair.FromCity,
+			"to_city":                 pair.ToCity,
+			"from_state":              pair.FromState,
+			"to_state":                pair.ToState,
+			"pickup_area":             pair.FromCity,
+			"drop_area":               pair.ToCity,
+			"distance_km":             pair.DistanceKm,
+			"tip_inr":                 0.0,
+			"zone_level":              inferBatchZoneLevel(pair.FromCity, pair.ToCity, pair.FromState, pair.ToState),
+			"zone_route_path":         zoneRoute,
+			"delivery_fee_inr":        deliveryFee,
+			"status":                  "assigned",
+			"assigned_at":             nowISO(),
+			"source":                  "demo-controls",
 		})
-		scheduleBatchMaterialization(fmt.Sprintf("%d", workerIDUint), map[string]any{
-			"from_city":  pair.FromCity,
-			"to_city":    pair.ToCity,
-			"from_state": pair.FromState,
-			"to_state":   pair.ToState,
-		})
+		seedOrder["worker_id"] = fmt.Sprintf("%d", workerIDUint)
+		seedOrder["created_at"] = nowISO()
+		seedOrder["updated_at"] = nowISO()
+		refreshBatchSnapshotsForOrder(seedOrder)
+		scheduleBatchMaterialization(availableBatchCacheScope, seedOrder)
+		scheduleBatchMaterialization(fmt.Sprintf("%d", workerIDUint), seedOrder)
 	}
 	log.Printf("seedDemoOrdersForZones: successfully seeded %d orders across %d zones for worker %d\n", count, len(zoneIDs), workerIDUint)
 }
@@ -348,18 +369,37 @@ func seedDemoOrdersWithFallback(workerIDUint, zoneID uint, count int) {
 			log.Printf("seedDemoOrdersWithFallback: Failed to insert order %d: %v\n", i+1, err)
 			continue
 		}
-		scheduleBatchMaterialization(fmt.Sprintf("%d", workerIDUint), map[string]any{
-			"from_city":  pickupAreas[pickupIdx],
-			"to_city":    dropAreas[dropIdx],
-			"from_state": "",
-			"to_state":   "",
+		seedOrder, _ := parseDemoOrderPayload(map[string]any{
+			"order_id":                fmt.Sprintf("ord-seed-%d-%d", workerIDUint, i+1),
+			"customer_name":           "Demo Customer",
+			"customer_id":             fmt.Sprintf("cust-seed-%d-%d", workerIDUint, i+1),
+			"customer_contact_number": fmt.Sprintf("+91%010d", 9100000000+int(workerIDUint)+i),
+			"address":                 pickupAreas[pickupIdx],
+			"payment_method":          "cod",
+			"order_value":             55 + float64(i*8),
+			"payment_amount":          55 + float64(i*8),
+			"package_size":            "small",
+			"package_weight_kg":       1.0,
+			"zone_id":                 zoneID,
+			"from_city":               pickupAreas[pickupIdx],
+			"to_city":                 dropAreas[dropIdx],
+			"pickup_area":             pickupAreas[pickupIdx],
+			"drop_area":               dropAreas[dropIdx],
+			"distance_km":             2.5 + float64(i)*0.4,
+			"tip_inr":                 10.0,
+			"zone_level":              "A",
+			"zone_route_path":         []string{"A"},
+			"delivery_fee_inr":        40.0,
+			"status":                  "assigned",
+			"assigned_at":             nowISO(),
+			"source":                  "demo-controls",
 		})
-		scheduleBatchMaterialization(availableBatchCacheScope, map[string]any{
-			"from_city":  pickupAreas[pickupIdx],
-			"to_city":    dropAreas[dropIdx],
-			"from_state": "",
-			"to_state":   "",
-		})
+		seedOrder["worker_id"] = fmt.Sprintf("%d", workerIDUint)
+		seedOrder["created_at"] = nowISO()
+		seedOrder["updated_at"] = nowISO()
+		refreshBatchSnapshotsForOrder(seedOrder)
+		scheduleBatchMaterialization(fmt.Sprintf("%d", workerIDUint), seedOrder)
+		scheduleBatchMaterialization(availableBatchCacheScope, seedOrder)
 	}
 }
 
@@ -488,17 +528,44 @@ func DemoSimulateOrders(c *gin.Context) {
 	store.mu.Lock()
 	base := len(store.data.Orders)
 	for i := 0; i < count; i++ {
-		store.data.Orders = append(store.data.Orders, map[string]any{
-			"order_id":    nextID("ord", base+i),
-			"pickup_area": "Tambaram",
-			"drop_area":   "Camp Road",
-			"distance_km": 2.5 + float64(i)*0.4,
-			"earning_inr": 55 + i*8,
-			"status":      "assigned",
-			"assigned_at": nowISO(),
+		order, _ := parseDemoOrderPayload(map[string]any{
+			"order_id":                nextID("ord", base+i),
+			"customer_name":           "Demo Customer",
+			"customer_id":             fmt.Sprintf("cust-demo-%d", base+i),
+			"customer_contact_number": fmt.Sprintf("+91%010d", 9200000000+base+i),
+			"address":                 "Tambaram",
+			"payment_method":          "cod",
+			"order_value":             55 + float64(i*8),
+			"payment_amount":          55 + float64(i*8),
+			"package_size":            "small",
+			"package_weight_kg":       1.0,
+			"zone_id":                 1,
+			"from_city":               "Tambaram",
+			"to_city":                 "Camp Road",
+			"pickup_area":             "Tambaram",
+			"drop_area":               "Camp Road",
+			"distance_km":             2.5 + float64(i)*0.4,
+			"tip_inr":                 0.0,
+			"zone_level":              "A",
+			"zone_route_path":         []string{"A"},
+			"delivery_fee_inr":        25.0,
+			"status":                  "assigned",
+			"assigned_at":             nowISO(),
+			"source":                  "demo-controls",
 		})
+		order["created_at"] = nowISO()
+		order["updated_at"] = nowISO()
+		store.data.Orders = append(store.data.Orders, order)
 	}
 	store.mu.Unlock()
+
+	for _, order := range store.data.Orders[base:] {
+		refreshBatchSnapshotsForOrder(order)
+		scheduleBatchMaterialization(availableBatchCacheScope, order)
+		if workerID, ok := order["worker_id"].(string); ok && workerID != "" {
+			scheduleBatchMaterialization(workerID, order)
+		}
+	}
 
 	c.JSON(200, gin.H{"message": "orders_simulated", "count": count})
 }

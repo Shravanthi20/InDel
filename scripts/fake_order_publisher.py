@@ -3,6 +3,7 @@ import argparse
 import json
 import random
 import time
+import uuid
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -113,9 +114,17 @@ def compute_delivery_fee_inr(zone_route_path: list[str]) -> int:
     return sum(ZONE_BAND_FEE_INR.get(band, 0) for band in zone_route_path)
 
 
+def source_zone_file_for_level(zone_level: str) -> str:
+    return {
+        "A": "zone_a.json",
+        "B": "zone_b.json",
+        "C": "zone_c.json",
+    }.get(zone_level, "zone_unknown.json")
+
+
 
 # Generate a random order from a zone pair (from/to cities)
-def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 1) -> dict:
+def random_order_from_pair(idx: int, pair: dict, zone_level: str, zone_id: int = 1) -> dict:
     first = random.choice(FIRST_NAMES)
     last = random.choice(LAST_NAMES)
     customer_name = f"{first} {last}"
@@ -138,11 +147,11 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
     from_lon = pair.get("from_lon")
     to_lat = pair.get("to_lat")
     to_lon = pair.get("to_lon")
-    delivery_fee_inr = int(distance * 2) if zone_type in ("zone_c", "inter-state") else int(distance * 1.2)
     zone_route_path = random_zone_route_path()
+    delivery_fee_inr = compute_delivery_fee_inr(zone_route_path)
     eligibility = determine_zone_and_vehicle(from_city, to_city, CITY_STATE_LOOKUP)
     return {
-        "order_id": f"ord-fake-{int(time.time())}-{idx}",
+        "order_id": f"ord-fake-{uuid.uuid4().hex[:12]}-{idx}",
         "customer_name": customer_name,
         "customer_id": f"cust-{random.randint(10000, 99999)}",
         "customer_contact_number": f"+91{random.randint(9000000000, 9999999999)}",
@@ -156,20 +165,16 @@ def random_order_from_pair(idx: int, pair: dict, zone_type: str, zone_id: int = 
         "drop_area": to_city,
         "distance_km": distance,
         "tip_inr": 0,
-        "zone_path": [from_city, to_city],
         "zone_route_path": zone_route_path,
         "delivery_fee_inr": delivery_fee_inr,
         "zone_id": zone_id,
-        "zone_level": "A" if zone_type == "zone_a" else "B" if zone_type == "zone_b" else "C" if zone_type == "zone_c" else "",
-        "source_zone_file": "zone_a.json" if zone_type == "zone_a" else "zone_b.json" if zone_type == "zone_b" else "zone_c.json" if zone_type == "zone_c" else "",
+        "zone_level": zone_level,
+        "source_zone_file": source_zone_file_for_level(zone_level),
         "status": "assigned",
         "assigned_at": now_iso(),
         "source": "fake-order-publisher",
-        # --- Eligibility fields ---
-        "zone_type": eligibility["zone_type"],
         "required_vehicle_type": eligibility["required_vehicle_type"],
         "needs_hub_transfer": eligibility["needs_hub_transfer"],
-        # --- New fields ---
         "from_city": from_city,
         "to_city": to_city,
         "from_state": from_state,
@@ -209,9 +214,9 @@ def build_all_pairs(zone_a_pairs: list[str], zone_b_pairs: list[dict], zone_c_pa
     zone_b_by_from = {entry["from"]: entry for entry in zone_b_pairs}
     zone_a_pair_dicts = build_zone_a_pair_dicts(zone_a_pairs, zone_b_by_from)
     return (
-        [(pair, "zone_a") for pair in zone_a_pair_dicts]
-        + [(pair, "zone_b") for pair in zone_b_pairs]
-        + [(pair, "zone_c") for pair in zone_c_pairs]
+        [(pair, "A") for pair in zone_a_pair_dicts]
+        + [(pair, "B") for pair in zone_b_pairs]
+        + [(pair, "C") for pair in zone_c_pairs]
     )
 
 
@@ -223,14 +228,14 @@ def publish_one_cycle(args, all_pairs: list[tuple[dict, str]], cycle_index: int,
     print(f"\n=== Publish Cycle {cycle_index} ===")
     print(f"Routes considered: {len(all_pairs)} | Orders per route: {args.orders_per_run}")
 
-    for pair_index, (pair, zone_type) in enumerate(all_pairs):
+    for pair_index, (pair, zone_level) in enumerate(all_pairs):
         for route_order_index in range(args.orders_per_run):
             order_index += 1
-            payload = random_order_from_pair(order_index, pair, zone_type, args.zone_id or 1)
+            payload = random_order_from_pair(order_index, pair, zone_level, args.zone_id or 1)
             status, response_text = post_json(args.url, payload, args.timeout_seconds, retries=2)
             print(
                 f"  -> {payload['order_id']} {payload['from_city']}->{payload['to_city']} "
-                f"[{payload.get('source_zone_file', zone_type)}] status={status}"
+                f"[{payload.get('source_zone_file', source_zone_file_for_level(zone_level))}] status={status}"
             )
 
             if status >= 400:
