@@ -27,6 +27,9 @@ data class Policy(
     @SerializedName("billing_cycle_days") val billingCycleDays: Int? = null,
     @SerializedName("grace_period_days") val gracePeriodDays: Int? = null,
     @SerializedName("initial_payment_multiplier") val initialPaymentMultiplier: Int? = null,
+    @SerializedName("risk_score") val riskScore: Double? = null,
+    @SerializedName("pricing_source") val pricingSource: String? = null,
+    @SerializedName("model_version") val modelVersion: String? = null,
     @SerializedName("plan_info") val planInfo: PlanInfo? = null
 )
 
@@ -50,7 +53,10 @@ data class PolicyResponse(
 data class PremiumResponse(
     @SerializedName("weekly_premium_inr") val weeklyPremiumInr: Int,
     @SerializedName("currency") val currency: String,
-    @SerializedName("shap_breakdown") val shapBreakdown: List<ShapImpact>
+    @SerializedName("risk_score") val riskScore: Double? = null,
+    @SerializedName("pricing_source") val pricingSource: String? = null,
+    @SerializedName("model_version") val modelVersion: String? = null,
+    @SerializedName("shap_breakdown") val shapBreakdown: List<ShapImpact> = emptyList()
 )
 
 data class EnrollResponse(
@@ -73,7 +79,15 @@ data class PayPremiumResponse(
     @SerializedName("payment_id") val paymentId: String,
     @SerializedName("checkout_id") val checkoutId: String? = null,
     @SerializedName("payment_status") val paymentStatus: String? = null,
-    @SerializedName("checkout_mode") val checkoutMode: String? = null
+    @SerializedName("checkout_mode") val checkoutMode: String? = null,
+    // Payment lifecycle fields returned after a successful payment
+    @SerializedName("base_premium_inr") val basePremiumInr: Int? = null,
+    @SerializedName("late_fee_inr") val lateFeeInr: Int? = null,
+    @SerializedName("required_payment_inr") val requiredPaymentInr: Int? = null,
+    @SerializedName("next_week_premium_inr") val nextWeekPremiumInr: Int? = null,
+    @SerializedName("next_due_date") val nextDueDate: String? = null,
+    @SerializedName("grace_period_days") val gracePeriodDays: Int? = null,
+    @SerializedName("policy_id") val policyId: Long? = null
 )
 
 data class SimpleMessageResponse(
@@ -81,4 +95,23 @@ data class SimpleMessageResponse(
     @SerializedName("policy") val policy: PolicyStatus? = null,
     @SerializedName("registered") val registered: Boolean? = null,
     @SerializedName("status") val status: String? = null
+)
+
+// ── Disruption Payout ───────────────────────────────────────────────────────
+
+data class DisruptionPayoutRequest(
+    @SerializedName("disruption_type") val disruptionType: String,
+    @SerializedName("zone_level") val zoneLevel: String,
+    @SerializedName("zone_name") val zoneName: String,
+    @SerializedName("disruption_hours") val disruptionHours: Double = 4.0
+)
+
+data class DisruptionPayoutResponse(
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("payout_amount_inr") val payoutAmountInr: Double? = null,
+    @SerializedName("disruption_type") val disruptionType: String? = null,
+    @SerializedName("claim_id") val claimId: String? = null,
+    @SerializedName("payout_id") val payoutId: String? = null,
+    @SerializedName("error") val error: String? = null,
+    @SerializedName("reason") val reason: String? = null
 )

@@ -16,7 +16,7 @@ func GetOrderDetail(c *gin.Context) {
 
 	orderID := c.Param("order_id")
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseWorkerErr := parseWorkerID(workerID)
 		orderNumID, parseOrderErr := parseOrderID(orderID)
 		if parseWorkerErr == nil && parseOrderErr == nil {
@@ -143,7 +143,7 @@ func GetZoneConfig(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			type row struct {

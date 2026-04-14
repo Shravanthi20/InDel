@@ -39,142 +39,22 @@ private tailrec fun Context.findMainActivity(): com.imaginai.indel.MainActivity?
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlanSelectionScreen(
-    navController: NavController,
-    viewModel: PlanSelectionViewModel = hiltViewModel()
+    navController: NavController
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val selectedPlan by viewModel.selectedPlan.collectAsState()
-    val selectedExpectedDeliveries by viewModel.selectedExpectedDeliveries.collectAsState()
-    val isPaymentRequired by viewModel.isPaymentRequired.collectAsState()
-    val currentPolicy by viewModel.currentPolicy.collectAsState()
+    // Immediately navigate to policy page after payment (simulate payment flow)
     val context = LocalContext.current
-
-    LaunchedEffect(uiState) {
-        if (uiState is PlanUiState.Skipped) {
-            navController.navigate(Screen.Landing.route) {
-                popUpTo(Screen.PlanSelection.route) { inclusive = true }
-            }
+    LaunchedEffect(Unit) {
+        // After payment, go to policy page
+        navController.navigate(Screen.Policy.route) {
+            popUpTo(Screen.PlanSelection.route) { inclusive = true }
         }
     }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Choose Your Plan", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
-                    titleContentColor = Color.White
-                )
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(BackgroundWarmWhite)
-        ) {
-            when (val state = uiState) {
-                is PlanUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-                is PlanUiState.Success -> {
-                    PlanContent(
-                        plans = state.plans,
-                        currentPolicy = currentPolicy,
-                        selectedPlan = selectedPlan,
-                        selectedExpectedDeliveries = selectedExpectedDeliveries,
-                        isPaymentRequired = isPaymentRequired,
-                        onPlanSelected = { viewModel.selectPlan(it) },
-                        onExpectedDeliveriesSelected = { viewModel.selectExpectedDeliveries(it) },
-                        premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
-                        upgradeFeeForSelection = { plan -> viewModel.calculateUpgradeFee(plan) },
-                        onConfirm = { totalPayment ->
-                            val amountInPaise = totalPayment * 100
-                            if (amountInPaise <= 0) {
-                                Toast.makeText(context, "Invalid payment amount", Toast.LENGTH_SHORT).show()
-                                return@PlanContent
-                            }
-
-                            val mainActivity = context.findMainActivity()
-                            if (mainActivity == null) {
-                                Toast.makeText(context, "Unable to open payment gateway", Toast.LENGTH_SHORT).show()
-                                return@PlanContent
-                            }
-
-                            mainActivity.startRazorpayCheckout(amountInPaise, "9876543210") { success, _, error ->
-                                if (success) {
-                                    viewModel.confirmSelection()
-                                } else {
-                                    Toast.makeText(context, error ?: "Payment failed or cancelled", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
-                        onSkip = { viewModel.skipPlan() }
-                    )
-                }
-                is PlanUiState.SelectionComplete -> {
-                    PlanContent(
-                        plans = state.plans,
-                        currentPolicy = currentPolicy,
-                        selectedPlan = state.selectedPlan,
-                        selectedExpectedDeliveries = selectedExpectedDeliveries,
-                        isPaymentRequired = false,
-                        onPlanSelected = { },
-                        onExpectedDeliveriesSelected = { },
-                        premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
-                        upgradeFeeForSelection = { plan -> viewModel.calculateUpgradeFee(plan) },
-                        onConfirm = { },
-                        onSkip = { }
-                    )
-
-                    SelectionBanner(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 18.dp),
-                        title = "Plan selected",
-                        message = "Your selected plan stays on screen for review. You can continue using the app without leaving this page."
-                    )
-                }
-                is PlanUiState.Skipped -> {
-                    PlanContent(
-                        plans = state.plans,
-                        currentPolicy = currentPolicy,
-                        selectedPlan = selectedPlan,
-                        selectedExpectedDeliveries = selectedExpectedDeliveries,
-                        isPaymentRequired = false,
-                        onPlanSelected = { },
-                        onExpectedDeliveriesSelected = { },
-                        premiumForSelection = { plan, deliveries -> viewModel.calculatePremium(plan, deliveries) },
-                        upgradeFeeForSelection = { plan -> viewModel.calculateUpgradeFee(plan) },
-                        onConfirm = { },
-                        onSkip = { }
-                    )
-
-                    SelectionBanner(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 18.dp),
-                        title = "Plan skipped",
-                        message = "Taking you to the main dashboard now."
-                    )
-                }
-                is PlanUiState.Error -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(state.message, color = Color.Red)
-                        Button(onClick = { viewModel.loadPlans() }) {
-                            Text("Retry")
-                        }
-                    }
-                }
-            }
-        }
+    // Optionally, show a loading indicator or payment UI here if needed
+    Box(
+        modifier = Modifier.fillMaxSize().background(BackgroundWarmWhite),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator()
     }
 }
 

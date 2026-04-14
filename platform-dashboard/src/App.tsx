@@ -12,6 +12,7 @@ import ReconciliationOps from './pages/ReconciliationOps'
 import SyntheticDataOps from './pages/SyntheticDataOps'
 import GodModeLayout from './pages/god-mode/GodModeLayout'
 import { GodModeProvider } from './pages/god-mode/state'
+import BatchSimulationPage from './pages/god-mode/BatchSimulationPage'
 
 export default function App() {
   return (
@@ -53,6 +54,14 @@ export default function App() {
               element={(
                 <GodModeProvider>
                   <GodModeLayout />
+                </GodModeProvider>
+              )}
+            />
+            <Route
+              path="/god-mode/batch-simulation"
+              element={(
+                <GodModeProvider>
+                  <BatchSimulationPage />
                 </GodModeProvider>
               )}
             />

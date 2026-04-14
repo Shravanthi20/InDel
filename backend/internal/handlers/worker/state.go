@@ -223,7 +223,7 @@ func requireAuth(c *gin.Context) (string, bool) {
 	}
 	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 
-	if hasDB() {
+	if HasDB() {
 		type tokenRow struct {
 			UserID uint `gorm:"column:user_id"`
 		}

@@ -158,23 +158,20 @@ class OrdersViewModel @Inject constructor(
 
     fun getBatchById(batchId: String): DeliveryBatch? = cachedBatches.firstOrNull { it.batchId == batchId }
 
-    fun pickupCodeForBatch(batchId: String): String = codeFromBatchId(batchId, seed = 31)
-
-    fun deliveryCodeForBatch(batchId: String): String = codeFromBatchId(batchId, seed = 37)
-
     fun isZoneASingleStop(batch: DeliveryBatch): Boolean {
         val from = batch.fromCity.trim().lowercase()
         val to = batch.toCity.trim().lowercase()
         return batch.zoneLevel.trim().equals("A", ignoreCase = true) && from.isNotBlank() && from == to
     }
 
-    suspend fun acceptBatch(batch: DeliveryBatch, pickupCode: String): Boolean {
+    suspend fun acceptBatch(batch: DeliveryBatch, pickupCode: String): BatchActionResult {
         val response = workerRepository.acceptBatch(batch.batchId, batch.orders.map { it.orderId }, pickupCode)
-        if (response.isSuccessful) {
+        return if (response.isSuccessful) {
             fetchOrders()
-            return true
+            BatchActionResult(success = true, errorMessage = null)
+        } else {
+            BatchActionResult(success = false, errorMessage = response.errorBody()?.string()?.ifBlank { null } ?: "Unable to pick up this batch right now.")
         }
-        return false
     }
 
     suspend fun deliverBatch(batch: DeliveryBatch, deliveryCode: String): BatchDeliveryResult {
@@ -193,17 +190,9 @@ class OrdersViewModel @Inject constructor(
                 success = false,
                 batchCompleted = false,
                 remainingOrders = null,
-                errorMessage = "Unable to complete delivery right now.",
+                errorMessage = response.errorBody()?.string()?.ifBlank { null } ?: "Unable to complete delivery right now.",
             )
         }
-    }
-
-    private fun codeFromBatchId(batchId: String, seed: Int): String {
-        var value = seed
-        batchId.trim().uppercase().forEach { char ->
-            value = (value * if (seed == 31) 31 else 37 + char.code) % 9000
-        }
-        return (1000 + value).toString().padStart(4, '0')
     }
 
     private fun DeliveryBatchDto.toUiBatch(): DeliveryBatch {
@@ -246,13 +235,17 @@ class OrdersViewModel @Inject constructor(
     }
 }
 
+data class BatchActionResult(
+    val success: Boolean,
+    val errorMessage: String?,
+)
+
 data class BatchDeliveryResult(
     val success: Boolean,
     val batchCompleted: Boolean,
     val remainingOrders: Int?,
     val errorMessage: String?,
 )
-
 enum class BatchLifecycleTab(val title: String) {
     AVAILABLE_NEAR("Available / Near"),
     PICKED_UP("Picked Up"),
@@ -268,3 +261,5 @@ sealed class OrdersUiState {
     ) : OrdersUiState()
     data class Error(val message: String) : OrdersUiState()
 }
+
+

@@ -16,6 +16,7 @@ export const getDisruptions = () => client.get('/api/v1/platform/disruptions')
 export const getOrders = () => client.get('/api/v1/worker/orders')
 export const getAvailableBatches = () => client.get('/api/v1/worker/batches')
 export const getAssignedBatches = () => client.get('/api/v1/worker/batches/assigned')
+export const getSimulationBatches = (status?: 'assigned' | 'picked_up' | 'delivered') => client.get('/api/v1/demo/batches', { params: status ? { status } : undefined })
 export const putAcceptBatch = (batchId: string, data: { orderIds: string[]; pickupCode: string }) =>
   client.put(`/api/v1/worker/batches/${encodeURIComponent(batchId)}/accept`, data)
 export const putDeliverBatch = (batchId: string, data: { deliveryCode: string }) =>
@@ -74,3 +75,4 @@ export const generateClaimsForDisruption = (disruptionId: number) =>
   client.post(`/api/v1/internal/claims/generate-for-disruption/${disruptionId}`)
 export const postExternalSignal = (data: {zone_id: number, source: string, status: string}) =>
   client.post('/api/v1/platform/webhooks/external-signal', data)
+

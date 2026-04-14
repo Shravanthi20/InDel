@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAssignedBatches, getAvailableBatches, getZones } from '../api/insurer'
+import { getAssignedBatches, getAvailableBatches } from '../api/insurer'
+import { getZonePaths } from '../../platform-dashboard/src/api/platform'
 import { PageShell, Panel } from './OperationsShared'
 
-type ZoneRow = {
-  zone_id: number
-  name: string
-  city: string
-  state: string
-}
+// No longer needed: ZoneRow
 
 type BatchRow = {
   batchId: string
@@ -35,97 +31,81 @@ function batchMatchesZone(batch: BatchRow, zone: ZoneRow) {
   return tokens.some((token) => fields.some((field) => field.includes(token) || token.includes(field)))
 }
 
-export default function ViewBatches() {
-  const [zones, setZones] = useState<ZoneRow[]>([])
   const [availableBatches, setAvailableBatches] = useState<BatchRow[]>([])
   const [assignedBatches, setAssignedBatches] = useState<BatchRow[]>([])
-  const [zoneLevelFilter, setZoneLevelFilter] = useState<ZoneLevel | ''>('')
-  const [zoneFilter, setZoneFilter] = useState('ALL')
+  const [zoneLevel, setZoneLevel] = useState<'a' | 'b' | 'c' | ''>('')
+  const [zoneOptions, setZoneOptions] = useState<any[]>([])
+  const [zoneCache] = useState<{ [k: string]: any[] }>({})
+  const [selectedZone, setSelectedZone] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    let mounted = true
-
-    async function loadData() {
-      setLoading(true)
-      setError('')
-
-      const [zonesResult, availableResult, assignedResult] = await Promise.allSettled([
-        getZones(),
-        getAvailableBatches<{ batches?: BatchRow[] }>(),
-        getAssignedBatches<{ batches?: BatchRow[] }>(),
-      ])
-
-      if (!mounted) {
-        return
-      }
-
-      if (zonesResult.status === 'fulfilled') {
-        const zonePayload = zonesResult.value?.data?.zones
-        setZones(Array.isArray(zonePayload) ? zonePayload : [])
-      }
+    setLoading(true)
+    setError('')
+    Promise.allSettled([
+      getAvailableBatches<{ batches?: BatchRow[] }>(),
+      getAssignedBatches<{ batches?: BatchRow[] }>(),
+    ]).then(([availableResult, assignedResult]) => {
       if (availableResult.status === 'fulfilled') {
         setAvailableBatches(availableResult.value?.batches || [])
       }
       if (assignedResult.status === 'fulfilled') {
         setAssignedBatches(assignedResult.value?.batches || [])
       }
-
       if (availableResult.status === 'rejected' && assignedResult.status === 'rejected') {
         setError('Unable to load batches from backend.')
       }
-
       setLoading(false)
-    }
-
-    loadData()
-
-    return () => {
-      mounted = false
-    }
+    })
   }, [])
 
-  const levelFilteredAvailable = useMemo(() => {
-    if (!zoneLevelFilter || zoneLevelFilter === 'ALL') {
-      return availableBatches
+  // Fetch 15 zones for selected level, cache in memory
+  useEffect(() => {
+    if (!zoneLevel) {
+      setZoneOptions([])
+      setSelectedZone('')
+      return
     }
-    return availableBatches.filter((batch) => normalize(batch.zoneLevel) === normalize(zoneLevelFilter))
-  }, [availableBatches, zoneLevelFilter])
-
-  const levelFilteredAssigned = useMemo(() => {
-    if (!zoneLevelFilter || zoneLevelFilter === 'ALL') {
-      return assignedBatches
+    if (zoneCache[zoneLevel]) {
+      setZoneOptions(zoneCache[zoneLevel])
+      setSelectedZone('')
+      return
     }
-    return assignedBatches.filter((batch) => normalize(batch.zoneLevel) === normalize(zoneLevelFilter))
-  }, [assignedBatches, zoneLevelFilter])
+    getZonePaths(zoneLevel).then(res => {
+      const cities = res.data.cities || res.data.zones || []
+      setZoneOptions(cities)
+      zoneCache[zoneLevel] = cities
+      setSelectedZone('')
+    }).catch(() => setZoneOptions([]))
+  }, [zoneLevel])
 
-  const levelFilteredBatches = useMemo(
-    () => [...levelFilteredAvailable, ...levelFilteredAssigned],
-    [levelFilteredAvailable, levelFilteredAssigned],
-  )
-
-  const zoneOptions = useMemo(() => {
-    if (!zoneLevelFilter) {
-      return [] as ZoneRow[]
+  // Filter batches by selected level and zone
+  const filteredAvailable = useMemo(() => {
+    let filtered = availableBatches
+    if (zoneLevel) {
+      filtered = filtered.filter((batch) => normalize(batch.zoneLevel) === normalize(zoneLevel))
     }
-    if (zoneLevelFilter === 'ALL') {
-      return zones
+    if (selectedZone) {
+      filtered = filtered.filter((batch) => {
+        return (batch.fromCity && batch.fromCity === selectedZone) || (batch.toCity && batch.toCity === selectedZone)
+      })
     }
-    return zones.filter((zone) => levelFilteredBatches.some((batch) => batchMatchesZone(batch, zone)))
-  }, [levelFilteredBatches, zoneLevelFilter, zones])
+    return filtered
+  }, [availableBatches, zoneLevel, selectedZone])
 
-  const selectedZone = useMemo(() => zoneOptions.find((zone) => String(zone.zone_id) === zoneFilter) || null, [zoneOptions, zoneFilter])
-
-  const filteredAvailable = useMemo(
-    () => (selectedZone ? levelFilteredAvailable.filter((batch) => batchMatchesZone(batch, selectedZone)) : levelFilteredAvailable),
-    [levelFilteredAvailable, selectedZone],
-  )
-
-  const filteredAssigned = useMemo(
-    () => (selectedZone ? levelFilteredAssigned.filter((batch) => batchMatchesZone(batch, selectedZone)) : levelFilteredAssigned),
-    [levelFilteredAssigned, selectedZone],
-  )
+  const filteredAssigned = useMemo(() => {
+    let filtered = assignedBatches
+    if (zoneLevel) {
+      filtered = filtered.filter((batch) => normalize(batch.zoneLevel) === normalize(zoneLevel))
+    }
+    if (selectedZone) {
+      filtered = filtered.filter((batch) => {
+        return (batch.fromCity && batch.fromCity === selectedZone) || (batch.toCity && batch.toCity === selectedZone)
+      })
+    }
+    return filtered
+  }, [assignedBatches, zoneLevel, selectedZone])
 
   return (
     <PageShell
@@ -136,30 +116,26 @@ export default function ViewBatches() {
       <Panel title="Filters" subtitle="Select zone level, then zone name from backend zones.">
         <div className="flex flex-wrap items-center gap-3">
           <select
-            value={zoneLevelFilter}
-            onChange={(event) => {
-              const nextLevel = event.target.value as ZoneLevel | ''
-              setZoneLevelFilter(nextLevel)
-              setZoneFilter('ALL')
-            }}
+            value={zoneLevel}
+            onChange={e => setZoneLevel(e.target.value as 'a' | 'b' | 'c' | '')}
             className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
           >
             <option value="">Select zone level</option>
-            <option value="A">Zone A</option>
-            <option value="B">Zone B</option>
-            <option value="C">Zone C</option>
-            <option value="ALL">All levels</option>
+            <option value="a">Zone A</option>
+            <option value="b">Zone B</option>
+            <option value="c">Zone C</option>
           </select>
-
           <select
-            value={zoneFilter}
-            onChange={(event) => setZoneFilter(event.target.value)}
-            disabled={!zoneLevelFilter}
+            value={selectedZone}
+            onChange={e => setSelectedZone(e.target.value)}
+            disabled={!zoneLevel || zoneOptions.length === 0}
             className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
           >
-            <option value="ALL">All zones</option>
-            {zoneOptions.map((zone) => (
-              <option key={zone.zone_id} value={String(zone.zone_id)}>{zoneLabel(zone)}</option>
+            <option value="">{zoneLevel ? 'Select Zone' : 'Select Level First'}</option>
+            {zoneOptions.map((z, idx) => (
+              <option key={z.city || z.zone_name || idx} value={z.city || z.zone_name}>
+                {(z.city || z.zone_name) + (z.state ? ', ' + z.state : '')}
+              </option>
             ))}
           </select>
           {loading ? <span className="text-sm text-slate-500">Loading...</span> : null}

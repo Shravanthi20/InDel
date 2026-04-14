@@ -279,14 +279,15 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 
 	weekStart, _ := weekBounds(now.UTC())
 	var workers []eligibleWorker
-	// DEMO MODE: Relaxing JOINs to ensure payouts work even after data wipes.
-	// We'll fetch all workers in the zone, and if they miss baseline/policy, we'll provide defaults.
+	// Check for workers in the disrupted zone who have ACTIVE protection plans
+	// This ensures claims are only generated for workers currently enrolled in the protection policy
 	if err := s.DB.Table("worker_profiles wp").
 		Select("wp.worker_id, COALESCE(eb.baseline_amount, 5000.0) AS baseline_amount, COALESCE(wes.total_earnings, 0) AS actual_earnings").
-		Joins("LEFT JOIN policies p ON p.worker_id = wp.worker_id").
+		Joins("INNER JOIN active_policies ap ON ap.user_id = wp.worker_id").
+		Joins("INNER JOIN policies p ON p.worker_id = wp.worker_id AND p.status = 'active'").
 		Joins("LEFT JOIN earnings_baseline eb ON eb.worker_id = wp.worker_id").
 		Joins("LEFT JOIN weekly_earnings_summary wes ON wes.worker_id = wp.worker_id AND wes.week_start = ?", weekStart).
-		Where("wp.zone_id = ?", disruption.ZoneID).
+		Where("wp.zone_id = ? AND ap.zone = ?", disruption.ZoneID, disruption.ZoneID).
 		Scan(&workers).Error; err != nil {
 		return nil, err
 	}
@@ -321,10 +322,13 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 
 		status := "approved"
 		fraudVerdict := "clear"
+		fraudScore := 0.19 // Default low fraud score for legitimate disruptions
+
 		// DEMO MODE: Disable manual review threshold (set to 100k)
 		if loss > 100000 {
 			status = "manual_review"
 			fraudVerdict = "review"
+			fraudScore = 0.66 // Higher fraud score for large claims
 		}
 
 		claim := models.Claim{DisruptionID: disruptionID, WorkerID: worker.WorkerID, ClaimAmount: round2(loss * 0.85), Status: status, FraudVerdict: fraudVerdict, CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
@@ -332,12 +336,7 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 			return nil, err
 		}
 
-		score := models.ClaimFraudScore{ClaimID: claim.ID, IsolationForestScore: 0.19, DbscanScore: 0.19, FinalVerdict: "clear", RuleViolations: "[]"}
-		if status == "manual_review" {
-			score.IsolationForestScore = 0.66
-			score.DbscanScore = 0.66
-			score.FinalVerdict = "review"
-		}
+		score := models.ClaimFraudScore{ClaimID: claim.ID, IsolationForestScore: fraudScore, DbscanScore: fraudScore, FinalVerdict: fraudVerdict, RuleViolations: "[]"}
 		if err := s.DB.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "claim_id"}}, DoUpdates: clause.AssignmentColumns([]string{"isolation_forest_score", "dbscan_score", "final_verdict", "rule_violations"})}).Create(&score).Error; err != nil {
 			return nil, err
 		}

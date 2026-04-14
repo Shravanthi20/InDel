@@ -11,7 +11,7 @@ import (
 
 // ensureZoneIDByLevelAndName finds or creates a zone by level and name
 func ensureZoneIDByLevelAndName(zoneLevel, zoneName string) uint {
-	if !hasDB() {
+	if !HasDB() {
 		return 0
 	}
 	level := strings.TrimSpace(zoneLevel)
@@ -43,7 +43,7 @@ func Onboard(c *gin.Context) {
 
 	body := parseBody(c)
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			zoneLevel := bodyString(body, "zone_level", "")
@@ -102,7 +102,7 @@ func GetProfile(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			type profileResp struct {
@@ -135,7 +135,7 @@ func GetProfile(c *gin.Context) {
 				if city == "" {
 					city = "Chennai"
 				}
-				
+
 				var ordersCompleted int64
 				_ = workerDB.Model(&models.Order{}).Where("worker_id = ? AND status = 'delivered'", row.WorkerID).Count(&ordersCompleted).Error
 
@@ -176,7 +176,7 @@ func UpdateProfile(c *gin.Context) {
 	}
 	body := parseBody(c)
 
-	if hasDB() {
+	if HasDB() {
 		workerIDUint, parseErr := parseWorkerID(workerID)
 		if parseErr == nil {
 			var profile models.WorkerProfile

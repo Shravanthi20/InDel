@@ -102,7 +102,7 @@ func refreshBatchCache(workerID string) {
 	}
 	updated := map[string]gin.H{}
 	for groupKey, groupRows := range grouped {
-		snapshots := rowsToBatches(groupRows, batchStatusFromRows(groupRows, "Assigned"))
+		snapshots := rowsToBatches(groupRows, batchStatusFromRows(groupRows, "Assigned"), true)
 		if len(snapshots) == 0 {
 			continue
 		}
@@ -118,7 +118,7 @@ func refreshBatchCache(workerID string) {
 func readBatchRowsForWorker(workerID string) []batchOrderRow {
 	rows := make([]batchOrderRow, 0)
 
-	if hasDB() {
+	if HasDB() {
 		if workerID == availableBatchCacheScope {
 			err := workerDB.Raw(`
 				SELECT o.id, o.zone_id,
@@ -352,7 +352,7 @@ func refreshBatchSnapshotForWorker(workerID, groupKey string) {
 		return
 	}
 
-	snapshots := rowsToBatches(groupRows, "Pending")
+	snapshots := rowsToBatches(groupRows, "Pending", true)
 	if len(snapshots) == 0 {
 		deleteBatchSnapshot(workerID, groupKey)
 		return

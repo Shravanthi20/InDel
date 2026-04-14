@@ -77,7 +77,8 @@ class RegisterViewModel @Inject constructor(
                     body?.cities?.let { cities ->
                         Log.d(TAG, "Processing ${cities.size} cities")
                         cities.forEach { city ->
-                            paths.add(ZonePath(displayName = city, city = city))
+                            val displayName = city.city + (city.state?.let { " ($it)" } ?: "")
+                            paths.add(ZonePath(displayName = displayName, city = city.city))
                         }
                     }
                     

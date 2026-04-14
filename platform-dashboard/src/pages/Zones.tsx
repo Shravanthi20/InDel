@@ -1,12 +1,15 @@
-import { useEffect, useState, useMemo } from 'react'
-import { getZoneHealth, getZones } from '../api/platform'
-import { Activity, ShieldAlert, BarChart, MapPin, Wind, CloudRain, Zap, Search, Filter } from 'lucide-react'
-
 export default function Zones() {
   const [zones, setZones] = useState<any[]>([])
   const [health, setHealth] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'healthy' | 'disrupted' | 'anomalous'>('all')
+
+  // Chaos Engine: Dynamic zone selection state
+  const [zoneLevel, setZoneLevel] = useState<'a' | 'b' | 'c' | ''>('')
+  const [zoneOptions, setZoneOptions] = useState<any[]>([])
+  const [zoneName, setZoneName] = useState('')
+  // Simple in-memory cache for session
+  const [zoneCache] = useState<{ [k: string]: any[] }>({})
 
   useEffect(() => {
     async function load() {
@@ -14,11 +17,30 @@ export default function Zones() {
       setZones(zonesRes.data.zones ?? [])
       setHealth(healthRes.data.data ?? [])
     }
-
     load().catch((error) => console.error('Failed to load zones', error))
     const timer = setInterval(() => load().catch(() => undefined), 5000)
     return () => clearInterval(timer)
   }, [])
+
+  // Fetch 15 zones for selected level, cache in memory
+  useEffect(() => {
+    if (!zoneLevel) {
+      setZoneOptions([])
+      setZoneName('')
+      return
+    }
+    if (zoneCache[zoneLevel]) {
+      setZoneOptions(zoneCache[zoneLevel])
+      setZoneName('')
+      return
+    }
+    getZonePaths(zoneLevel).then(res => {
+      const cities = res.data.cities || res.data.zones || []
+      setZoneOptions(cities)
+      zoneCache[zoneLevel] = cities
+      setZoneName('')
+    }).catch(() => setZoneOptions([]))
+  }, [zoneLevel])
 
   const filteredZones = useMemo(() => {
     return zones.filter(zone => {
@@ -42,6 +64,41 @@ export default function Zones() {
 
   return (
     <div className="space-y-10">
+      {/* Chaos Engine: Dynamic Zone Selection */}
+      <div className="enterprise-panel p-4 mb-8">
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
+          </div>
+
+        {filteredZones.length === 0 ? (
+              onChange={e => setZoneLevel(e.target.value as 'a' | 'b' | 'c' | '')}
+            >
+              <option value="">Select Level</option>
+              <option value="a">A</option>
+              <option value="b">B</option>
+              <option value="c">C</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold mb-1">Zone Name</label>
+            <select
+              className="rounded border px-3 py-2 text-sm"
+              value={zoneName}
+              onChange={e => setZoneName(e.target.value)}
+              disabled={!zoneLevel || zoneOptions.length === 0}
+            >
+              <option value="">{zoneLevel ? 'Select Zone' : 'Select Level First'}</option>
+              {zoneOptions.map((z, idx) => (
+                <option key={z.city || z.zone_name || idx} value={z.city || z.zone_name}>
+                  {(z.city || z.zone_name) + (z.state ? ', ' + z.state : '')}
+                </option>
+              ))}
+            </select>
+          </div>
+          {zoneLevel && zoneName && (
+            <div className="text-xs font-bold text-emerald-600">Selected: Level {zoneLevel.toUpperCase()}, {zoneName}</div>
+          )}
+        </div>
+      </div>
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Zone Monitoring</h1>
@@ -53,7 +110,7 @@ export default function Zones() {
         </div>
       </div>
 
-      <div className="enterprise-panel p-4 flex items-center justify-between mb-8">
+      {/* ...existing code... */}
          <div className="relative group w-72">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
               <Search className="h-3.5 w-3.5" />
@@ -84,21 +141,20 @@ export default function Zones() {
          </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {filteredZones.length === 0 ? (
-          <div className="col-span-full py-20 text-center text-slate-400 text-xs italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl">
-             No zones match the current monitoring parameters.
-          </div>
-        ) : filteredZones.map((zone) => {
-          const zoneHealth = health.find((item) => item.zone_id === zone.zone_id)
-          const isDisrupted = zoneHealth?.status === 'disrupted'
-          const isAnomalous = zoneHealth?.status === 'anomalous_demand' || zoneHealth?.status === 'monitoring'
-          const drop = Math.round((zoneHealth?.order_drop ?? 0) * 100)
-          
-          return (
-            <div key={zone.zone_id} className={`enterprise-panel relative group overflow-hidden transition-all duration-300 ${isDisrupted ? 'border-rose-500/40 shadow-[0_0_20px_rgba(244,63,94,0.1)]' : isAnomalous ? 'border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.05)]' : ''}`}>
-              <div className="p-8">
-                <div className="flex items-start justify-between mb-8">
+      {filteredZones.length === 0 ? (
+        <div className="col-span-full py-20 text-center text-slate-400 text-xs italic border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl">
+           No zones match the current monitoring parameters.
+        </div>
+      ) : filteredZones.map((zone) => {
+        const zoneHealth = health.find((item) => item.zone_id === zone.zone_id)
+        const isDisrupted = zoneHealth?.status === 'disrupted'
+        const isAnomalous = zoneHealth?.status === 'anomalous_demand' || zoneHealth?.status === 'monitoring'
+        const drop = Math.round((zoneHealth?.order_drop ?? 0) * 100)
+        
+        return (
+          <div key={zone.zone_id} className={`enterprise-panel relative group overflow-hidden transition-all duration-300 ${isDisrupted ? 'border-rose-500/40 shadow-[0_0_20px_rgba(244,63,94,0.1)]' : isAnomalous ? 'border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.05)]' : ''}`}>
+            <div className="p-8">
+              <div className="flex items-start justify-between mb-8">
                   <div className="max-w-[180px]">
                     <div className="flex items-center gap-2">
                        <MapPin className="h-4 w-4 text-slate-400" />

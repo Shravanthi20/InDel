@@ -91,7 +91,10 @@ class ProfileEditViewModel @Inject constructor(
                     val body = response.body()
                     val paths = withContext(Dispatchers.Default) {
                         val result = mutableListOf<ZonePath>()
-                        body?.cities?.forEach { result.add(ZonePath(displayName = it, city = it)) }
+                        body?.cities?.forEach { 
+                            val displayName = it.city + (it.state?.let { s -> " ($s)" } ?: "")
+                            result.add(ZonePath(displayName = displayName, city = it.city)) 
+                        }
                         body?.cityPairs?.forEach { pair ->
                             val display = when (type) {
                                 "b" -> "${pair.from} to ${pair.to} (${pair.state ?: ""})"

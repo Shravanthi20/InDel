@@ -32,6 +32,12 @@ interface WorkerApiService {
     @GET("api/v1/platform/zones")
     suspend fun getZones(): Response<ZoneListResponse>
 
+    @GET("api/v1/platform/zone-levels")
+    suspend fun getZoneLevels(): Response<ZoneLevelResponse>
+
+    @GET("api/v1/platform/zone-paths")
+    suspend fun getZonePaths(@Query("type") type: String): Response<ZonePathResponse>
+
     // Orders & Delivery
     @GET("api/v1/demo/orders/available")
     suspend fun getAvailableOrders(@Query("path") path: String? = null): Response<OrderListResponse>
@@ -169,6 +175,10 @@ interface WorkerApiService {
     // Demo Tools (Debug only)
     @POST("api/v1/demo/trigger-disruption")
     suspend fun triggerDisruption(@Body request: DisruptionRequest): Response<SimpleMessageResponse>
+
+    // Disruption Payout (worker-facing: gates on active plan + zone + risk score)
+    @POST("api/v1/worker/disruptions/trigger")
+    suspend fun triggerDisruptionPayout(@Body request: DisruptionPayoutRequest): Response<DisruptionPayoutResponse>
 
     @POST("api/v1/demo/assign-orders")
     suspend fun assignOrders(@Body request: CountRequest): Response<SimpleMessageResponse>

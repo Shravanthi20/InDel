@@ -1,6 +1,33 @@
 version: '3.8'
 
 services:
+  core:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: core
+    environment:
+      INDEL_ENV: demo
+      SERVICE: core
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: indel
+      DB_PASSWORD: ${DB_PASSWORD:-demo_password}
+      DB_NAME: indel_demo
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8000/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
   postgres:
     image: postgres:15
     environment:
@@ -34,10 +61,29 @@ services:
         condition: service_healthy
     restart: "no"
 
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep standalone || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -51,49 +97,11 @@ services:
       timeout: 10s
       retries: 15
       start_period: 20s
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-    ports:
-      - "2181:2181"
-
-  core:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: core
-    environment:
-      INDEL_ENV: demo
-      INDEL_CORE_INTERNAL_ALLOWED_ROLES: ${INDEL_CORE_INTERNAL_ALLOWED_ROLES:-worker,admin,platform_admin,ops_manager}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: indel
-      DB_PASSWORD: ${DB_PASSWORD:-demo_password}
-      DB_NAME: indel_demo
-      KAFKA_BROKERS: kafka:9092
-    ports:
-      - "${HOST_IP:-127.0.0.1}:8000:8000"
     volumes:
       - ./zone_a.json:/root/zone_a.json:ro
       - ./zone_b.json:/root/zone_b.json:ro
       - ./zone_c.json:/root/zone_c.json:ro
       - ./zone_level.json:/root/zone_level.json:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
-      kafka:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8000/health >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 20s
 
   worker-gateway:
     build:

@@ -21,7 +21,7 @@ func GetPayouts(c *gin.Context) {
 		}
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			type row struct {
 				PayoutID    uint    `gorm:"column:payout_id"`
@@ -70,7 +70,7 @@ func GetWallet(c *gin.Context) {
 		return
 	}
 
-	if hasDB() {
+	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
 			var available float64 = 0
 			var lastAmount float64 = 0

@@ -60,6 +60,7 @@ zones.txt
 
 # Gradle
 .gradle/
+/.gradle-home/
 build/
 
 # Additional
@@ -114,6 +115,7 @@ temp.txt
 zones.txt
 *.tmp
 *.bak
+*.txt
 
 # Frontend / package managers
 node_modules/
@@ -123,3 +125,5 @@ platform-dashboard/node_modules/
 # Local mobile secrets / generated app config
 worker-app/app/google-services.json
 worker-app/ios/Runner/GoogleService-Info.plist
+/.bin/
+bin/
