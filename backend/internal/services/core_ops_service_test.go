@@ -106,7 +106,7 @@ func TestGenerateClaimsAndQueueProcessPayouts(t *testing.T) {
 		if err := db.Create(&models.WorkerProfile{WorkerID: workerID, Name: "Worker", ZoneID: zone.ID, VehicleType: "bike", UPIId: "w@upi", AQIZone: "medium", TotalEarningsLifetime: 100000}).Error; err != nil { t.Fatal(err) }
 		if err := db.Create(&models.Policy{WorkerID: workerID, Status: "active", PremiumAmount: 22}).Error; err != nil { t.Fatal(err) }
 		if err := db.Create(&models.EarningsBaseline{WorkerID: workerID, BaselineAmount: 4000, LastUpdatedAt: now}).Error; err != nil { t.Fatal(err) }
-		if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 1200, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
+		if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 0, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
 	}
 
 	start := now.Add(-2 * time.Hour)
@@ -193,8 +193,8 @@ func TestAutoProcessDisruptionScopesProcessingToThatDisruption(t *testing.T) {
 	if err := db.Create(&models.Policy{WorkerID: workerB.ID, Status: "active", PremiumAmount: 22}).Error; err != nil { t.Fatal(err) }
 	if err := db.Create(&models.EarningsBaseline{WorkerID: workerA.ID, BaselineAmount: 2000, LastUpdatedAt: now}).Error; err != nil { t.Fatal(err) }
 	if err := db.Create(&models.EarningsBaseline{WorkerID: workerB.ID, BaselineAmount: 1800, LastUpdatedAt: now}).Error; err != nil { t.Fatal(err) }
-	if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerA.ID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 1100, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
-	if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerB.ID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 900, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerA.ID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 0, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
+	if err := db.Create(&models.WeeklyEarningsSummary{WorkerID: workerB.ID, WeekStart: weekStart, WeekEnd: weekEnd, TotalEarnings: 0, ClaimEligible: true}).Error; err != nil { t.Fatal(err) }
 
 	startA := now.Add(-2 * time.Hour)
 	startB := now.Add(-3 * time.Hour)
