@@ -32,6 +32,9 @@ class PremiumPayViewModel @Inject constructor(
     private val _lateFee = MutableStateFlow(0)
     val lateFee = _lateFee.asStateFlow()
 
+    private val _isActivationPayment = MutableStateFlow(false)
+    val isActivationPayment = _isActivationPayment.asStateFlow()
+
     private val _paymentEnabled = MutableStateFlow(false)
     val paymentEnabled = _paymentEnabled.asStateFlow()
 
@@ -40,6 +43,14 @@ class PremiumPayViewModel @Inject constructor(
 
     init {
         fetchMlThenPolicy()
+    }
+
+    private fun hasRecordedPaymentThisCycle(policy: com.imaginai.indel.data.model.Policy): Boolean {
+        return !policy.lastPaymentTimestamp.isNullOrBlank() && policy.nextPaymentEnabled == false
+    }
+
+    private fun requiresActivationPayment(policy: com.imaginai.indel.data.model.Policy): Boolean {
+        return !policy.status.equals("active", ignoreCase = true)
     }
 
     private fun fetchMlThenPolicy() {
@@ -62,23 +73,31 @@ class PremiumPayViewModel @Inject constructor(
                     ?: policy?.weeklyPremiumInr
                     ?: 35
 
-                val late = policy?.lateFeeInr ?: 0
-                val total = base + late
+                val activationPayment = policy?.let { requiresActivationPayment(it) } == true
+                val multiplier = policy?.initialPaymentMultiplier ?: 2
+                val late = if (activationPayment) 0 else policy?.lateFeeInr ?: 0
+                val total = if (activationPayment) base * multiplier else base + late
 
                 _basePremium.value = base
                 _lateFee.value = late
+                _isActivationPayment.value = activationPayment
                 _amount.value = total.toString()
-                _paymentEnabled.value = policy?.nextPaymentEnabled == true
+                _paymentEnabled.value = when {
+                    policy == null -> false
+                    activationPayment -> true
+                    policy.coverageStatus.equals("Deactivated", ignoreCase = true) -> false
+                    hasRecordedPaymentThisCycle(policy) -> false
+                    else -> true
+                }
                 _paymentHint.value = when {
                     policy == null -> "Unable to confirm payment eligibility right now."
-                    policy.coverageStatus.equals("NeedsActivation", ignoreCase = true) ->
-                        "Start the plan from plan selection before paying the first premium."
+                    activationPayment ->
+                        "Consent to the one-time activation payment now. From the next cycle onward, only the ML-priced weekly premium will be charged."
                     policy.coverageStatus.equals("Deactivated", ignoreCase = true) ->
                         "This plan is deactivated. Re-enroll before making a payment."
-                    policy.nextPaymentEnabled == true -> null
-                    policy.daysSinceLastPayment != null && policy.billingCycleDays != null ->
-                        "Next premium unlocks after ${policy.billingCycleDays} days. Current cycle day: ${policy.daysSinceLastPayment}."
-                    else -> "Premium payment is not available for this billing cycle yet."
+                    hasRecordedPaymentThisCycle(policy) ->
+                        "This week's premium is already paid. You can pay again after the next due date."
+                    else -> null
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error fetching premium", e)

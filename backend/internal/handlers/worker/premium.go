@@ -93,41 +93,32 @@ func PayPremium(c *gin.Context) {
 				syncPolicyStatusWithPaymentState(workerIDUint, state)
 			}
 
-			if scheduleErr == nil {
-				if state.CoverageStatus == "NeedsActivation" {
-					c.JSON(409, gin.H{
-						"error":                      "initial_activation_payment_required",
-						"initial_payment_multiplier": initialMultiplier,
-						"message":                    "Activate plan from plan selection with first payment (double weekly premium).",
-					})
-					return
-				}
-				if state.CoverageStatus == "Deactivated" {
-					c.JSON(409, gin.H{
-						"error":   "plan_deactivated_restart_required",
-						"message": "Plan is deactivated after billing window and grace period. Re-enroll with initial activation payment.",
-					})
-					return
-				}
-				if !state.NextPaymentEnabled {
-					c.JSON(400, gin.H{
-						"error":                   paymentLockError(state),
-						"days_since_last_payment": state.DaysSinceLastPay,
-						"billing_cycle_days":      state.BillingCycleDays,
-					})
-					return
-				}
-			}
-
 			var policyID uint
 			var currentPremium int
+			var policyStatus string
 			var p struct {
 				ID            uint    `gorm:"column:id"`
+				Status        string  `gorm:"column:status"`
 				PremiumAmount float64 `gorm:"column:premium_amount"`
 			}
-			if err := workerDB.Raw("SELECT id, premium_amount FROM policies WHERE worker_id = ? ORDER BY id DESC LIMIT 1", workerIDUint).Scan(&p).Error; err == nil {
+			if err := workerDB.Raw("SELECT id, status, premium_amount FROM policies WHERE worker_id = ? ORDER BY id DESC LIMIT 1", workerIDUint).Scan(&p).Error; err == nil {
 				policyID = p.ID
+				policyStatus = p.Status
 				currentPremium = int(p.PremiumAmount)
+			}
+
+			activationPayment := policyStatus != "" && policyStatus != "active"
+
+			if !activationPayment && scheduleErr == nil && state.LastPaymentRecorded != nil && !state.LastPaymentRecorded.IsZero() && !state.NextPaymentEnabled {
+				nextDue := state.LastPaymentRecorded.AddDate(0, 0, state.BillingCycleDays).Format("2006-01-02")
+				c.JSON(409, gin.H{
+					"error":           paymentLockError(state),
+					"message":         "premium_already_paid_for_current_week",
+					"next_due_date":   nextDue,
+					"payment_status":  state.PaymentStatus,
+					"coverage_status": state.CoverageStatus,
+				})
+				return
 			}
 
 			quote, _ := services.QuotePremium(workerDB, workerIDUint, now)
@@ -140,16 +131,20 @@ func PayPremium(c *gin.Context) {
 			}
 
 			lateFee := 0
-			if scheduleErr == nil {
+			if scheduleErr == nil && !activationPayment {
 				lateFee = state.LateFeeINR
 			}
 			requiredAmount := basePremium + lateFee
+			if activationPayment {
+				requiredAmount = basePremium * initialMultiplier
+			}
 			if amount < requiredAmount {
 				c.JSON(400, gin.H{
 					"error":               "insufficient_payment_amount",
 					"required_amount_inr": requiredAmount,
 					"base_premium_inr":    basePremium,
 					"late_fee_inr":        lateFee,
+					"is_activation":       activationPayment,
 				})
 				return
 			}
@@ -169,6 +164,10 @@ func PayPremium(c *gin.Context) {
 				"UPDATE policies SET status = 'active', premium_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE worker_id = ?",
 				nextPremium, workerIDUint,
 			).Error
+			_ = workerDB.Exec(
+				"INSERT INTO active_policies (user_id, policy_id, zone, started_at, updated_at) SELECT ?, p.id, COALESCE(z.name, ''), NOW(), NOW() FROM policies p LEFT JOIN worker_profiles wp ON wp.worker_id = p.worker_id LEFT JOIN zones z ON z.id = wp.zone_id WHERE p.worker_id = ? ORDER BY p.id DESC LIMIT 1 ON CONFLICT (user_id) DO UPDATE SET policy_id = EXCLUDED.policy_id, zone = EXCLUDED.zone, updated_at = NOW()",
+				workerIDUint, workerIDUint,
+			).Error
 			_ = upsertPaymentSchedule(workerIDUint, now, false, "Active")
 			_ = workerDB.Exec(
 				"INSERT INTO notifications (worker_id, type, message, created_at) VALUES (?, 'premium_due', ?, CURRENT_TIMESTAMP)",
@@ -185,6 +184,7 @@ func PayPremium(c *gin.Context) {
 				"base_premium_inr":      basePremium,
 				"late_fee_inr":          lateFee,
 				"required_payment_inr":  requiredAmount,
+				"is_activation":         activationPayment,
 				"next_week_premium_inr": nextPremium,
 				"next_due_date":         now.AddDate(0, 0, 7).Format("2006-01-02"),
 				"grace_period_days":     2,

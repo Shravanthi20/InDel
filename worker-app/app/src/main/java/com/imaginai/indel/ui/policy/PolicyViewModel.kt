@@ -129,9 +129,28 @@ class PolicyViewModel @Inject constructor(
      */
     fun startPlanWithPayment(policy: Policy) {
         viewModelScope.launch {
-            _uiState.value = PolicyUiState.Loading
             _actionError.value = null
             try {
+                val enrollResp = policyRepository.enrollPolicy()
+                if (enrollResp.isSuccessful) {
+                    _uiState.value = PolicyUiState.Success(
+                        policy.copy(
+                            status = "active",
+                            coverageStatus = "Active",
+                        )
+                    )
+                    val updated = policyRepository.fetchAndCachePolicy()
+                    if (updated != null) {
+                        _uiState.value = PolicyUiState.Success(updated)
+                    }
+                    Log.d(TAG, "[Start Plan] Plan activated without auto-charging premium")
+                } else {
+                    val errBody = enrollResp.errorBody()?.string().orEmpty()
+                    Log.w(TAG, "[Start Plan] Enroll failed: $errBody")
+                    _uiState.value = PolicyUiState.Error("Failed to activate plan. Please try again.")
+                }
+                return@launch
+
                 // Fetch latest ML premium first (ML is primary)
                 val premiumResp = policyRepository.getPremiumQuote()
                 val mlAmount = if (premiumResp.isSuccessful) {

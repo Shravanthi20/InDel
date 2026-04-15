@@ -46,10 +46,13 @@ func normalizeZoneInput(zoneLevel, zoneName string) normalizedZoneInput {
 	name := rawName
 
 	if idx := strings.LastIndex(rawName, " ("); idx > 0 && strings.HasSuffix(rawName, ")") {
-		name = strings.TrimSpace(rawName[:idx])
+		baseName := strings.TrimSpace(rawName[:idx])
 		parsedState := strings.TrimSpace(strings.TrimSuffix(rawName[idx+2:], ")"))
 		if parsedState != "" {
 			state = parsedState
+			name = strings.TrimSpace(baseName + " - " + parsedState)
+		} else {
+			name = baseName
 		}
 	}
 
@@ -75,19 +78,10 @@ func normalizeZoneInput(zoneLevel, zoneName string) normalizedZoneInput {
 
 func formatZoneDisplay(zoneName, city string) string {
 	name := strings.TrimSpace(zoneName)
-	city = strings.TrimSpace(city)
-	if name == "" {
-		return city
-	}
-	if city == "" {
+	if name != "" {
 		return name
 	}
-	nameLower := strings.ToLower(name)
-	cityLower := strings.ToLower(city)
-	if strings.Contains(nameLower, cityLower) || strings.Contains(name, "(") || strings.Contains(name, ",") || strings.Contains(nameLower, " to ") {
-		return name
-	}
-	return fmt.Sprintf("%s, %s", name, city)
+	return strings.TrimSpace(city)
 }
 
 // ensureZoneIDByLevelAndName finds or creates a zone by level and name

@@ -63,6 +63,41 @@ class RegisterViewModel @Inject constructor(
         }
     }
 
+    private fun canonicalZoneDisplay(rawName: String?, rawState: String?): String {
+        val name = rawName?.trim().orEmpty()
+        val state = rawState?.trim().orEmpty()
+        if (name.isBlank()) return ""
+
+        if (name.contains(" to ", ignoreCase = true)) {
+            return name
+        }
+
+        val parenthesizedMatch = Regex("""^(.*)\((.*)\)$""").matchEntire(name)
+        if (parenthesizedMatch != null) {
+            val city = parenthesizedMatch.groupValues[1].trim()
+            val explicitState = parenthesizedMatch.groupValues[2].trim()
+            if (city.isNotBlank() && explicitState.isNotBlank()) {
+                return "$city ($explicitState)"
+            }
+        }
+
+        val hyphenParts = name.split(" - ", limit = 2).map { it.trim() }
+        if (hyphenParts.size == 2 && hyphenParts[0].isNotBlank() && hyphenParts[1].isNotBlank()) {
+            return "${hyphenParts[0]} (${hyphenParts[1]})"
+        }
+
+        return if (state.isNotBlank()) "$name ($state)" else name
+    }
+
+    private fun zoneIdentity(displayName: String): String {
+        return displayName
+            .lowercase()
+            .replace("-", " ")
+            .replace(Regex("""[(),]"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+    }
+
     private fun fetchZonePaths(level: String) {
         viewModelScope.launch {
             try {
@@ -73,12 +108,7 @@ class RegisterViewModel @Inject constructor(
                     val paths = mutableListOf<ZonePath>()
 
                     body?.zones?.forEach { zone ->
-                        val zoneLabel = buildString {
-                            append(zone.zoneName)
-                            zone.zoneState?.takeIf { it.isNotBlank() }?.let {
-                                append(" ($it)")
-                            }
-                        }
+                        val zoneLabel = canonicalZoneDisplay(zone.zoneName, zone.zoneState)
                         paths.add(
                             ZonePath(
                                 id = zone.zoneId?.toString(),
@@ -89,12 +119,7 @@ class RegisterViewModel @Inject constructor(
                     }
 
                     body?.cities?.forEach { city ->
-                        val cityLabel = buildString {
-                            append(city.city)
-                            city.state?.takeIf { it.isNotBlank() }?.let {
-                                append(" ($it)")
-                            }
-                        }
+                        val cityLabel = canonicalZoneDisplay(city.city, city.state)
                         paths.add(
                             ZonePath(
                                 displayName = cityLabel,
@@ -127,7 +152,16 @@ class RegisterViewModel @Inject constructor(
                         paths.addAll(body.paths)
                     }
 
-                    _availablePaths.value = paths.distinctBy { it.displayName.orEmpty() }
+                    _availablePaths.value = paths
+                        .mapNotNull { path ->
+                            val displayName = canonicalZoneDisplay(path.displayName, null)
+                            if (displayName.isBlank()) {
+                                null
+                            } else {
+                                path.copy(displayName = displayName)
+                            }
+                        }
+                        .distinctBy { zoneIdentity(it.displayName.orEmpty()) }
                     _uiState.value = if (_availablePaths.value.isEmpty()) {
                         RegisterUiState.Error("No zones returned for selected level")
                     } else {

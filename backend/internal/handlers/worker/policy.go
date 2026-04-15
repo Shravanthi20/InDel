@@ -61,16 +61,22 @@ func GetPolicy(c *gin.Context) {
 					syncPolicyStatusWithPaymentState(workerIDUint, paymentState)
 				}
 
-				dueDate := p.CreatedAt.AddDate(0, 0, 7).Format("2006-01-02")
+				dueDateBase := p.CreatedAt
 				var lastPaymentDate time.Time
-				if err := workerDB.Table("premium_payments").Select("payment_date").Where("policy_id = ?", p.ID).Order("payment_date DESC").Limit(1).Scan(&lastPaymentDate).Error; err == nil && !lastPaymentDate.IsZero() {
-					// If they made a payment, due date is exactly 7 days after their last payment
-					dueDate = lastPaymentDate.AddDate(0, 0, 7).Format("2006-01-02")
-				} else if p.Status == "active" {
-					// Fallback if no payment recorded but active
-					if p.CreatedAt.AddDate(0, 0, 7).Before(time.Now()) {
-						dueDate = time.Now().AddDate(0, 0, 7).Format("2006-01-02")
-					}
+				if err := workerDB.Table("premium_payments").
+					Select("payment_date").
+					Where("worker_id = ? AND status = 'completed'", workerIDUint).
+					Order("payment_date DESC").
+					Limit(1).
+					Scan(&lastPaymentDate).Error; err == nil && !lastPaymentDate.IsZero() {
+					dueDateBase = lastPaymentDate
+				}
+				if stateErr == nil && paymentState.LastPaymentRecorded != nil && !paymentState.LastPaymentRecorded.IsZero() {
+					dueDateBase = *paymentState.LastPaymentRecorded
+				}
+				dueDate := dueDateBase.AddDate(0, 0, 7).Format("2006-01-02")
+				if p.Status == "active" && dueDateBase.IsZero() {
+					dueDate = time.Now().AddDate(0, 0, 7).Format("2006-01-02")
 				}
 
 				effectiveStatus := p.Status
@@ -140,18 +146,48 @@ func EnrollPolicy(c *gin.Context) {
 
 	if HasDB() {
 		if workerIDUint, parseErr := parseWorkerID(workerID); parseErr == nil {
+			now := time.Now().UTC()
 			premiumAmount := 22.0
-			if quote, err := services.QuotePremium(workerDB, workerIDUint, time.Now().UTC()); err == nil && quote != nil && quote.WeeklyPremiumINR > 0 {
+			if quote, err := services.QuotePremium(workerDB, workerIDUint, now); err == nil && quote != nil && quote.WeeklyPremiumINR > 0 {
 				premiumAmount = quote.WeeklyPremiumINR
 			}
-			policy := models.Policy{WorkerID: workerIDUint, Status: "active", PremiumAmount: premiumAmount}
+
+			var policy models.Policy
+			if err := workerDB.Where("worker_id = ?", workerIDUint).Order("id DESC").First(&policy).Error; err == nil {
+				if policy.PremiumAmount <= 0 {
+					policy.PremiumAmount = premiumAmount
+				}
+				policy.Status = "active"
+				policy.UpdatedAt = now
+				if saveErr := workerDB.Save(&policy).Error; saveErr == nil {
+					// Fetch worker's zone for active_policies
+					var profile models.WorkerProfile
+					if err := workerDB.Where("worker_id = ?", workerIDUint).First(&profile).Error; err == nil {
+						var zone models.Zone
+						if err := workerDB.Where("id = ?", profile.ZoneID).First(&zone).Error; err == nil {
+							_ = workerDB.Exec(
+								"INSERT INTO active_policies (user_id, policy_id, zone, started_at, updated_at) VALUES (?, ?, ?, NOW(), NOW()) ON CONFLICT (user_id) DO UPDATE SET policy_id = EXCLUDED.policy_id, zone = EXCLUDED.zone, updated_at = NOW()",
+								workerIDUint, policy.ID, zone.Name,
+							).Error
+						}
+					}
+					c.JSON(200, gin.H{"message": "policy_enrolled", "policy": gin.H{
+						"policy_id":          fmt.Sprintf("pol-%03d", policy.ID),
+						"plan_id":            policy.PlanID,
+						"status":             policy.Status,
+						"weekly_premium_inr": int(policy.PremiumAmount),
+						"coverage_ratio":     0.8,
+					}})
+					return
+				}
+			}
+
+			policy = models.Policy{WorkerID: workerIDUint, Status: "active", PremiumAmount: premiumAmount}
 			if err := workerDB.Create(&policy).Error; err == nil {
-				// Fetch worker's zone for active_policies
 				var profile models.WorkerProfile
 				if err := workerDB.Where("worker_id = ?", workerIDUint).First(&profile).Error; err == nil {
 					var zone models.Zone
 					if err := workerDB.Where("id = ?", profile.ZoneID).First(&zone).Error; err == nil {
-						// Insert into active_policies
 						_ = workerDB.Exec(
 							"INSERT INTO active_policies (user_id, policy_id, zone, started_at, updated_at) VALUES (?, ?, ?, NOW(), NOW()) ON CONFLICT (user_id) DO UPDATE SET policy_id = EXCLUDED.policy_id, zone = EXCLUDED.zone, updated_at = NOW()",
 							workerIDUint, policy.ID, zone.Name,

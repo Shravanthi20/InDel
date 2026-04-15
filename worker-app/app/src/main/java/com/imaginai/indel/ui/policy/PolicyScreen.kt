@@ -33,6 +33,11 @@ import com.imaginai.indel.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+private fun canPayPremium(policy: Policy): Boolean {
+    if (policy.coverageStatus.equals("Deactivated", ignoreCase = true)) return false
+    return policy.lastPaymentTimestamp.isNullOrBlank() || policy.nextPaymentEnabled != false
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PolicyScreen(
@@ -176,8 +181,8 @@ private fun PremiumPlanContent(
     onStopPlan: () -> Unit
 ) {
     val isActive = policy.status == "active"
-    val paymentEnabled = policy.nextPaymentEnabled ?: false
     val isDeactivated = policy.coverageStatus.equals("Deactivated", ignoreCase = true)
+    val paymentEnabled = canPayPremium(policy)
     val isGrace = policy.paymentStatus.equals("Eligible", ignoreCase = true) &&
             (policy.graceDaysRemaining ?: 999) < (policy.gracePeriodDays ?: 2)
     val lateFee = policy.lateFeeInr ?: 0
@@ -235,7 +240,7 @@ private fun PremiumPlanContent(
                 StartPlanButton(
                     weeklyPremium = basePremium,
                     multiplier = policy.initialPaymentMultiplier ?: 2,
-                    onClick = { viewModel.startPlanWithPayment(policy) }
+                    onClick = { navController.navigate(Screen.PremiumPay.route) }
                 )
             } else {
                 // ── ACTIVE: "Premium Payment" + "Stop Plan" ───────────────

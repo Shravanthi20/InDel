@@ -86,6 +86,36 @@ var cityStateList = []struct {
 	{"Delhi", "Delhi"},
 }
 
+func canonicalZoneLabel(name, state string) (string, string) {
+	trimmedName := strings.TrimSpace(name)
+	trimmedState := strings.TrimSpace(state)
+	if trimmedName == "" {
+		return "", trimmedState
+	}
+
+	if idx := strings.LastIndex(trimmedName, " ("); idx > 0 && strings.HasSuffix(trimmedName, ")") {
+		label := strings.TrimSpace(trimmedName)
+		explicitState := strings.TrimSpace(strings.TrimSuffix(trimmedName[idx+2:], ")"))
+		if explicitState != "" {
+			return label, explicitState
+		}
+	}
+
+	if parts := strings.SplitN(trimmedName, " - ", 2); len(parts) == 2 {
+		city := strings.TrimSpace(parts[0])
+		explicitState := strings.TrimSpace(parts[1])
+		if city != "" && explicitState != "" {
+			return fmt.Sprintf("%s (%s)", city, explicitState), explicitState
+		}
+	}
+
+	if trimmedState != "" {
+		return fmt.Sprintf("%s (%s)", trimmedName, trimmedState), trimmedState
+	}
+
+	return trimmedName, trimmedState
+}
+
 // GetZonePaths returns cities or city pairs for zone types a, b, c
 func GetZonePaths(c *gin.Context) {
 	typeParam := strings.ToLower(c.Query("type"))
@@ -161,18 +191,18 @@ func GetZonePaths(c *gin.Context) {
 				if zoneName == "" {
 					zoneName = strings.TrimSpace(row.City)
 				}
-				zoneState := strings.TrimSpace(row.State)
-				if zoneName == "" || zoneState == "" {
+				zoneLabel, zoneState := canonicalZoneLabel(zoneName, row.State)
+				if zoneLabel == "" {
 					continue
 				}
-				key := strings.ToLower(zoneState + "|" + zoneName)
+				key := strings.ToLower(zoneLabel)
 				if _, ok := seen[key]; ok {
 					continue
 				}
 				seen[key] = struct{}{}
 				zones = append(zones, gin.H{
 					"zone_id":    row.ID,
-					"zone_name":  zoneName,
+					"zone_name":  zoneLabel,
 					"zone_state": zoneState,
 					"city":       strings.TrimSpace(row.City),
 					"level":      strings.ToUpper(strings.TrimSpace(row.Level)),

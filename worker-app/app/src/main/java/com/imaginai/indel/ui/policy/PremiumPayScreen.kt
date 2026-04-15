@@ -74,6 +74,7 @@ fun PremiumPayScreen(
     val amount by viewModel.amount.collectAsState()
     val basePremium by viewModel.basePremium.collectAsState()
     val lateFee by viewModel.lateFee.collectAsState()
+    val isActivationPayment by viewModel.isActivationPayment.collectAsState()
     val paymentEnabled by viewModel.paymentEnabled.collectAsState()
     val paymentHint by viewModel.paymentHint.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
@@ -82,7 +83,7 @@ fun PremiumPayScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pay Weekly Premium", fontWeight = FontWeight.Bold) },
+                title = { Text(if (isActivationPayment) "Activate Premium Plan" else "Pay Weekly Premium", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -120,7 +121,7 @@ fun PremiumPayScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            "Weekly Premium Due",
+                            if (isActivationPayment) "Activation Payment Due" else "Weekly Premium Due",
                             style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.8f),
                             letterSpacing = 1.sp
@@ -133,7 +134,20 @@ fun PremiumPayScreen(
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        if (lateFee > 0) {
+                        if (isActivationPayment) {
+                            Surface(
+                                color = WarningAmber.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    "Consent payment: 2x weekly premium",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    color = WarningAmber,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        } else if (lateFee > 0) {
                             Surface(
                                 color = WarningAmber.copy(alpha = 0.2f),
                                 shape = RoundedCornerShape(10.dp)
@@ -178,7 +192,11 @@ fun PremiumPayScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Payment is dynamically priced based on current weather risk, order volatility, and your performance baseline.",
+                        if (isActivationPayment) {
+                            "This one-time consent payment activates your protection again. Future weekly premiums will continue from the ML-computed cycle amount."
+                        } else {
+                            "Payment is dynamically priced based on current weather risk, order volatility, and your performance baseline."
+                        },
                         fontSize = 13.sp,
                         color = BrandBlue,
                         lineHeight = 18.sp
@@ -247,7 +265,7 @@ fun PremiumPayScreen(
                 Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Touch Pay  Rs ${amount.ifBlank { "--" }}",
+                    if (isActivationPayment) "Consent & Pay  Rs ${amount.ifBlank { "--" }}" else "Touch Pay  Rs ${amount.ifBlank { "--" }}",
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp
                 )

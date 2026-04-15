@@ -112,15 +112,7 @@ export default function Disruptions() {
     s.replace("_", " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
 
   const formatZoneLabel = (zone: any) => {
-    const zoneName = String(zone?.zone_name || zone?.name || `Zone ${zone?.zone_id ?? ''}`).trim()
-    const zoneState = String(zone?.state || '').trim()
-    const zoneCity = String(zone?.city || '').trim()
-
-    if (zoneState) return `${zoneName} - ${zoneState}`
-    if (zoneCity && !zoneName.toLowerCase().includes(zoneCity.toLowerCase())) {
-      return `${zoneName} - ${zoneCity}`
-    }
-    return zoneName
+    return String(zone?.zone_name || zone?.name || `Zone ${zone?.zone_id ?? ''}`).trim()
   }
 
   const handleExternalSignal = async (zone_id: number, type: string, active: boolean) => {
