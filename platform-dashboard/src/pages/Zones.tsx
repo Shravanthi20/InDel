@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MapPin, Activity, Search, Wind, CloudRain, ShieldAlert, Zap } from 'lucide-react';
 import { getZones, getZoneHealth, getZonePaths } from '../api/zones';
 import { getDisruptions, postTriggerDemo } from '../api/platform';
+import ZoneMap from './ZoneMap';
 
 type SignalBadgeProps = { icon: React.ElementType, label: string, active?: boolean };
 const SignalBadge = ({ icon: Icon, label, active }: SignalBadgeProps) => (
@@ -89,6 +90,11 @@ export default function Zones() {
 
    return (
       <div className="space-y-10">
+         {/* Map Integration */}
+         <div className="enterprise-panel p-4 mb-8">
+            <h2 className="text-lg font-bold mb-2">Zone Map</h2>
+            <ZoneMap />
+         </div>
          {/* Chaos Engine: Dynamic Zone & Disruption Selection */}
          <div className="enterprise-panel p-4 mb-8">
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">

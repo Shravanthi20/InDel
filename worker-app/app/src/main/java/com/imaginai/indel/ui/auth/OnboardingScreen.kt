@@ -25,26 +25,20 @@ fun OnboardingScreen(
     navController: NavController,
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
-    val name by viewModel.name.collectAsState()
+    // val name by viewModel.name.collectAsState()
     val vehicleType by viewModel.vehicleType.collectAsState()
     val vehicleName by viewModel.vehicleName.collectAsState()
-    val upiId by viewModel.upiId.collectAsState()
+    // val upiId by viewModel.upiId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
     var vehicleExpanded by remember { mutableStateOf(false) }
     var vehicleNameExpanded by remember { mutableStateOf(false) }
     var vehicleNameOption by remember { mutableStateOf("") }
 
-    val commonTransportMeans = listOf(
-        "scooter",
-        "motorcycle",
-        "auto-rickshaw",
-        "hatchback",
-        "sedan",
-        "suv",
-        "pickup-van",
-        "mini-truck",
-        "other"
+    val vehicleTypeToNames = mapOf(
+        "two-wheeler" to listOf("scooter", "motorcycle"),
+        "four-wheeler-small" to listOf("hatchback", "sedan", "suv", "pickup-van", "auto-rickshaw"),
+        "four-wheeler-large" to listOf("mini-truck", "other"),
     )
 
     LaunchedEffect(uiState) {
@@ -81,14 +75,7 @@ fun OnboardingScreen(
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 
-            OutlinedTextField(
-                value = name,
-                onValueChange = viewModel::onNameChanged,
-                label = { Text("Full Name") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+
 
             ExposedDropdownMenuBox(
                 expanded = vehicleExpanded,
@@ -154,7 +141,8 @@ fun OnboardingScreen(
                     expanded = vehicleNameExpanded,
                     onDismissRequest = { vehicleNameExpanded = false }
                 ) {
-                    commonTransportMeans.forEach { option ->
+                    val options = vehicleTypeToNames[vehicleType] ?: emptyList()
+                    options.forEach { option ->
                         DropdownMenuItem(
                             text = { Text(option) },
                             onClick = {
@@ -182,14 +170,6 @@ fun OnboardingScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = upiId,
-                onValueChange = viewModel::onUpiIdChanged,
-                label = { Text("UPI ID (for payouts)") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-            
             Spacer(modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -199,7 +179,6 @@ fun OnboardingScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 enabled = uiState !is OnboardingUiState.Loading && 
-                        name.isNotBlank() && 
                     vehicleType.isNotBlank() &&
                     vehicleName.isNotBlank(),
                 shape = RoundedCornerShape(12.dp)

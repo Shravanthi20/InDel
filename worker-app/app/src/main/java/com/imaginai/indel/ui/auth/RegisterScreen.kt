@@ -40,7 +40,8 @@ fun RegisterScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     var zoneLevelExpanded by remember { mutableStateOf(false) }
-    var zoneNameExpanded by remember { mutableStateOf(false) }
+    var zoneNameQuery by remember { mutableStateOf("") }
+    var zoneNameDropdownExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
         if (uiState is RegisterUiState.Success) {
@@ -138,57 +139,46 @@ fun RegisterScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Zone Name Dropdown
-            ExposedDropdownMenuBox(
-                expanded = zoneNameExpanded,
-                onExpandedChange = { newExpanded ->
-                    if (zoneLevel.isNotBlank() && availablePaths.isNotEmpty()) {
-                        zoneNameExpanded = newExpanded
-                    }
-                }
-            ) {
+            // Zone Name Autocomplete
+            Box {
                 OutlinedTextField(
-                    value = zoneName.ifBlank { "Select Zone Name" },
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Zone Name") },
-                    trailingIcon = {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Select zone name")
+                    value = if (zoneNameQuery.isNotBlank()) zoneNameQuery else zoneName,
+                    onValueChange = {
+                        zoneNameQuery = it
+                        zoneNameDropdownExpanded = true
+                        viewModel.onZoneNameQueryChanged(it)
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    label = { Text("Zone Name") },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    enabled = zoneLevel.isNotBlank() && availablePaths.isNotEmpty()
+                    enabled = zoneLevel.isNotBlank() && availablePaths.isNotEmpty(),
+                    singleLine = true,
+                    trailingIcon = {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Show zone suggestions")
+                    }
                 )
-                ExposedDropdownMenu(
-                    expanded = zoneNameExpanded,
-                    onDismissRequest = { zoneNameExpanded = false },
+                DropdownMenu(
+                    expanded = zoneNameDropdownExpanded && zoneLevel.isNotBlank() && availablePaths.isNotEmpty(),
+                    onDismissRequest = { zoneNameDropdownExpanded = false },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (availablePaths.isNotEmpty()) {
-                        val displayItems = availablePaths.take(10)
-                        displayItems.forEach { path ->
-                            if (path.displayName != null) {
-                                DropdownMenuItem(
-                                    text = { Text(path.displayName!!, maxLines = 1) },
-                                    onClick = {
-                                        viewModel.onZonePathSelected(path)
-                                        zoneNameExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                        if (availablePaths.size > 10) {
+                    val filtered = availablePaths.filter {
+                        zoneNameQuery.isBlank() || (it.displayName?.contains(zoneNameQuery, ignoreCase = true) == true)
+                    }.take(20)
+                    if (filtered.isNotEmpty()) {
+                        filtered.forEach { path ->
                             DropdownMenuItem(
-                                text = { Text("... and ${availablePaths.size - 10} more") },
-                                onClick = {},
-                                enabled = false
+                                text = { Text(path.displayName ?: "", maxLines = 1) },
+                                onClick = {
+                                    viewModel.onZonePathSelected(path)
+                                    zoneNameQuery = path.displayName ?: ""
+                                    zoneNameDropdownExpanded = false
+                                }
                             )
                         }
                     } else {
                         DropdownMenuItem(
-                            text = { Text("No zones available") },
+                            text = { Text("No matching zones") },
                             onClick = {},
                             enabled = false
                         )

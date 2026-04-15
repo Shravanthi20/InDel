@@ -8,19 +8,28 @@ from itertools import combinations
 def parse_cities(file_path):
     cities = []
     states = defaultdict(list)
+    city_info = {}
     with open(file_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             state = row['State'].strip()
             city = row['Location'].split(' Latitude')[0].strip()
+            lat = float(row['Latitude'])
+            lon = float(row['Longitude'])
             cities.append((state, city))
             states[state].append(city)
-    return cities, states
+            city_info[city] = {'city': city, 'state': state, 'lat': lat, 'long': lon}
+    return cities, states, city_info
 
-cities, states = parse_cities('Indian Cities Geo Data.csv')
+cities, states, city_info = parse_cities('Indian Cities Geo Data.csv')
 
-# Zone A: unique city names
-zone_a = sorted(set(city for _, city in cities))
+# Zone A: unique city dicts with city, state, lat, long
+zone_a = []
+seen = set()
+for _, city in cities:
+    if city not in seen:
+        seen.add(city)
+        zone_a.append(city_info[city])
 
 # Zone B: city-to-city pairs in the same state
 zone_b = []
@@ -33,6 +42,7 @@ zone_c = []
 for (state1, city1), (state2, city2) in combinations(sorted(set(cities)), 2):
     if state1 != state2:
         zone_c.append({'from': city1, 'to': city2, 'from_state': state1, 'to_state': state2})
+
 
 # Store as JSON for API use
 with open('zone_a.json', 'w', encoding='utf-8') as f:

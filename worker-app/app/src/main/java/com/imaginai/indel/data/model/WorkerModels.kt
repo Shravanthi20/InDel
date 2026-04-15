@@ -4,7 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class WorkerProfile(
     @SerializedName("worker_id") val workerId: String,
-    @SerializedName("name") val name: String,
+    // @SerializedName("name") val name: String,
     @SerializedName("phone") val phone: String,
     @SerializedName("zone") val zone: String? = null,
     @SerializedName("zone_level") val zoneLevel: String,
@@ -15,7 +15,7 @@ data class WorkerProfile(
     @SerializedName("to_city") val toCity: String? = null,
     @SerializedName("vehicle_type") val vehicleType: String,
     @SerializedName("vehicle_name") val vehicleName: String? = null,
-    @SerializedName("upi_id") val upiId: String,
+    // @SerializedName("upi_id") val upiId: String,
     @SerializedName("coverage_status") val coverageStatus: String,
     @SerializedName("enrolled") val enrolled: Boolean,
     @SerializedName("orders_completed") val ordersCompleted: Int? = 0,
@@ -23,16 +23,8 @@ data class WorkerProfile(
 )
 
 data class OnboardRequest(
-    @SerializedName("name") val name: String,
-    @SerializedName("zone_level") val zoneLevel: String? = null,
-    @SerializedName("zone_name") val zoneName: String? = null,
-    @SerializedName("zone_id") val zoneId: Int? = null,
-    @SerializedName("city") val city: String? = null,
-    @SerializedName("from_city") val fromCity: String? = null,
-    @SerializedName("to_city") val toCity: String? = null,
     @SerializedName("vehicle_type") val vehicleType: String,
-    @SerializedName("vehicle_name") val vehicleName: String? = null,
-    @SerializedName("upi_id") val upiId: String
+    @SerializedName("vehicle_name") val vehicleName: String? = null
 )
 
 data class OnboardResponse(

@@ -18,8 +18,6 @@ class OnboardingViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<OnboardingUiState>(OnboardingUiState.Idle)
     val uiState = _uiState.asStateFlow()
 
-    private val _name = MutableStateFlow("")
-    val name = _name.asStateFlow()
 
     private val _vehicleType = MutableStateFlow("")
     val vehicleType = _vehicleType.asStateFlow()
@@ -27,38 +25,23 @@ class OnboardingViewModel @Inject constructor(
     private val _vehicleName = MutableStateFlow("")
     val vehicleName = _vehicleName.asStateFlow()
 
-    private val _upiId = MutableStateFlow("")
-    val upiId = _upiId.asStateFlow()
 
-    fun onNameChanged(value: String) { _name.value = value }
 
     fun onVehicleTypeChanged(value: String) { _vehicleType.value = value }
     fun onVehicleNameChanged(value: String) { _vehicleName.value = value }
-    fun onUpiIdChanged(value: String) { _upiId.value = value }
 
     fun submitOnboarding() {
-        val upi = _upiId.value.trim()
-        
         val vehicleName = _vehicleName.value.trim()
-
-        if (_name.value.isBlank() || _vehicleType.value.isBlank() || vehicleName.isBlank() || upi.isBlank()) {
+        if (_vehicleType.value.isBlank() || vehicleName.isBlank()) {
             _uiState.value = OnboardingUiState.Error("Please fill all fields")
             return
         }
-
-        if (!isValidUpiId(upi)) {
-            _uiState.value = OnboardingUiState.Error("Invalid UPI ID format (username@bankid)")
-            return
-        }
-
         viewModelScope.launch {
             _uiState.value = OnboardingUiState.Loading
             try {
                 val response = workerRepository.onboard(
-                    name = _name.value,
                     vehicleType = _vehicleType.value,
-                    vehicleName = vehicleName,
-                    upiId = upi
+                    vehicleName = vehicleName
                 )
                 if (response.isSuccessful) {
                     _uiState.value = OnboardingUiState.Success

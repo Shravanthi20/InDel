@@ -14,6 +14,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
+        private val _zoneNameQuery = MutableStateFlow("")
+        val zoneNameQuery = _zoneNameQuery.asStateFlow()
     private val authRepository: AuthRepository,
     private val workerRepository: WorkerRepository
 ) : ViewModel() {
@@ -58,9 +60,14 @@ class RegisterViewModel @Inject constructor(
         _zoneLevel.value = value
         _zoneName.value = ""
         _availablePaths.value = emptyList()
+        _zoneNameQuery.value = ""
         if (value.isNotBlank()) {
             fetchZonePaths(value)
         }
+    }
+
+    fun onZoneNameQueryChanged(query: String) {
+        _zoneNameQuery.value = query
     }
 
     private fun canonicalZoneDisplay(rawName: String?, rawState: String?): String {
@@ -182,6 +189,7 @@ class RegisterViewModel @Inject constructor(
 
     fun onZonePathSelected(path: ZonePath) {
         _zoneName.value = path.displayName ?: ""
+        _zoneNameQuery.value = path.displayName ?: ""
     }
 
     private fun isValidEmail(email: String): Boolean {

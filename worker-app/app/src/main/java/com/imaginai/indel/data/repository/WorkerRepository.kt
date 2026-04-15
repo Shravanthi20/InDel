@@ -13,28 +13,12 @@ class WorkerRepository @Inject constructor(
 ) {
     // Profile
     suspend fun onboard(
-        name: String,
-        zoneLevel: String? = null,
-        zoneName: String? = null,
-        zoneId: Int? = null,
-        city: String? = null,
-        fromCity: String? = null,
-        toCity: String? = null,
         vehicleType: String,
-        vehicleName: String? = null,
-        upiId: String
+        vehicleName: String? = null
     ) = workerApiService.onboard(
         OnboardRequest(
-            name = name,
-            zoneLevel = zoneLevel,
-            zoneName = zoneName,
-            zoneId = zoneId,
-            city = city,
-            fromCity = fromCity,
-            toCity = toCity,
             vehicleType = vehicleType,
-            vehicleName = vehicleName,
-            upiId = upiId
+            vehicleName = vehicleName
         )
     )
 
