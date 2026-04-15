@@ -21,12 +21,12 @@ type AuthToken struct {
 }
 
 type WorkerProfile struct {
-	ID                    uint `gorm:"primaryKey"`
-	WorkerID              uint `gorm:"uniqueIndex"`
-	Name                  string
-	ZoneID                uint
-	VehicleType           string
-	UPIId                 string
+	ID       uint `gorm:"primaryKey"`
+	WorkerID uint `gorm:"uniqueIndex"`
+	// Name                  string
+	ZoneID      uint
+	VehicleType string
+	// UPIId                 string
 	AQIZone               string
 	TotalEarningsLifetime float64
 	CreatedAt             time.Time

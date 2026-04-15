@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -230,14 +229,10 @@ func GetZonePaths(c *gin.Context) {
 	}
 
 	if typeParam == "a" {
-		// Load city geo lookup once
-		cityGeoOnce.Do(func() {
-			cityGeoMap, cityGeoErr = loadCityGeo("Indian Cities Geo Data.csv")
-		})
 		f, err := os.Open(fileName)
-		if err == nil && cityGeoErr == nil {
+		if err == nil {
 			defer f.Close()
-			var data []string
+			var data []map[string]interface{}
 			if err := json.NewDecoder(f).Decode(&data); err == nil {
 				limit := zonePathLimit
 				if len(data) < limit {
@@ -245,57 +240,60 @@ func GetZonePaths(c *gin.Context) {
 				}
 				cities := data[:limit]
 				result := make([]gin.H, 0, len(cities))
-				for _, city := range cities {
-					geo, ok := cityGeoMap[city]
-					if !ok {
-						geo = struct {
-							State    string
-							Lat, Lon float64
-						}{"Unknown", 0, 0}
-					}
+				for _, cityObj := range cities {
 					result = append(result, gin.H{
-						"city":  city,
-						"state": geo.State,
-						"lat":   geo.Lat,
-						"lon":   geo.Lon,
+						"city":  cityObj["city"],
+						"state": cityObj["state"],
+						"lat":   cityObj["lat"],
+						"lon":   cityObj["long"],
 					})
 				}
 				c.JSON(http.StatusOK, gin.H{"cities": result})
 				return
 			}
 		}
-		// fallback to old logic if file not found or decode fails
-		cities := make([]gin.H, 0, len(cityStateList))
-		for _, cs := range cityStateList {
-			cities = append(cities, gin.H{"city": cs.City, "state": cs.State, "lat": 0, "lon": 0})
-		}
-		sort.Slice(cities, func(i, j int) bool { return fmt.Sprint(cities[i]["city"]) < fmt.Sprint(cities[j]["city"]) })
-		if len(cities) > zonePathLimit {
-			cities = cities[:zonePathLimit]
-		}
-		c.JSON(http.StatusOK, gin.H{"cities": cities})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "zone_a.json missing or invalid"})
 		return
 	}
-	if typeParam == "b" {
-		zones := []gin.H{}
-		for _, c1 := range cityStateList {
-			zones = append(zones, gin.H{"zone_name": c1.City, "zone_state": c1.State, "city": c1.City})
+	if typeParam == "b" || typeParam == "c" {
+		f, err := os.Open(fileName)
+		if err == nil {
+			defer f.Close()
+			var data []map[string]interface{}
+			if err := json.NewDecoder(f).Decode(&data); err == nil {
+				limit := zonePathLimit
+				if len(data) < limit {
+					limit = len(data)
+				}
+				zones := data[:limit]
+				result := make([]gin.H, 0, len(zones))
+				for _, zoneObj := range zones {
+					// For zone_b: {from, to, state, ...}, for zone_c: {from, to, from_state, to_state, ...}
+					if typeParam == "b" {
+						result = append(result, gin.H{
+							"zone_name":  fmt.Sprintf("%v-%v", zoneObj["from"], zoneObj["to"]),
+							"zone_state": zoneObj["state"],
+							"from":       zoneObj["from"],
+							"to":         zoneObj["to"],
+							"city":       zoneObj["from"],
+						})
+					} else {
+						result = append(result, gin.H{
+							"zone_name":  fmt.Sprintf("%v-%v", zoneObj["from"], zoneObj["to"]),
+							"zone_state": fmt.Sprintf("%v-%v", zoneObj["from_state"], zoneObj["to_state"]),
+							"from":       zoneObj["from"],
+							"to":         zoneObj["to"],
+							"from_state": zoneObj["from_state"],
+							"to_state":   zoneObj["to_state"],
+							"city":       zoneObj["from"],
+						})
+					}
+				}
+				c.JSON(http.StatusOK, gin.H{"zones": result})
+				return
+			}
 		}
-		if len(zones) > zonePathLimit {
-			zones = zones[:zonePathLimit]
-		}
-		c.JSON(http.StatusOK, gin.H{"zones": zones})
-		return
-	}
-	if typeParam == "c" {
-		zones := []gin.H{}
-		for _, c1 := range cityStateList {
-			zones = append(zones, gin.H{"zone_name": c1.City, "zone_state": c1.State, "city": c1.City})
-		}
-		if len(zones) > zonePathLimit {
-			zones = zones[:zonePathLimit]
-		}
-		c.JSON(http.StatusOK, gin.H{"zones": zones})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("%s missing or invalid", fileName)})
 		return
 	}
 	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_type"})

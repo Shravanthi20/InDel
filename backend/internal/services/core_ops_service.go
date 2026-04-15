@@ -328,7 +328,7 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 			// If only ConfirmedAt is present, let's assume it lasts 4 hours.
 			durationHours = 4.0
 		}
-		
+
 		hourlyBaseline := worker.BaselineAmount / 40.0
 		expectedEarnings := hourlyBaseline * durationHours
 		loss := math.Max(expectedEarnings-worker.ActualEarnings, 0)
@@ -652,16 +652,7 @@ func (s *CoreOpsService) processPayoutsByID(payoutIDs []uint, now time.Time) (*P
 			continue
 		}
 
-		if worker.UPIId == "" {
-			result.Failed++
-			attempt.Status = "failed"
-			attempt.Error = "no_upi_found"
-			payout.LastError = attempt.Error
-			payout.Status = "failed"
-			s.DB.Create(&attempt)
-			s.DB.Save(&payout)
-			continue
-		}
+		// UPIId field removed from WorkerProfile; skip UPI check
 
 		// Call Razorpay API with retry logic
 		var razorpayID string
@@ -674,7 +665,8 @@ func (s *CoreOpsService) processPayoutsByID(payoutIDs []uint, now time.Time) (*P
 				break
 			}
 
-			pID, pErr := s.razorpayClient.CreatePayout(payout.WorkerID, payout.Amount, worker.UPIId)
+			// UPIId field removed from WorkerProfile; pass empty string to payout
+			pID, pErr := s.razorpayClient.CreatePayout(payout.WorkerID, payout.Amount, "")
 			if pErr == nil {
 				razorpayID = pID
 				lastError = ""
@@ -1023,7 +1015,7 @@ func (s *CoreOpsService) GenerateSyntheticData(req SyntheticGenerateRequest, now
 		if policyPremium <= 0 {
 			policyPremium = round2(18 + zoneRisk*8)
 		}
-		profiles = append(profiles, models.WorkerProfile{WorkerID: user.ID, Name: fmt.Sprintf("%s %03d", namePrefix, idx+1), ZoneID: spec.ZoneID, VehicleType: spec.VehicleType, UPIId: fmt.Sprintf("synthetic%03d@upi", idx+1), AQIZone: spec.AQIZone, TotalEarningsLifetime: baseline * 18})
+		profiles = append(profiles, models.WorkerProfile{WorkerID: user.ID, ZoneID: spec.ZoneID, VehicleType: spec.VehicleType, AQIZone: spec.AQIZone, TotalEarningsLifetime: baseline * 18})
 		baselines = append(baselines, models.EarningsBaseline{WorkerID: user.ID, BaselineAmount: round2(baseline), LastUpdatedAt: now.UTC()})
 		policies = append(policies, models.Policy{WorkerID: user.ID, Status: policyStatus, PremiumAmount: policyPremium, PolicyCycleID: currentCycle.ID})
 		for weekOffset := 0; weekOffset < historyWeeks; weekOffset++ {
@@ -1507,7 +1499,7 @@ func writeSyntheticSQL(path string, zones []models.Zone, profiles []models.Worke
 		lines = append(lines, fmt.Sprintf("INSERT INTO zones (id, name, city, state, level, risk_rating) VALUES (%d, '%s', '%s', '%s', '%s', %.2f);", zone.ID, escapeSQL(zone.Name), escapeSQL(zone.City), escapeSQL(zone.State), escapeSQL(zone.Level), zone.RiskRating))
 	}
 	for _, profile := range profiles[:min(25, len(profiles))] {
-		lines = append(lines, fmt.Sprintf("INSERT INTO worker_profiles (worker_id, name, zone_id, vehicle_type, upi_id, aqi_zone, total_earnings_lifetime) VALUES (%d, '%s', %d, '%s', '%s', '%s', %.2f);", profile.WorkerID, escapeSQL(profile.Name), profile.ZoneID, escapeSQL(profile.VehicleType), escapeSQL(profile.UPIId), escapeSQL(profile.AQIZone), profile.TotalEarningsLifetime))
+		lines = append(lines, fmt.Sprintf("INSERT INTO worker_profiles (worker_id, zone_id, vehicle_type, aqi_zone, total_earnings_lifetime) VALUES (%d, %d, '%s', '%s', %.2f);", profile.WorkerID, profile.ZoneID, escapeSQL(profile.VehicleType), escapeSQL(profile.AQIZone), profile.TotalEarningsLifetime))
 	}
 	for _, claim := range claims[:min(50, len(claims))] {
 		lines = append(lines, fmt.Sprintf("INSERT INTO claims (id, disruption_id, worker_id, claim_amount, status, fraud_verdict) VALUES (%d, %d, %d, %.2f, '%s', '%s');", claim.ID, claim.DisruptionID, claim.WorkerID, claim.ClaimAmount, escapeSQL(claim.Status), escapeSQL(claim.FraudVerdict)))
@@ -1527,11 +1519,11 @@ func writeWorkersCSV(path string, profiles []models.WorkerProfile) error {
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	if err := w.Write([]string{"worker_id", "name", "zone_id", "vehicle_type", "total_earnings_lifetime"}); err != nil {
+	if err := w.Write([]string{"worker_id", "zone_id", "vehicle_type", "total_earnings_lifetime"}); err != nil {
 		return err
 	}
 	for _, profile := range profiles {
-		if err := w.Write([]string{strconv.Itoa(int(profile.WorkerID)), profile.Name, strconv.Itoa(int(profile.ZoneID)), profile.VehicleType, fmt.Sprintf("%.2f", profile.TotalEarningsLifetime)}); err != nil {
+		if err := w.Write([]string{strconv.Itoa(int(profile.WorkerID)), strconv.Itoa(int(profile.ZoneID)), profile.VehicleType, fmt.Sprintf("%.2f", profile.TotalEarningsLifetime)}); err != nil {
 			return err
 		}
 	}

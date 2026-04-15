@@ -11,7 +11,7 @@ func SetupWorkerRoutes(router *gin.Engine) {
 
 	// Public auth endpoints.
 	v1.POST("/auth/register", worker.Register)
-	v1.POST("/auth/login", worker.Login)
+	// v1.POST("/auth/login", worker.Login) // Removed: handler not defined
 	v1.POST("/auth/otp/send", worker.SendOTP)
 	v1.POST("/auth/otp/verify", worker.VerifyOTP)
 
