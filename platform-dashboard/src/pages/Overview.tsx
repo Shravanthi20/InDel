@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getDisruptions, getWorkers, getZoneHealth, getZones } from '../api/platform'
 import { Users, MapPin, ShoppingBag, AlertTriangle, ArrowUpRight, TrendingUp, ShieldCheck } from 'lucide-react'
 
 export default function Overview() {
   const [workers, setWorkers] = useState<any[]>([])
+  const [previousWorkerCount, setPreviousWorkerCount] = useState<number | null>(null)
+  const lastWorkerCountRef = useRef<number | null>(null)
   const [zones, setZones] = useState<any[]>([])
   const [health, setHealth] = useState<any[]>([])
   const [disruptions, setDisruptions] = useState<any[]>([])
@@ -16,6 +18,9 @@ export default function Overview() {
         getZoneHealth(),
         getDisruptions(),
       ])
+      const nextWorkerCount = workersRes.data.workers?.length ?? 0
+      setPreviousWorkerCount(lastWorkerCountRef.current)
+      lastWorkerCountRef.current = nextWorkerCount
       setWorkers(workersRes.data.workers ?? [])
       setZones(zonesRes.data.zones ?? [])
       setHealth(healthRes.data.data ?? [])
@@ -32,13 +37,18 @@ export default function Overview() {
     const baselineOrders = health.reduce((sum, item) => sum + (item.baseline_orders ?? 0), 0)
     const disruptedZones = health.filter((item) => item.status === 'disrupted').length
     const paid = disruptions.reduce((sum, item) => sum + (item.payout_amount_total ?? 0), 0)
-    
-    // Calculate actual trends
     const ordersTrend = baselineOrders > 0 ? ((liveOrders - baselineOrders) / baselineOrders * 100).toFixed(1) : '0.0'
-    const workersTrend = workers.length > 0 ? '+4.2%' : '0.0%' // Mocked since we don't have historical worker counts
-    
-    return { liveOrders, baselineOrders, disruptedZones, paid, ordersTrend, workersTrend }
-  }, [health, disruptions, workers])
+    const healthyZones = health.filter((item) => item.status === 'healthy').length
+    const workerDelta = previousWorkerCount === null ? null : workers.length - previousWorkerCount
+    const workersTrend = workerDelta === null
+      ? 'Loading'
+      : workerDelta === 0
+        ? 'Stable'
+        : `${workerDelta > 0 ? '+' : ''}${workerDelta} since refresh`
+    const coverage = health.length > 0 ? Math.round((healthyZones / health.length) * 100) : 0
+
+    return { liveOrders, baselineOrders, disruptedZones, paid, ordersTrend, workersTrend, coverage }
+  }, [health, disruptions, workers, previousWorkerCount])
 
   return (
     <div className="space-y-10">
@@ -95,23 +105,23 @@ export default function Overview() {
               <div className="p-6 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 font-['Outfit']">Payouts Processed</div>
                  <div className="text-2xl font-black text-slate-900 dark:text-white font-['Outfit']">Rs {Math.round(totals.paid).toLocaleString()}</div>
-                 <div className="mt-2 text-[10px] font-bold text-emerald-600 uppercase tracking-tighter font-['Outfit']">Verified on-chain</div>
+                 <div className="mt-2 text-[10px] font-bold text-emerald-600 uppercase tracking-tighter font-['Outfit']">Live backend totals</div>
               </div>
               <div className="p-6 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 font-['Outfit']">Disruptions Caught</div>
                  <div className="text-2xl font-black text-slate-900 dark:text-white font-['Outfit']">{disruptions.length}</div>
-                 <div className="mt-2 text-[10px] font-bold text-orange-600 uppercase tracking-tighter font-['Outfit']">Averaging 24h cycle</div>
+                 <div className="mt-2 text-[10px] font-bold text-orange-600 uppercase tracking-tighter font-['Outfit']">Current feed</div>
               </div>
            </div>
 
            <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
               <div className="space-y-3">
                  <div className="flex justify-between items-center text-[11px] font-['Outfit']">
-                    <span className="text-slate-500 font-medium tracking-tight">Active Coverage Strength</span>
-                    <span className="text-slate-900 dark:text-white font-bold">{totals.disruptedZones > 0 ? "72% Degraded" : "100% Guaranteed"}</span>
+                    <span className="text-slate-500 font-medium tracking-tight">Healthy Coverage</span>
+                    <span className="text-slate-900 dark:text-white font-bold">{totals.coverage}%</span>
                  </div>
                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div className={`h-full transition-all duration-1000 ${totals.disruptedZones > 0 ? "bg-rose-500 w-[72%]" : "bg-orange-500 w-[100%]"}`}></div>
+                    <div className="h-full transition-all duration-1000 bg-orange-500" style={{ width: `${totals.coverage}%` }}></div>
                  </div>
               </div>
            </div>

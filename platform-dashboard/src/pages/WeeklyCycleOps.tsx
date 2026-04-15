@@ -30,7 +30,7 @@ export default function WeeklyCycleOps() {
         <Panel title="Run Current Cycle" subtitle="This calls the internal weekly-cycle endpoint and returns the latest run summary.">
           <div className="space-y-5">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-              Use this after synthetic data generation or before a demo scenario to compute premiums for active policies. Repeated runs should stay idempotent unless missing data was fixed between attempts.
+              Use this to compute premiums for active policies from the latest backend state. Repeated runs should stay idempotent unless the source data changed between attempts.
             </div>
 
             <div className="flex items-center gap-4">
@@ -47,7 +47,7 @@ export default function WeeklyCycleOps() {
           </div>
         </Panel>
 
-        <Panel title="What to Watch" subtitle="The key signals that tell you whether the premium cycle is healthy.">
+        <Panel title="What to Watch" subtitle="The backend signals that tell you whether the premium cycle is healthy.">
           <div className="grid gap-4">
             <StatCard label="Best Outcome" value="Completed" />
             <StatCard label="Recovery Signal" value="Failures drop to 0" tone="warm" />
@@ -67,7 +67,7 @@ export default function WeeklyCycleOps() {
             </div>
           </Panel>
 
-          <Panel title="Run Interpretation" subtitle="Use this summary during demo narration or while debugging data quality issues.">
+          <Panel title="Run Interpretation" subtitle="Use this summary while debugging backend data quality issues.">
             <ResultBox>
               <div className="space-y-2">
                 <p><span className="font-semibold text-orange-300">cycle_id:</span> {result.cycle_id}</p>

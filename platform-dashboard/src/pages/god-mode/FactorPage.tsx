@@ -37,26 +37,26 @@ export default function FactorPage({ factorKey }: { factorKey: keyof EnvInputs }
   const display = meta.step < 1 ? value.toFixed(2) : value.toFixed(0)
 
   return (
-    <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:shadow-black/20">
       <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <div className="space-y-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Factor Control</p>
-            <h2 className="mt-1 text-2xl font-bold text-slate-900">{meta.title}</h2>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Factor Control</p>
+            <h2 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{meta.title}</h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
               {godModeEnabled
                 ? 'Manual override is enabled. This slider will be used by simulation.'
                 : 'God Mode is OFF. This value currently mirrors API/mock input.'}
             </p>
           </div>
 
-          <div className={`rounded-2xl border p-4 ${value > (meta.max * 0.7) ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
+          <div className={`rounded-2xl border p-4 ${value > (meta.max * 0.7) ? 'border-rose-200 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/10' : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900'}`}>
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                 <Icon className="h-4 w-4 text-sky-700" />
                 {meta.title}
               </div>
-              <div className="rounded-full border border-slate-200 bg-white px-3 py-1 font-mono text-xs text-slate-700">
+              <div className="rounded-full border border-slate-200 bg-white px-3 py-1 font-mono text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
                 {display} {meta.helper}
               </div>
             </div>
@@ -70,7 +70,7 @@ export default function FactorPage({ factorKey }: { factorKey: keyof EnvInputs }
               onChange={(event) => setManualInput(factorKey, Number(event.target.value))}
               className="mt-3 h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-sky-600 disabled:cursor-not-allowed"
             />
-            <div className="mt-2 flex justify-between text-[10px] uppercase tracking-[0.2em] text-slate-500">
+            <div className="mt-2 flex justify-between text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
               <span>{meta.min}</span>
               <span>{meta.max}</span>
             </div>
@@ -97,9 +97,9 @@ export default function FactorPage({ factorKey }: { factorKey: keyof EnvInputs }
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Live simulation snapshot</div>
-            <div className="mt-2 text-sm text-slate-300">Run Simulation to commit this state. Snapshot below reflects last run.</div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+            <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Live simulation snapshot</div>
+            <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Run Simulation to commit this state. Snapshot below reflects last run.</div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -130,9 +130,9 @@ function PolicyCard({
   onChange: (value: number) => void
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</div>
-      <div className="mt-1 text-xl font-bold text-slate-900">{value}</div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="mt-1 text-xl font-bold text-slate-900 dark:text-slate-100">{value}</div>
       <input
         type="range"
         min={min}
@@ -155,7 +155,7 @@ function ResultTile({ label, value, critical, normal }: { label: string; value: 
   return (
     <div className={`rounded-2xl border p-3 ${tone}`}>
       <div className="text-[10px] uppercase tracking-[0.25em] opacity-70">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-slate-900">{value}</div>
+      <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{value}</div>
     </div>
   )
 }

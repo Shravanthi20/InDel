@@ -47,8 +47,10 @@ export default function Disruptions() {
   const [loadingAction, setLoadingAction] = useState(false)
   const [actionStatus, setActionStatus] = useState("")
   const [delaying, setDelaying] = useState<string | null>(null)
+  const [fetchLatencyMs, setFetchLatencyMs] = useState<number | null>(null)
 
   const fetchData = async () => {
+    const startedAt = performance.now()
     try {
       const [hRes, dRes, zRes] = await Promise.all([getZoneHealth(), getDisruptions(), getZones()])
       setHealths(hRes.data.data)
@@ -65,6 +67,8 @@ export default function Disruptions() {
       }
     } catch (e) {
       console.error('Failed to fetch platform status', e)
+    } finally {
+      setFetchLatencyMs(Math.round(performance.now() - startedAt))
     }
   }
 
@@ -180,7 +184,7 @@ export default function Disruptions() {
         <div className="flex gap-4">
            <div className="enterprise-panel px-4 py-2 flex flex-col items-center justify-center">
               <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Engine Latency</div>
-              <div className="text-sm font-black text-emerald-600">0.42ms</div>
+              <div className="text-sm font-black text-emerald-600">{fetchLatencyMs === null ? '...' : `${fetchLatencyMs}ms`}</div>
            </div>
         </div>
       </div>

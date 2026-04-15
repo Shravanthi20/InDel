@@ -5,7 +5,7 @@ export default function GodModeLayout() {
     <div>
       <div>
         <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Batch Browser</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
           View available and assigned batches by zone.
         </p>
       </div>

@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { generateSyntheticData, type SyntheticScenario } from '../../api/operations'
 import { PageShell, Panel, ResultBox, StatCard } from '../OperationsShared'
 
-const scenarios: { label: string; value: SyntheticScenario; note: string }[] = [
-  { label: 'Normal Week', value: 'normal_week', note: 'Balanced baseline for demo seeding and happy-path portfolio flows.' },
-  { label: 'Mild Disruption', value: 'mild_disruption', note: 'Small pressure on payouts without overwhelming portfolio health.' },
-  { label: 'Severe Disruption', value: 'severe_disruption', note: 'High-loss week useful for claims and payout surge demos.' },
-  { label: 'Fraud Burst', value: 'fraud_burst', note: 'Heavier flagged-claim mix for manual review and payout controls.' },
+const scenarios: { label: string; value: SyntheticScenario }[] = [
+  { label: 'Normal Week', value: 'normal_week' },
+  { label: 'Mild Disruption', value: 'mild_disruption' },
+  { label: 'Severe Disruption', value: 'severe_disruption' },
+  { label: 'Fraud Burst', value: 'fraud_burst' },
 ]
 
 export default function SyntheticGeneration() {
@@ -41,14 +41,14 @@ export default function SyntheticGeneration() {
     <PageShell
       eyebrow="Test Tools"
       title="Synthetic Signal Control"
-      description="Seed deterministic demo data for the full InDel pipeline. Rapidly initialize realistic test scenarios and validate system behavior."
+      description="Seed deterministic backend data for the full InDel pipeline and validate system behavior."
     >
       <div className="grid gap-10 xl:grid-cols-[1.2fr_0.8fr]">
         <Panel title="Simulation Vector" subtitle="Configure the deterministic seed and scenario target.">
           <div className="space-y-8">
             <div className="grid gap-8 md:grid-cols-2">
               <label className="space-y-3">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Entropy Seed</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500">Entropy Seed</span>
                 <input
                   type="number"
                   value={seed}
@@ -58,7 +58,7 @@ export default function SyntheticGeneration() {
               </label>
 
               <label className="space-y-3">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Namespace</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500">Namespace</span>
                 <input
                   type="text"
                   value={outputDir}
@@ -70,7 +70,7 @@ export default function SyntheticGeneration() {
             </div>
 
             <div className="space-y-4">
-              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 text-center">Scenario Selection</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 text-center">Scenario Selection</p>
               <div className="grid gap-4 md:grid-cols-2">
                 {scenarios.map((item) => (
                   <button
@@ -79,12 +79,14 @@ export default function SyntheticGeneration() {
                     onClick={() => setScenario(item.value)}
                     className={`rounded-lg border p-6 text-left transition-none ${
                         scenario === item.value
-                          ? 'border-blue-600 bg-blue-600 text-white shadow-xl'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:border-slate-300'
+                          ? 'border-blue-600 bg-blue-600 text-white shadow-xl dark:border-blue-500 dark:bg-blue-500'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                   >
-                    <p className={`text-lg font-black tracking-tight ${scenario === item.value ? 'text-white' : 'text-slate-900 dark:text-slate-200'}`}>{item.label}</p>
-                    <p className={`mt-2 text-[11px] leading-relaxed ${scenario === item.value ? 'text-blue-100' : 'text-slate-500 dark:text-slate-500'}`}>{item.note}</p>
+                    <p className={`text-lg font-black tracking-tight ${scenario === item.value ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>{item.label}</p>
+                    <p className={`mt-2 text-[11px] leading-relaxed ${scenario === item.value ? 'text-blue-100' : 'text-slate-500 dark:text-slate-500'}`}>
+                      {item.value.replace('_', ' ')}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -106,11 +108,11 @@ export default function SyntheticGeneration() {
 
         <Panel title="Projections" subtitle="Projected impact of the current simulation.">
           <div className="grid gap-6">
-            <StatCard label="Target Population" value="500+" />
-            <StatCard label="Event Density" value="2,200" tone="warm" />
-            <div className="p-6 rounded border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[11px] leading-relaxed text-slate-500">
+            <StatCard label="Selected Seed" value={String(seed)} />
+            <StatCard label="Scenario" value={scenario.replace('_', ' ')} tone="warm" />
+            <div className="p-6 rounded border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
                <p className="font-black text-slate-900 dark:text-white mb-2 uppercase tracking-widest text-[9px]">Simulation Model</p>
-               Targeting vector <span className="text-blue-600 font-bold uppercase">{scenario.replace('_', ' ')}</span> to validate systemic resilience against correlated loss events.
+               Current backend request targets <span className="text-blue-600 dark:text-blue-300 font-bold uppercase">{scenario.replace('_', ' ')}</span> with seed <span className="font-bold text-slate-900 dark:text-slate-100">{seed}</span>.
             </div>
           </div>
         </Panel>
@@ -137,7 +139,7 @@ export default function SyntheticGeneration() {
                   ['Entropy Seed', artifacts?.seed_sql]
                 ].map(([label, path]) => (
                   <div key={label}>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">{label}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-500 mb-1">{label}</p>
                     <p className="truncate text-slate-900 dark:text-slate-300 font-mono text-[11px]">{path}</p>
                   </div>
                 ))}

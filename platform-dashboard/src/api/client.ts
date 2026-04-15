@@ -1,12 +1,25 @@
 import axios from 'axios'
 
-const currentHost = typeof window !== 'undefined' && window.location?.hostname
-  ? window.location.hostname
-  : '192.168.1.6'
-const defaultGatewayBaseUrl = `http://${currentHost}:8004`
+function resolveHost() {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    return window.location.hostname
+  }
+  return '127.0.0.1'
+}
+
+function resolveBaseUrl(envValue: unknown, port: number) {
+  const configured = typeof envValue === 'string' ? envValue.trim() : ''
+  if (configured) {
+    return configured
+  }
+  return `http://${resolveHost()}:${port}`
+}
+
+const defaultGatewayBaseUrl = resolveBaseUrl(import.meta.env.VITE_PLATFORM_API_URL, 8004)
+const forecastGatewayBaseUrl = resolveBaseUrl(import.meta.env.VITE_FORECAST_API_URL, 9003)
 
 const client = axios.create({
-  baseURL: import.meta.env.VITE_PLATFORM_API_URL || defaultGatewayBaseUrl
+  baseURL: defaultGatewayBaseUrl
 })
 
 export const coreClient = client
@@ -22,7 +35,7 @@ async function ensureBootstrapToken(forceRefresh = false): Promise<string | null
   }
 
   if (!bootstrapTokenPromise) {
-    const baseURL = (import.meta.env.VITE_PLATFORM_API_URL || defaultGatewayBaseUrl).replace(/\/$/, '')
+    const baseURL = defaultGatewayBaseUrl.replace(/\/$/, '')
     const demoPhone = (import.meta.env.VITE_DEMO_WORKER_PHONE as string | undefined) || '+919999999999'
     const demoOtp = (import.meta.env.VITE_DEMO_WORKER_OTP as string | undefined) || '123456'
 
@@ -95,5 +108,7 @@ client.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+export const forecastClient = axios.create({ baseURL: forecastGatewayBaseUrl })
 
 export default client

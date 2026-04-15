@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getDisruptions, getZoneHealth, getForecast } from '../api/platform'
+import { getDisruptions, getForecast, getZones, getZoneHealth } from '../api/platform'
 import { BarChart3, TrendingDown, ClipboardList, AlertOctagon, ArrowDownUp, Download, BrainCircuit, Info, RefreshCw } from 'lucide-react'
 
 type SortConfig = { key: string; direction: 'asc' | 'desc' } | null
@@ -12,6 +12,7 @@ interface ForecastPoint {
 export default function Analytics() {
   const [health, setHealth] = useState<any[]>([])
   const [disruptions, setDisruptions] = useState<any[]>([])
+  const [zones, setZones] = useState<any[]>([])
   const [timeFilter, setTimeFilter] = useState<'all' | 'weekly' | 'real-time'>('all')
   const [sortConfig, setSortConfig] = useState<SortConfig>(null)
   const [forecast, setForecast] = useState<ForecastPoint[]>([])
@@ -19,13 +20,17 @@ export default function Analytics() {
   const [forecastInference, setForecastInference] = useState<'prophet' | 'seasonal' | 'fallback' | null>(null)
   const [forecastLoading, setForecastLoading] = useState(true)
   const [forecastError, setForecastError] = useState(false)
-  const [selectedZone, setSelectedZone] = useState(1)
+  const [selectedZone, setSelectedZone] = useState<number | null>(null)
 
   useEffect(() => {
     async function load() {
-      const [healthRes, disruptionsRes] = await Promise.all([getZoneHealth(), getDisruptions()])
+      const [healthRes, disruptionsRes, zonesRes] = await Promise.all([getZoneHealth(), getDisruptions(), getZones()])
       setHealth(healthRes.data.data ?? [])
       setDisruptions(disruptionsRes.data.data ?? [])
+
+      const nextZones = zonesRes.data?.zones ?? []
+      setZones(nextZones)
+      setSelectedZone((current) => current ?? nextZones[0]?.zone_id ?? null)
     }
 
     load().catch((error) => console.error('Failed to load analytics', error))
@@ -35,6 +40,14 @@ export default function Analytics() {
 
   useEffect(() => {
     async function loadForecast() {
+      if (selectedZone === null) {
+        setForecast([])
+        setForecastMeta(null)
+        setForecastInference(null)
+        setForecastLoading(false)
+        return
+      }
+
       setForecastLoading(true)
       setForecastError(false)
       try {
@@ -51,6 +64,7 @@ export default function Analytics() {
         setForecastLoading(false)
       }
     }
+
     loadForecast()
   }, [selectedZone])
 
@@ -147,7 +161,6 @@ export default function Analytics() {
         <AnalyticsCard label="Manual Review Queue" value={stats.manualReview} icon={AlertOctagon} color={stats.manualReview > 0 ? "text-amber-600" : "text-emerald-600"} />
       </div>
 
-      {/* ── Reserve Planning Forecast ─────────────────────────────────────── */}
       <div className="enterprise-panel p-8">
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -157,47 +170,45 @@ export default function Analytics() {
                 7-Day Reserve Forecast
               </h2>
               <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-widest">
-                Facebook Prophet · Zone {selectedZone} · Reserve planning only
+                {forecastMeta?.scope ?? 'Backend forecast'} · Zone {selectedZone ?? '-'} · ML output
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Zone selector */}
             <div className="flex gap-1">
-              {[1, 2, 3, 4].map(z => (
+              {zones.map((zone) => (
                 <button
-                  key={z}
-                  id={`forecast-zone-${z}`}
-                  onClick={() => setSelectedZone(z)}
-                  className={`px-3 py-1.5 rounded border text-[10px] font-black uppercase tracking-widest transition-none ${selectedZone === z
-                      ? 'bg-violet-600 border-violet-600 text-white'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:border-violet-300'
-                    }`}
+                  key={zone.zone_id}
+                  id={`forecast-zone-${zone.zone_id}`}
+                  onClick={() => setSelectedZone(zone.zone_id)}
+                  className={`px-3 py-1.5 rounded border text-[10px] font-black uppercase tracking-widest transition-none ${selectedZone === zone.zone_id
+                    ? 'bg-violet-600 border-violet-600 text-white'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:border-violet-300'
+                  }`}
                 >
-                  Zone {z}
+                  {zone.name || `Zone ${zone.zone_id}`}
                 </button>
               ))}
             </div>
             {forecastLoading && <RefreshCw className="h-3.5 w-3.5 text-slate-400 animate-spin" />}
             {forecastInference === 'prophet' && (
               <div className="px-3 py-1.5 rounded border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10">
-                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">● Prophet Live</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Prophet live</span>
               </div>
             )}
             {forecastInference === 'fallback' && (
               <div className="px-3 py-1.5 rounded border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10">
-                <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Static Fallback</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Model fallback active</span>
               </div>
             )}
             <div className="px-3 py-1.5 rounded border border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10">
               <span className="text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">
-                Reserve Planning Only
+                ML driven
               </span>
             </div>
           </div>
         </div>
 
-        {/* Critical guardrail notice */}
         <div className="mb-6 flex items-start gap-3 p-4 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/5">
           <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
@@ -205,22 +216,19 @@ export default function Analytics() {
               This forecast does not influence claim approval or claim decisioning.
             </p>
             <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
-              Prophet is a per-zone seasonal model used exclusively for reserve buffer planning.
-              It does not model cross-zone correlated events. Reinsurance and a catastrophic cap
-              cover tail risk at portfolio level. Upgrade path: DeepAR for joint distribution modelling.
+              Forecast output is consumed only for reserve planning and model validation.
             </p>
           </div>
         </div>
 
         {forecastError ? (
           <div className="py-10 text-center text-xs text-slate-400 italic">
-            Forecast service unavailable — reserve planning estimates offline.
+            Forecast service unavailable - reserve planning estimates offline.
           </div>
         ) : forecastLoading ? (
           <div className="py-10 text-center text-xs text-slate-400 italic">Loading forecast...</div>
         ) : (
           <>
-            {/* Bar chart */}
             <div className="grid grid-cols-7 gap-2 items-end h-32 mb-3">
               {forecast.map((point) => {
                 const pct = (point.disruption_probability / maxProb) * 100
@@ -235,11 +243,11 @@ export default function Analytics() {
                     <div className="w-full rounded-t overflow-hidden" style={{ height: `${Math.max(pct, 6)}%` }}>
                       <div
                         className={`w-full h-full rounded-t ${isHigh
-                            ? 'bg-rose-500/80 dark:bg-rose-500/60'
-                            : isMed
-                              ? 'bg-amber-500/80 dark:bg-amber-500/60'
-                              : 'bg-emerald-500/70 dark:bg-emerald-500/50'
-                          }`}
+                          ? 'bg-rose-500/80 dark:bg-rose-500/60'
+                          : isMed
+                            ? 'bg-amber-500/80 dark:bg-amber-500/60'
+                            : 'bg-emerald-500/70 dark:bg-emerald-500/50'
+                        }`}
                       />
                     </div>
                   </div>
@@ -247,7 +255,6 @@ export default function Analytics() {
               })}
             </div>
 
-            {/* Date labels */}
             <div className="grid grid-cols-7 gap-2 mb-6">
               {forecast.map((point) => {
                 const d = new Date(point.date)
@@ -264,11 +271,10 @@ export default function Analytics() {
               })}
             </div>
 
-            {/* Legend + metadata */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-5 border-t border-slate-100 dark:border-slate-800">
               <div className="flex gap-4">
                 <LegendDot color="bg-emerald-500" label="Low (<20%)" />
-                <LegendDot color="bg-amber-500" label="Medium (20–35%)" />
+                <LegendDot color="bg-amber-500" label="Medium (20-35%)" />
                 <LegendDot color="bg-rose-500" label="High (>35%)" />
               </div>
               <div className="flex flex-col items-end gap-0.5">
@@ -288,7 +294,6 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* ── Disruption Table ──────────────────────────────────────────────── */}
       <div className="enterprise-panel overflow-hidden">
         <div className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -301,9 +306,9 @@ export default function Analytics() {
                 key={f}
                 onClick={() => setTimeFilter(f)}
                 className={`px-3 py-1.5 rounded border text-[10px] font-bold transition-none uppercase ${timeFilter === f
-                    ? 'bg-orange-600 border-orange-600 text-white shadow-sm'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+                  ? 'bg-orange-600 border-orange-600 text-white shadow-sm'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
               >
                 {f}
               </button>

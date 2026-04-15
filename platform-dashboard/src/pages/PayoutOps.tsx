@@ -147,7 +147,7 @@ export default function PayoutOps() {
           </div>
         </Panel>
 
-        <Panel title="Flow Summary" subtitle="Recommended demo sequence">
+        <Panel title="Flow Summary" subtitle="Recommended backend sequence">
           <div className="space-y-3 text-sm leading-6 text-slate-600">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">1. Generate synthetic data.</div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">2. Trigger claims for a disruption id.</div>
