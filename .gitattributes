@@ -1,0 +1,2 @@
+zone_b.json filter=lfs diff=lfs merge=lfs -text
+zone_c.json filter=lfs diff=lfs merge=lfs -text
