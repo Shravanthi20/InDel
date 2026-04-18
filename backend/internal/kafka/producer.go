@@ -1,9 +1,13 @@
 package kafka
 
 import (
+	"crypto/sha256"
+	"hash"
+	"os"
 	"strings"
 
 	"github.com/IBM/sarama"
+	"github.com/xdg/scram"
 )
 
 type Producer struct {
@@ -18,34 +22,27 @@ func NewProducer(brokers string) (*Producer, error) {
 	kafkaUser := os.Getenv("KAFKA_USER")
 	kafkaPass := os.Getenv("KAFKA_PASS")
 	if kafkaUser != "" && kafkaPass != "" {
-		 config.Net.SASL.Enable = true
-		 config.Net.SASL.User = kafkaUser
-		 config.Net.SASL.Password = kafkaPass
-		 config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
-		 config.Net.SASL.Handshake = true
-		 config.Net.TLS.Enable = true
-		 config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
-			  return &XDGSCRAMClient{HashGeneratorFcn: SHA256}
-		 }
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = kafkaUser
+		config.Net.SASL.Password = kafkaPass
+		config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
+		config.Net.SASL.Handshake = true
+		config.Net.TLS.Enable = true
+		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+			return &XDGSCRAMClient{HashGeneratorFcn: SHA256}
+		}
 	}
 
 	brokerList := strings.Split(brokers, ",")
 	producer, err := sarama.NewAsyncProducer(brokerList, config)
 	if err != nil {
-		 return nil, err
+		return nil, err
 	}
 
 	return &Producer{producer: producer}, nil
-
-// SCRAM client implementation for SHA-256
 }
 
-// XDGSCRAMClient and SHA256 implementation for SCRAM-SHA-256
-import (
-	"crypto/sha256"
-	"github.com/xdg/scram"
-)
-
+// SCRAM client implementation for SHA-256
 var SHA256 scram.HashGeneratorFcn = func() hash.Hash { return sha256.New() }
 
 type XDGSCRAMClient struct {
@@ -55,13 +52,13 @@ type XDGSCRAMClient struct {
 }
 
 func (x *XDGSCRAMClient) Begin(userName, password, authzID string) error {
-	var err error
-	x.Client, err = scram.NewClientPlain(x.HashGeneratorFcn, userName, password)
-	if err != nil {
-		 return err
-	}
-	x.ClientConversation = x.Client.NewConversation()
-	return nil
+       var err error
+       x.Client, err = x.HashGeneratorFcn.NewClient(userName, password, authzID)
+       if err != nil {
+	       return err
+       }
+       x.ClientConversation = x.Client.NewConversation()
+       return nil
 }
 
 func (x *XDGSCRAMClient) Step(challenge string) (string, error) {
@@ -70,7 +67,6 @@ func (x *XDGSCRAMClient) Step(challenge string) (string, error) {
 
 func (x *XDGSCRAMClient) Done() bool {
 	return x.ClientConversation.Done()
-}
 }
 
 func (p *Producer) Publish(topic string, key string, message []byte) error {

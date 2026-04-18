@@ -1,16 +1,18 @@
 FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
+
 COPY go.mod go.sum ./
 RUN go mod download
+RUN go mod vendor
 
 COPY . .
 
 # SERVICE maps to folders under ./cmd (core, worker-gateway, insurer-gateway, platform-gateway)
 ARG SERVICE=core
 RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-	CGO_ENABLED=0 GOOS=linux go build -o backend ./cmd/${SERVICE}
+	--mount=type=cache,target=/root/.cache/go-build \
+	CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o backend ./cmd/${SERVICE}
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
