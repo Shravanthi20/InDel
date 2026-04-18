@@ -12,4 +12,8 @@ const (
 	TopicOrderDrop           = "indel.zone.order-drop"
 	TopicEarningsSettled     = "indel.earnings.settled"
 	TopicClaimReviewed       = "indel.claims.reviewed"
+
+	// New disruption event topics
+	TopicClaimDisruptionCreated = "claim.disruption.created"
+	TopicClaimDisruptionUpdated = "claim.disruption.updated"
 )

@@ -1,0 +1,13 @@
+version: '3'
+services:
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      KAFKA_SASL_ENABLED: "true"
+      KAFKA_SASL_MECHANISM: SCRAM-SHA-512
+      KAFKA_SASL_USERNAME: ${KAFKA_USER}
+      KAFKA_SASL_PASSWORD: PAw1BJMw22FtKcosL3p5Wr7Rogd6yC
+      KAFKA_TLS_ENABLED: "true"

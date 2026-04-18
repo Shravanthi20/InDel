@@ -2,10 +2,10 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
-	"database/sql"
 	"fmt"
 	"log"
 	"math"
@@ -17,11 +17,41 @@ import (
 	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/claimeval"
+	"github.com/Shravanthi20/InDel/backend/internal/events"
+	"github.com/Shravanthi20/InDel/backend/internal/kafka"
 	"github.com/Shravanthi20/InDel/backend/internal/models"
 	"github.com/Shravanthi20/InDel/backend/pkg/razorpay"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// publishDisruptionEvent emits a disruption event to Kafka
+func (s *CoreOpsService) publishDisruptionEvent(eventType, claimID, disruptionType, severity string, metadata map[string]interface{}) {
+	producer, ok := s.producer.(*kafka.Producer)
+	if !ok || producer == nil {
+		log.Printf("[KAFKA] Producer unavailable, cannot emit disruption event")
+		return
+	}
+	evt := events.ClaimDisruptionEvent{
+		EventType:      eventType,
+		ClaimID:        claimID,
+		DisruptionType: disruptionType,
+		Timestamp:      time.Now().UTC(),
+		Severity:       severity,
+		Metadata:       metadata,
+	}
+	b, _ := json.Marshal(evt)
+	topic := kafka.TopicClaimDisruptionCreated
+	if eventType == "claim.disruption.updated" {
+		topic = kafka.TopicClaimDisruptionUpdated
+	}
+	err := producer.Publish(topic, claimID, b)
+	if err != nil {
+		log.Printf("[KAFKA] Failed to publish disruption event: %v", err)
+	} else {
+		log.Printf("[KAFKA] Disruption event published: %s for claim %s", eventType, claimID)
+	}
+}
 
 type CoreOpsService struct {
 	DB             *gorm.DB
@@ -185,9 +215,9 @@ func (s *CoreOpsService) RunWeeklyCycle(now time.Time) (*WeeklyCycleResult, erro
 	type cycleWorker struct {
 		WorkerID       uint
 		ZoneID         uint
-		RiskRating     float64      `gorm:"column:risk_rating"`
-		VehicleType    string       `gorm:"column:vehicle_type"`
-		BaselineAmount float64      `gorm:"column:baseline_amount"`
+		RiskRating     float64 `gorm:"column:risk_rating"`
+		VehicleType    string  `gorm:"column:vehicle_type"`
+		BaselineAmount float64 `gorm:"column:baseline_amount"`
 	}
 
 	var workers []cycleWorker
@@ -308,6 +338,18 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 
 		if worker.BaselineAmount <= 0 {
 			log.Printf("[CLAIMS] SKIP workerID=%d reason=zero_baseline", worker.WorkerID)
+			// Emit disruption event for ineligible worker
+			s.publishDisruptionEvent(
+				"claim.disruption.created",
+				"",
+				disruption.Type,
+				disruption.Severity,
+				map[string]interface{}{
+					"reason":        "zero_baseline",
+					"worker_id":     worker.WorkerID,
+					"disruption_id": disruptionID,
+				},
+			)
 			skipped++
 			continue
 		}
@@ -318,6 +360,17 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 		}
 		if existingCount > 0 {
 			log.Printf("[CLAIMS] SKIP workerID=%d reason=claim_already_exists", worker.WorkerID)
+			s.publishDisruptionEvent(
+				"claim.disruption.created",
+				"",
+				disruption.Type,
+				disruption.Severity,
+				map[string]interface{}{
+					"reason":        "claim_already_exists",
+					"worker_id":     worker.WorkerID,
+					"disruption_id": disruptionID,
+				},
+			)
 			skipped++
 			continue
 		}
@@ -333,8 +386,14 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 			ConfirmedAt:    disruption.ConfirmedAt,
 			Now:            now,
 			// Pre-fetched data
-			IsOnline:       &worker.IsOnline,
-			LastActiveAt:   func() *time.Time { if worker.LastActiveAt.Valid { t := worker.LastActiveAt.Time; return &t }; return nil }(),
+			IsOnline: &worker.IsOnline,
+			LastActiveAt: func() *time.Time {
+				if worker.LastActiveAt.Valid {
+					t := worker.LastActiveAt.Time
+					return &t
+				}
+				return nil
+			}(),
 			BaselineAmount: &worker.BaselineAmount,
 			ActualEarnings: &worker.ActualEarnings,
 		}
@@ -347,9 +406,20 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 		}
 
 		outcome := claimeval.EvaluateDetailed(context.Background(), activity)
-		
+
 		if !outcome.Eligible {
 			log.Printf("[CLAIMS] SKIP workerID=%d reason=%v", worker.WorkerID, strings.Join(outcome.Reasons, ", "))
+			s.publishDisruptionEvent(
+				"claim.disruption.created",
+				"",
+				disruption.Type,
+				disruption.Severity,
+				map[string]interface{}{
+					"reason":        outcome.Reasons,
+					"worker_id":     worker.WorkerID,
+					"disruption_id": disruptionID,
+				},
+			)
 			skipped++
 			continue
 		}
@@ -359,6 +429,17 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 			status = "manual_review"
 		} else if outcome.Decision == claimeval.DecisionReject {
 			log.Printf("[CLAIMS] REJECT workerID=%d reasons=%v", worker.WorkerID, outcome.Reasons)
+			s.publishDisruptionEvent(
+				"claim.disruption.created",
+				"",
+				disruption.Type,
+				disruption.Severity,
+				map[string]interface{}{
+					"reason":        outcome.Reasons,
+					"worker_id":     worker.WorkerID,
+					"disruption_id": disruptionID,
+				},
+			)
 			skipped++
 			continue
 		}
@@ -374,9 +455,34 @@ func (s *CoreOpsService) generateClaimsForDisruption(disruptionID uint, now time
 		}
 		if err := s.DB.Create(&claim).Error; err != nil {
 			log.Printf("[CLAIMS] ERROR creating claim for workerID=%d: %v", worker.WorkerID, err)
+			s.publishDisruptionEvent(
+				"claim.disruption.created",
+				"",
+				disruption.Type,
+				disruption.Severity,
+				map[string]interface{}{
+					"reason":        "db_create_failed",
+					"worker_id":     worker.WorkerID,
+					"disruption_id": disruptionID,
+					"error":         err.Error(),
+				},
+			)
 			return nil, err
 		}
 		log.Printf("[CLAIMS] ✅ claim created claimID=%d workerID=%d amount=%.2f status=%s", claim.ID, worker.WorkerID, claim.ClaimAmount, status)
+		// Emit disruption event for successful claim creation
+		s.publishDisruptionEvent(
+			"claim.disruption.created",
+			fmt.Sprintf("clm-%d", claim.ID),
+			disruption.Type,
+			disruption.Severity,
+			map[string]interface{}{
+				"worker_id":     worker.WorkerID,
+				"disruption_id": disruptionID,
+				"claim_amount":  claim.ClaimAmount,
+				"status":        status,
+			},
+		)
 
 		// Persist the detailed fraud signals for the Story-Telling UI
 		ruleViolations, _ := json.Marshal(outcome.Signals)
