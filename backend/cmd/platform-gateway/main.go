@@ -24,18 +24,20 @@ func main() {
 	router := gin.Default()
 	router.Use(middleware.CORS())
 
-	// Optional DB integration for platform webhooks.
-	cfg := config.Load()
-	if _, err := database.InitRedis(cfg); err != nil {
-		log.Printf("Redis unavailable: %v", err)
-	}
-	db, err := database.InitDB(cfg)
-	if err != nil {
-		log.Printf("Platform Gateway DB unavailable, using fallback mode: %v", err)
-	} else {
-		platform.SetDB(db)
-		log.Println("Platform Gateway connected to PostgreSQL")
-	}
+	// Initialize DB and Seed in background to allow immediate health check response
+	go func() {
+		cfg := config.Load()
+		if _, err := database.InitRedis(cfg); err != nil {
+			log.Printf("Background: Redis unavailable: %v", err)
+		}
+		db, err := database.InitDB(cfg)
+		if err != nil {
+			log.Printf("Background: Platform Gateway DB unavailable: %v", err)
+		} else {
+			platform.SetDB(db)
+			log.Println("Background: Platform Gateway connected to PostgreSQL")
+		}
+	}()
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {

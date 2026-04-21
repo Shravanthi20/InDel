@@ -26,29 +26,34 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
-	// Initialize Redis
-	if _, err := database.InitRedis(cfg); err != nil {
-		log.Printf("Redis unavailable: %v", err)
-	}
+	// Initialize DB, Redis and Poller in background to allow immediate health check response
+	go func() {
+		// Initialize Redis
+		if _, err := database.InitRedis(cfg); err != nil {
+			log.Printf("Background: Redis unavailable: %v", err)
+		}
 
-	// Initialize database
-	db, err := database.InitDB(cfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
+		// Initialize database
+		db, err := database.InitDB(cfg)
+		if err != nil {
+			log.Printf("Background: Failed to initialize database: %v", err)
+			return // Cannot proceed without DB in core
+		}
 
-	// Run migrations
-	if err := database.Migrate(db); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
-	}
+		// Run migrations (Sync check)
+		if err := database.Migrate(db); err != nil {
+			log.Printf("Background: Failed to run migrations: %v", err)
+		}
 
-	// Start keep-alive poller to ping backend services every 5 minutes
-	keepAlive := &pollers.KeepAlivePoller{
-		ServiceURLs: resolveKeepAliveURLs(),
-	}
-	keepAlive.Start()
+		// Start keep-alive poller
+		keepAlive := &pollers.KeepAlivePoller{
+			ServiceURLs: resolveKeepAliveURLs(),
+		}
+		keepAlive.Start()
 
-	core.SetDB(db)
+		core.SetDB(db)
+		log.Println("Background: Core service fully initialized")
+	}()
 
 	// Create Gin router
 	router := gin.Default()

@@ -26,22 +26,24 @@ func main() {
 	router := gin.Default()
 	router.Use(middleware.CORS())
 
-	// Initialize DB and seed minimal worker demo data if available.
-	cfg := config.Load()
-	if _, err := database.InitRedis(cfg); err != nil {
-		log.Printf("Redis unavailable: %v", err)
-	}
-	db, err := database.InitDB(cfg)
-	if err != nil {
-		log.Printf("Worker Gateway DB unavailable, using in-memory fallback: %v", err)
-	} else {
-		worker.SetDB(db)
-		if seedErr := worker.EnsureDemoSeed(); seedErr != nil {
-			log.Printf("Worker Gateway DB seed warning: %v", seedErr)
-		} else {
-			log.Println("Worker Gateway connected to PostgreSQL")
+	// Initialize DB and Seed in background to allow immediate health check response
+	go func() {
+		cfg := config.Load()
+		if _, err := database.InitRedis(cfg); err != nil {
+			log.Printf("Background: Redis unavailable: %v", err)
 		}
-	}
+		db, err := database.InitDB(cfg)
+		if err != nil {
+			log.Printf("Background: Worker Gateway DB unavailable: %v", err)
+		} else {
+			worker.SetDB(db)
+			if seedErr := worker.EnsureDemoSeed(); seedErr != nil {
+				log.Printf("Background: Worker Gateway DB seed warning: %v", seedErr)
+			} else {
+				log.Println("Background: Worker Gateway connected to PostgreSQL and seeded")
+			}
+		}
+	}()
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {

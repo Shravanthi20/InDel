@@ -25,26 +25,30 @@ func main() {
 	router := gin.Default()
 	router.Use(middleware.CORS())
 
-	// Optional DB wiring for live aggregate metrics.
-	cfg := config.Load()
-	if _, err := database.InitRedis(cfg); err != nil {
-		log.Printf("Redis unavailable: %v", err)
-	}
-	var svc *services.InsurerService
-	db, err := database.InitDB(cfg)
-	if err != nil {
-		log.Printf("Insurer Gateway DB unavailable, using fallback responses: %v", err)
-		svc = services.NewInsurerService(nil, nil)
-	} else {
-		log.Println("Insurer Gateway connected to PostgreSQL")
+	// Create the service object early (even with nil fields) so routes can be registered
+	svc := services.NewInsurerService(nil, nil)
 
-		var kp *kafka.Producer
-		kafkaBrokers := os.Getenv("KAFKA_BROKERS")
-		if kafkaBrokers != "" {
-			kp, _ = kafka.NewProducer(kafkaBrokers)
+	// Initialize DB, Redis and Kafka in background to allow immediate health check response
+	go func() {
+		cfg := config.Load()
+		if _, err := database.InitRedis(cfg); err != nil {
+			log.Printf("Background: Redis unavailable: %v", err)
 		}
-		svc = services.NewInsurerService(db, kp)
-	}
+		db, err := database.InitDB(cfg)
+		if err != nil {
+			log.Printf("Background: Insurer Gateway DB unavailable: %v", err)
+		} else {
+			log.Println("Background: Insurer Gateway connected to PostgreSQL")
+			svc.DB = db
+
+			var kp *kafka.Producer
+			kafkaBrokers := os.Getenv("KAFKA_BROKERS")
+			if kafkaBrokers != "" {
+				kp, _ = kafka.NewProducer(kafkaBrokers)
+				svc.KafkaProducer = kp
+			}
+		}
+	}()
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
