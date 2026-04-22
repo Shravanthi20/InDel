@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 import os
 import sys
+import math
 
 # Ensure local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -74,6 +75,54 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(script_dir, 'artifacts/premium_model.joblib')
 MODEL_VERSION = "premium_xgb_v1"
 
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+# Guardrails are configurable and intentionally broad so model predictions stay dynamic.
+PREMIUM_MIN_INR = _env_float("PREMIUM_MIN_INR", 30.0)
+PREMIUM_MAX_INR = _env_float("PREMIUM_MAX_INR", 120.0)
+PREMIUM_BASE_INR = _env_float("PREMIUM_BASE_INR", PREMIUM_MIN_INR)
+PREMIUM_RISK_BAND_INR = _env_float("PREMIUM_RISK_BAND_INR", 20.0)
+PREMIUM_MODEL_WEIGHT = _env_float("PREMIUM_MODEL_WEIGHT", 0.30)
+PREMIUM_REGION_STRESS_WEIGHT = _env_float("PREMIUM_REGION_STRESS_WEIGHT", 0.50)
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def apply_premium_guardrails(predicted: float) -> float:
+    if not math.isfinite(predicted):
+        return PREMIUM_MIN_INR
+
+    lower = min(PREMIUM_MIN_INR, PREMIUM_MAX_INR)
+    upper = max(PREMIUM_MIN_INR, PREMIUM_MAX_INR)
+    return max(lower, min(upper, predicted))
+
+
+def compute_dynamic_premium(predicted: float, risk_score: float, recent_disruption_rate: float) -> float:
+    # Blend model output with risk-aware uplift so low-disruption regions remain cheaper
+    # while high-disruption regions are priced higher, with a clear base floor.
+    model_weight = _clamp01(PREMIUM_MODEL_WEIGHT)
+    risk_component = PREMIUM_BASE_INR + (_clamp01(risk_score) * max(0.0, PREMIUM_RISK_BAND_INR))
+    blended = (predicted * model_weight) + (risk_component * (1.0 - model_weight))
+
+    # Region stress uplift: repeated disruptions in a region should increase premiums.
+    # `recent_disruption_rate` is expected in [0, 1]. Example with weight=0.50:
+    # rate=0.10 -> x1.05, rate=0.60 -> x1.30, rate=1.00 -> x1.50.
+    region_stress = 1.0 + (_clamp01(recent_disruption_rate) * max(0.0, PREMIUM_REGION_STRESS_WEIGHT))
+    blended = blended * region_stress
+
+    return apply_premium_guardrails(blended)
+
 def load_model_instance():
     global model, explainer
     if os.path.exists(MODEL_PATH):
@@ -112,9 +161,15 @@ def calculate_premium(request: PremiumRequest):
     # Explain
     explainability = explainer.explain(df)[0]
     
-    # Enforce actuarial floor/ceiling (e.g., Rs. 49 base minimum for new out-of-distribution workers)
-    final_premium = round(float(premium[0]), 2)
-    final_premium = max(49.0, min(250.0, final_premium))
+    # Keep pricing dynamic; only apply broad guardrails to avoid invalid extremes.
+    final_premium = round(
+        compute_dynamic_premium(
+            float(premium[0]),
+            float(risk[0]),
+            float(request.recent_disruption_rate),
+        ),
+        2,
+    )
     
     response_data = PremiumData(
         worker_id=request.worker_id,
@@ -150,8 +205,14 @@ def batch_calculate_premium(requests: List[PremiumRequest]):
     
     results = []
     for i, request in enumerate(requests):
-        final_premium = round(float(premiums[i]), 2)
-        final_premium = max(49.0, min(250.0, final_premium))
+        final_premium = round(
+            compute_dynamic_premium(
+                float(premiums[i]),
+                float(risks[i]),
+                float(request.recent_disruption_rate),
+            ),
+            2,
+        )
         
         results.append(PremiumData(
             worker_id=request.worker_id,
@@ -171,4 +232,13 @@ def batch_calculate_premium(requests: List[PremiumRequest]):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    app_instance = FastAPI(title="InDel Premium ML Service")
+    app_instance.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app_instance.include_router(router)
+    uvicorn.run(app_instance, host="0.0.0.0", port=8000)
