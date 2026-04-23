@@ -25,7 +25,7 @@ export default function DemoSection() {
           viewport={{ once: true }}
           transition={{ duration: 0.65, delay: 0.1 }}
         >
-          See it in 2 minutes.
+          See it in a few minutes.
         </motion.h2>
         <motion.p
           className="text-white/50 text-lg text-center max-w-xl mx-auto mb-12"
@@ -48,7 +48,7 @@ export default function DemoSection() {
         >
           <iframe
             src={import.meta.env.VITE_YOUTUBE_DEMO_URL}
-            title="InDel Demo — 2 Minute Walkthrough"
+            title="InDel Demo — Walkthrough"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}

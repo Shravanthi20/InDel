@@ -33,6 +33,9 @@ export interface PlanUser {
   plan_id?: string
   started_at?: string
   updated_at?: string
+  weekly_premium: number
+  max_payout: number
+  explainability?: Array<{ feature: string; impact: number }>
 }
 
 // --- Zone Path API Types ---

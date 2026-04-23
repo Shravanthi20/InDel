@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base reset ─────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+@layer base {
+  :root {
+    --primary: #EC4899;
+    --primary-dark: #BE185D;
+    --primary-light: #FDF2F8;
+    --dark-900: #111827;
+    --dark-800: #1F2937;
+    --dark-700: #374151;
+    --text-primary: #111827;
+    --text-secondary: #4B5563;
+  }
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #FFFFFF;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ── Custom scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F9FAFB;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
+}
+
+/* ── Keyframe animations ────────────────────────────────────── */
+@keyframes glow {
+  0%   { box-shadow: 0 0 20px rgba(236,72,153,0.3); }
+  100% { box-shadow: 0 0 40px rgba(236,72,153,0.6); }
+}
+
+@keyframes flowPulse {
+  0%, 100% { opacity: 0.4; transform: scaleY(1); }
+  50%       { opacity: 1; transform: scaleY(1.02); }
+}
+
+/* ── Utility classes ────────────────────────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(236, 72, 153, 0.1);
+}
+
+.glass-dark {
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(236, 72, 153, 0.2);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #EC4899, #BE185D);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-light {
+  background: linear-gradient(135deg, #F472B6, #FDF2F8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-hover:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 25px 50px -12px rgba(236, 72, 153, 0.15);
+}
+
+/* ── Dark section overrides ─────────────────────────────────── */
+.dark-section {
+  background: linear-gradient(135deg, #BE185D 0%, #EC4899 60%, #FDF2F8 100%);
+  color: #FFFFFF;
+}
+
+.dark-section .section-tag {
+  background: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ── Grid pattern overlay ───────────────────────────────────── */
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(236,72,153,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(236,72,153,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}

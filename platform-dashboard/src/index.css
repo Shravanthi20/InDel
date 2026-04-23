@@ -6,24 +6,24 @@
 
 @layer base {
   :root {
-    --brand-primary: #00739d;
-    --brand-primary-deep: #005a7a;
-    --brand-soft: #e6f3f7;
-    --bg-main: #f5f7f9;
-    --bg-accent: rgba(0, 115, 157, 0.08);
-    --border-subtle: #dbe3e9;
-    --text-primary: #666766;
-    --text-secondary: #919291;
+    --brand-primary: #EC4899;
+    --brand-primary-deep: #BE185D;
+    --brand-soft: #FDF2F8;
+    --bg-main: #FFFFFF;
+    --bg-accent: rgba(236, 72, 153, 0.05);
+    --border-subtle: #F3F4F6;
+    --text-primary: #111827;
+    --text-secondary: #4B5563;
   }
   .dark {
-    --brand-primary: #4ba6c8;
-    --brand-primary-deep: #00739d;
-    --brand-soft: #0f2733;
-    --bg-main: #0c141a;
-    --bg-accent: rgba(75, 166, 200, 0.12);
-    --border-subtle: #1f303a;
-    --text-primary: #e7f0f4;
-    --text-secondary: #a9bbc4;
+    --brand-primary: #F472B6;
+    --brand-primary-deep: #EC4899;
+    --brand-soft: #1F2937;
+    --bg-main: #111827;
+    --bg-accent: rgba(236, 72, 153, 0.08);
+    --border-subtle: #1F2937;
+    --text-primary: #F9FAFB;
+    --text-secondary: #9CA3AF;
   }
 
   html,
@@ -40,21 +40,13 @@
     background-color: var(--bg-main);
     background-image:
       radial-gradient(circle at top left, var(--bg-accent), transparent 36%),
-      radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 24%);
+      radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.03), transparent 24%);
     background-attachment: fixed;
   }
 
-  .dark body {
-    background-image:
-      radial-gradient(circle at top left, var(--bg-accent), transparent 34%),
-      radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.03), transparent 26%);
-  }
-
-  /* Enterprise-grade high-precision response (Instant feel) */
+  /* Responsive and snappy feel (but not disabled transitions) */
   * {
-    @apply transition-none !important;
-    @apply duration-0 !important;
-    @apply animate-none !important;
+    @apply transition-all duration-200 ease-in-out;
   }
 
   /* High precision focus states */
@@ -66,7 +58,7 @@
 
 @layer components {
   .enterprise-panel {
-    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-lg;
+    @apply bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-soft-xl rounded-2xl overflow-hidden;
   }
   
   .custom-scrollbar::-webkit-scrollbar {
@@ -76,44 +68,29 @@
     @apply bg-transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 dark:bg-slate-800 rounded-full;
+    @apply bg-gray-200 dark:bg-gray-800 rounded-full;
   }
 }
 
 @layer utilities {
-  /* Brand remap: replace legacy orange accents with worker-app blue palette. */
-  .text-orange-700,
-  .text-orange-600,
-  .text-orange-500,
-  .text-orange-400,
-  .text-orange-300 {
+  /* Brand remap to pink accent */
+  .text-orange-700, .text-orange-600, .text-orange-500, .text-orange-400, .text-orange-300,
+  .text-blue-700, .text-blue-600, .text-blue-500, .text-blue-400, .text-blue-300 {
     color: var(--brand-primary) !important;
   }
 
-  .bg-orange-700,
-  .bg-orange-600,
-  .bg-orange-500 {
+  .bg-orange-700, .bg-orange-600, .bg-orange-500,
+  .bg-blue-700, .bg-blue-600, .bg-blue-500 {
     background-color: var(--brand-primary) !important;
   }
 
-  .bg-orange-100,
-  .bg-orange-50,
-  .bg-orange-500\/10 {
+  .bg-orange-100, .bg-orange-50, .bg-orange-500\/10,
+  .bg-blue-100, .bg-blue-50, .bg-blue-500\/10 {
     background-color: var(--brand-soft) !important;
   }
 
-  .border-orange-700,
-  .border-orange-600,
-  .border-orange-500,
-  .border-orange-400,
-  .border-orange-500\/40,
-  .border-orange-500\/20 {
-    border-color: var(--brand-primary) !important;
-  }
-
-  .focus\:border-orange-600:focus,
-  .focus\:border-orange-500:focus,
-  .focus\:border-orange-400:focus {
+  .border-orange-700, .border-orange-600, .border-orange-500, .border-orange-400,
+  .border-blue-700, .border-blue-600, .border-blue-500, .border-blue-400 {
     border-color: var(--brand-primary) !important;
   }
 }

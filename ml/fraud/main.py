@@ -57,6 +57,7 @@ class FraudResponse(BaseModel):
 
 # ─── Health ─────────────────────────────────────────────────────────────────
 
+@router.get("/health")
 @router.get("/fraud/health")
 def health_fraud():
     return {
@@ -83,5 +84,8 @@ def score_claim(request: FraudRequest):
     )
 
 if __name__ == "__main__":
+    from fastapi import FastAPI
     import uvicorn
+    app = FastAPI()
+    app.include_router(router)
     uvicorn.run(app, host="0.0.0.0", port=8000)

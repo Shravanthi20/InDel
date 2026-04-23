@@ -49,7 +49,7 @@ fun EarningsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPink,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -66,7 +66,7 @@ fun EarningsScreen(
                 .background(BackgroundWarmWhite)
             ) {
                 when (val state = uiState) {
-                    is EarningsUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    is EarningsUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = BrandPink)
                     is EarningsUiState.Success -> EarningsContent(state.earnings)
                     is EarningsUiState.Error -> ErrorState(state.message) { viewModel.loadEarnings() }
                 }
@@ -86,17 +86,17 @@ fun EarningsContent(earnings: Earnings) {
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(24.dp), // More premium rounded corners
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(stringResource(R.string.weekly_earnings), style = MaterialTheme.typography.labelLarge, color = TextSecondary)
-                    Text("₹${earnings.thisWeekActual.toInt()}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = BrandBlue)
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Text(stringResource(R.string.weekly_earnings), style = MaterialTheme.typography.labelLarge, color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("₹${earnings.thisWeekActual.toInt()}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = BrandPink)
                     
-                    Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider(color = BackgroundWarmWhite)
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider(color = PinkSoft, thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         EarningItem(stringResource(R.string.baseline), "₹${earnings.thisWeekBaseline.toInt()}", TextSecondary)
@@ -115,21 +115,23 @@ fun EarningsContent(earnings: Earnings) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isGapped) BlueSoft.copy(alpha = 0.5f) else SuccessGreen.copy(alpha = 0.1f)
-                )
+                    containerColor = if (isGapped) PinkSoft else SuccessGreen.copy(alpha = 0.05f)
+                ),
+                border = if (isGapped) null else androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.2f))
             ) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         if (isGapped) Icons.Default.Info else Icons.AutoMirrored.Filled.TrendingUp,
                         contentDescription = null,
-                        tint = if (isGapped) BrandBlue else SuccessGreen
+                        tint = if (isGapped) BrandPink else SuccessGreen
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
                             stringResource(R.string.income_insight),
                             fontWeight = FontWeight.Bold,
-                            color = if (isGapped) BlueDeep else SuccessGreen
+                            color = if (isGapped) PinkDeep else SuccessGreen,
+                            style = MaterialTheme.typography.titleSmall
                         )
                         Text(
                             text = earnings.insight ?: if (isGapped) {

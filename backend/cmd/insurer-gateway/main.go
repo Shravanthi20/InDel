@@ -61,7 +61,10 @@ func main() {
 	routerpkg.SetupInsurerRoutes(router, svc)
 
 	// Start server
-	port := os.Getenv("INSURER_GATEWAY_PORT")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = os.Getenv("INSURER_GATEWAY_PORT")
+	}
 	if port == "" {
 		port = "8002"
 	}

@@ -1,4 +1,4 @@
-import client, { forecastClient } from './client'
+import client, { forecastClient, coreClient, workerClient } from './client'
 
 export type ZoneLevelOption = {
   level: 'A' | 'B' | 'C'
@@ -13,16 +13,16 @@ export const getZoneLevels = () => client.get<{ levels: ZoneLevelOption[] }>('/a
 export const getZonePaths = (type: 'a' | 'b' | 'c') => client.get(`/api/v1/platform/zone-paths?type=${type}`)
 export const getZoneHealth = () => client.get('/api/v1/platform/zones/health')
 export const getDisruptions = () => client.get('/api/v1/platform/disruptions')
-export const getOrders = () => client.get('/api/v1/worker/orders')
-export const getAvailableBatches = () => client.get('/api/v1/worker/batches')
-export const getAssignedBatches = () => client.get('/api/v1/worker/batches/assigned')
-export const getSimulationBatches = (status?: 'assigned' | 'picked_up' | 'delivered') => client.get('/api/v1/demo/batches', { params: status ? { status } : undefined })
+export const getOrders = () => workerClient.get('/api/v1/worker/orders')
+export const getAvailableBatches = () => workerClient.get('/api/v1/worker/batches')
+export const getAssignedBatches = () => workerClient.get('/api/v1/worker/batches/assigned')
+export const getSimulationBatches = (status?: 'assigned' | 'picked_up' | 'delivered') => workerClient.get('/api/v1/demo/batches', { params: status ? { status } : undefined })
 export const putAcceptBatch = (batchId: string, data: { orderIds: string[]; pickupCode: string }) =>
-  client.put(`/api/v1/worker/batches/${encodeURIComponent(batchId)}/accept`, data)
+  workerClient.put(`/api/v1/worker/batches/${encodeURIComponent(batchId)}/accept`, data)
 export const putDeliverBatch = (batchId: string, data: { deliveryCode: string }) =>
-  client.put(`/api/v1/worker/batches/${encodeURIComponent(batchId)}/deliver`, data)
+  workerClient.put(`/api/v1/worker/batches/${encodeURIComponent(batchId)}/deliver`, data)
 export const postSimulateOrders = (data: { count: number }) =>
-  client.post('/api/v1/demo/simulate-orders', data)
+  workerClient.post('/api/v1/demo/simulate-orders', data)
 export const postAddBatches = (data: {
   count: number
   zone_id?: number
@@ -56,7 +56,7 @@ export const postIngestDemoOrder = (data: {
   delivery_fee_inr: number
   status: string
   source: string
-}) => client.post('/api/v1/demo/orders/ingest', data)
+}) => workerClient.post('/api/v1/demo/orders/ingest', data)
 export const postTriggerDemo = (data: {
   zone_id: number
   force_order_drop: boolean
@@ -72,9 +72,9 @@ export const postTriggerDemo = (data: {
 }) =>
   client.post('/api/v1/platform/demo/trigger-disruption', data)
 export const generateClaimsForDisruption = (disruptionId: number) =>
-  client.post(`/api/v1/internal/claims/generate-for-disruption/${disruptionId}`)
+  coreClient.post(`/api/v1/internal/claims/generate-for-disruption/${disruptionId}`)
 export const postExternalSignal = (data: {zone_id: number, source: string, status: string}) =>
   client.post('/api/v1/platform/webhooks/external-signal', data)
 
 export const getForecast = (zone_id: number) =>
-  forecastClient.post('/forecast', { zone_id })
+  forecastClient.post('/api/v1/ml/forecast', { zone_id })

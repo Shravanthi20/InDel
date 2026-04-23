@@ -106,3 +106,14 @@ type MaintenanceCheck struct {
 func (MaintenanceCheck) TableName() string {
 	return "maintenance_check"
 }
+
+// LedgerItem represents a single financial event in the system
+type LedgerItem struct {
+	Timestamp   time.Time `json:"timestamp"`
+	WorkerID    uint      `json:"worker_id"`
+	Zone        string    `json:"zone"`
+	EventType   string    `json:"event_type"` // "premium", "payout"
+	Amount      float64   `json:"amount"`
+	Status      string    `json:"status"`
+	ReferenceID string    `json:"reference_id"`
+}

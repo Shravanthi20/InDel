@@ -20,9 +20,9 @@ const products = [
     link: "https://github.com/Shravanthi20/InDel#worker-app",
     linkLabel: "View on GitHub →",
     badge: "Android · Kotlin",
-    badgeColor: "bg-green-100 text-green-700",
+    badgeColor: "bg-brand-soft text-brand-primary border-brand-primary/20",
     highlight: "SHAP · Razorpay · Firebase FCM",
-    highlightColor: "border-green-200",
+    highlightColor: "border-brand-primary/10",
   },
   {
     icon: <IconMap />,
@@ -40,9 +40,9 @@ const products = [
     link: "https://indel-platform-dashboard.onrender.com",
     linkLabel: "Open Dashboard →",
     badge: "React · Vite · TypeScript",
-    badgeColor: "bg-blue-100 text-blue-700",
+    badgeColor: "bg-brand-soft text-brand-primary border-brand-primary/20",
     highlight: "Chaos Engine · Live Telemetry",
-    highlightColor: "border-blue-200",
+    highlightColor: "border-brand-primary/10",
   },
   {
     icon: <IconChart />,
@@ -60,9 +60,9 @@ const products = [
     link: "https://indel-urn9.onrender.com",
     linkLabel: "Open Dashboard →",
     badge: "Tremor · React · Vite",
-    badgeColor: "bg-purple-100 text-purple-700",
+    badgeColor: "bg-brand-primary text-white border-brand-primary/20 shadow-sm",
     highlight: "Prophet · IsolationForest · DBSCAN",
-    highlightColor: "border-purple-200",
+    highlightColor: "border-brand-primary/20 shadow-lg shadow-brand-primary/5",
   },
 ];
 

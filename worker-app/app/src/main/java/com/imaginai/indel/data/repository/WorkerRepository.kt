@@ -94,6 +94,8 @@ class WorkerRepository @Inject constructor(
 
     // Zones
     suspend fun getZones() = platformApiService.getZones()
+
+    suspend fun getZoneLevels() = platformApiService.getZoneLevels()
     
     suspend fun getZonePaths(type: String) = platformApiService.getZonePaths(type)
 

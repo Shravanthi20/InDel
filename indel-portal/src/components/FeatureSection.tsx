@@ -7,7 +7,7 @@ const features = [
     id: "chaos",
     icon: <IconChaos />,
     badge: "Built for Demo",
-    badgeColor: "bg-purple-100 text-purple-700",
+    badgeColor: "bg-brand-primary text-white border-brand-primary/20 shadow-sm",
     title: "Chaos Engine",
     subtitle: "Simulate disruption without waiting for a real flood",
     description:
@@ -23,7 +23,7 @@ const features = [
     id: "fraud",
     icon: <IconLab />,
     badge: "ML-Powered",
-    badgeColor: "bg-orange-100 text-orange-700",
+    badgeColor: "bg-brand-soft text-brand-primary border-brand-primary/20",
     title: "3-Layer Fraud Engine",
     subtitle: "Intercepts coordinated fraud across 6 behavioral dimensions",
     description:
@@ -39,7 +39,7 @@ const features = [
     id: "shap",
     icon: <IconGlobe />,
     badge: "Multilingual",
-    badgeColor: "bg-blue-100 text-blue-700",
+    badgeColor: "bg-brand-soft text-brand-primary border-brand-primary/20",
     title: "SHAP Explainability",
     subtitle: "Every premium, auditable — in the worker's language",
     description:
@@ -64,7 +64,7 @@ const features = [
     id: "ttl",
     icon: <IconTimer />,
     badge: "Anti-Ghost Login",
-    badgeColor: "bg-red-100 text-red-700",
+    badgeColor: "bg-brand-primary text-white border-brand-primary/20",
     title: "TTL Security Gate",
     subtitle: "15-minute backward window locks eligibility at the millisecond",
     description:

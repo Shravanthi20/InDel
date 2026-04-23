@@ -4,9 +4,6 @@ This document is the evaluator runbook for **InDel — Insure, Deliver** (Guidew
 
 It explains exactly what is needed and how to run the complete Phase 3 implementation locally: backend services, dashboards, and Android worker app.
 
-> [!IMPORTANT]
-> For Phase 3 evaluation, we are not distributing a standalone APK. We kindly request evaluators to run the Worker App using the provided project setup (Android Studio + local backend services) so the full integrated asynchronous workflow (Kafka + Razorpay) can be verified.
-
 ---
 
 ## 1. Project Details
@@ -73,14 +70,15 @@ Minimum values for local demo:
 # Network (Critical: Use your machine's LAN IP, e.g. 192.168.1.x, do NOT use localhost)
 HOST_IP=<your_lan_ip>
 LAN_IP=<your_lan_ip>
-API_BASE_URL=http://<your_lan_ip>:8003/
+WORKER_API_URL=http://<your_lan_ip>:8004
+PLATFORM_API_URL=http://<your_lan_ip>:8004
+API_BASE_URL=http://<your_lan_ip>:8004
 
 # Database
 POSTGRES_PASSWORD=demo_password
 DB_PASSWORD=demo_password
 
-# NGINX Gateway & Vite Endpoints (Ports default to 8004 for reverse proxy)
-PLATFORM_API_URL=http://<your_lan_ip>:8004
+# NGINX Gateway & Vite Endpoints (Port 8004 reverse proxy)
 VITE_PLATFORM_API_URL=http://<your_lan_ip>:8004
 VITE_INSURER_API_URL=http://<your_lan_ip>:8004
 VITE_CORE_API_URL=http://<your_lan_ip>:8004
@@ -234,8 +232,9 @@ Expected local URL (Vite):
 2. Wait for Gradle sync to complete.
 
 > **Mandatory Setup for Evaluator:**
-> Before running, ensure `/worker-app/.env` contains your LAN IP targeting the API gateway (Port 8003):
-> `API_BASE_URL=http://<your_lan_ip>:8003/`
+> Before running, ensure `/worker-app/.env` points to live gateways:
+> `WORKER_API_URL=http://<your_lan_ip>:8004`
+> `PLATFORM_API_URL=http://<your_lan_ip>:8004`
 
 3. Select emulator/device.
 4. Run the app.

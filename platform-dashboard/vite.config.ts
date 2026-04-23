@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/api\/v1\/forecast/, '/forecast'),
         },
         '/api': {
-          target: resolveProxyTarget(env.VITE_PLATFORM_API_URL, env.PLATFORM_API_URL, 'http://192.168.1.8:8004'),
+          target: resolveProxyTarget(env.VITE_PLATFORM_API_URL, env.PLATFORM_API_URL, 'http://127.0.0.1:8004'),
           changeOrigin: true,
         },
       },

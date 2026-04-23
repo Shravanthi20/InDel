@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.imaginai.indel.data.api.WorkerApiService
+import com.imaginai.indel.data.repository.WorkerRepository
 import com.imaginai.indel.data.model.DisruptionRequest
 import com.imaginai.indel.data.model.CountRequest
 import com.imaginai.indel.data.model.ZoneLevelOption
@@ -23,7 +24,8 @@ sealed class DevToolsActionState {
 
 @HiltViewModel
 class DevToolsViewModel @Inject constructor(
-    private val apiService: WorkerApiService
+    private val apiService: WorkerApiService,
+    private val workerRepository: WorkerRepository
 ) : ViewModel() {
 
     companion object {
@@ -66,7 +68,7 @@ class DevToolsViewModel @Inject constructor(
     fun loadZoneLevels() {
         viewModelScope.launch {
             try {
-                val resp = apiService.getZoneLevels()
+                val resp = workerRepository.getZoneLevels()
                 if (resp.isSuccessful) {
                     val levels = resp.body()?.levels
                     if (!levels.isNullOrEmpty()) {
@@ -89,7 +91,7 @@ class DevToolsViewModel @Inject constructor(
     private fun loadZoneNames(level: String) {
         viewModelScope.launch {
             try {
-                val resp = apiService.getZonePaths(level.lowercase())
+                val resp = workerRepository.getZonePaths(level.lowercase())
                 if (resp.isSuccessful) {
                     val body = resp.body()
                     val names: List<String> = when (level.uppercase()) {

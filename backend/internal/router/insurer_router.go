@@ -26,4 +26,5 @@ func SetupInsurerRoutes(router *gin.Engine, svc *services.InsurerService) {
 	v1.POST("/users/:id/plan/start", h.StartUserPlan)
 	v1.POST("/users/:id/plan/end", h.EndUserPlan)
 	v1.GET("/plan-stats", middleware.RedisCache(15*time.Second), h.GetPlanUsers)
+	v1.GET("/ledger", h.GetLedger)
 }

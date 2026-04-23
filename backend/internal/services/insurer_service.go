@@ -56,15 +56,18 @@ type MoneyExchangeSummary struct {
 }
 
 type UserPlanStatus struct {
-	UserID    uint   `json:"id"`
-	Name      string `json:"name"`
-	Phone     string `json:"phone"`
-	Zone      string `json:"zone"`
-	Status    string `json:"status"`
-	PolicyID  *uint  `json:"policy_id,omitempty"`
-	PlanID    string `json:"plan_id,omitempty"`
-	StartedAt string `json:"started_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+	UserID         uint                 `json:"id"`
+	Name           string               `json:"name"`
+	Phone          string               `json:"phone"`
+	Zone           string               `json:"zone"`
+	Status         string               `json:"status"`
+	PolicyID       *uint                `json:"policy_id,omitempty"`
+	PlanID         string               `json:"plan_id,omitempty"`
+	StartedAt      string               `json:"started_at,omitempty"`
+	UpdatedAt      string               `json:"updated_at,omitempty"`
+	WeeklyPremium  float64              `json:"weekly_premium"`
+	MaxPayout      float64              `json:"max_payout" gorm:"-"`
+	Explainability []PremiumExplainItem `json:"explainability,omitempty" gorm:"-"`
 }
 
 func NewInsurerService(db *gorm.DB, kp *kafka.Producer) *InsurerService {
@@ -85,6 +88,7 @@ func (s *InsurerService) ListUserPlanStatuses() ([]UserPlanStatus, error) {
 			COALESCE(z.name, 'Unknown') AS zone,
 			CASE WHEN ap.user_id IS NOT NULL THEN 'active' ELSE 'inactive' END AS status,
 			lp.id AS policy_id,
+			COALESCE(lp.premium_amount, 0) AS weekly_premium,
 			COALESCE(lp.plan_id, '') AS plan_id,
 			COALESCE(CAST(ap.started_at AS text), '') AS started_at,
 			COALESCE(CAST(COALESCE(ap.updated_at, lp.updated_at, lp.created_at) AS text), '') AS updated_at
@@ -103,6 +107,33 @@ func (s *InsurerService) ListUserPlanStatuses() ([]UserPlanStatus, error) {
 	`).Scan(&rows).Error
 	if err != nil {
 		return nil, err
+	}
+
+	// Compute fresh premiums for inactive workers, or enrich active ones
+	for i := range rows {
+		if rows[i].Status == "active" && rows[i].WeeklyPremium > 0 {
+			// SYNC: Use the actual committed premium from the database (e.g. ₹49 for Rose)
+			// Still compute explainability to show 'Why this premium?'
+			quote, _ := QuotePremium(s.DB, rows[i].UserID, time.Now().UTC())
+			if quote != nil {
+				rows[i].Explainability = quote.Explainability
+				rows[i].MaxPayout = 500 + (quote.RiskScore * 400)
+			} else {
+				rows[i].MaxPayout = 800
+			}
+		} else {
+			// For unprotected workers, compute a live quote
+			quote, _ := QuotePremium(s.DB, rows[i].UserID, time.Now().UTC())
+			if quote != nil {
+				rows[i].WeeklyPremium = quote.WeeklyPremiumINR
+				rows[i].Explainability = quote.Explainability
+				rows[i].MaxPayout = 500 + (quote.RiskScore * 400)
+			} else {
+				// Fallback defaults
+				rows[i].WeeklyPremium = 22
+				rows[i].MaxPayout = 800
+			}
+		}
 	}
 
 	return rows, nil
@@ -838,4 +869,87 @@ func (s *InsurerService) RespondToMaintenanceCheck(checkID string, findings stri
 		}
 		return nil
 	})
+}
+
+func (s *InsurerService) GetLedger(offset, limit int) ([]models.LedgerItem, int64, error) {
+	if s.DB == nil {
+		return []models.LedgerItem{}, 0, nil
+	}
+
+	type rawEvent struct {
+		Timestamp   time.Time
+		WorkerID    uint
+		Zone        string
+		EventType   string
+		Amount      float64
+		Status      string
+		ReferenceID string
+	}
+
+	var raws []rawEvent
+	var total int64
+
+	// Combined query for Premiums and Payouts
+	query := `
+		(SELECT 
+			COALESCE(pp.payment_date, pp.created_at) AS timestamp, 
+			pp.worker_id, 
+			COALESCE(z.name, 'Global') AS zone, 
+			'premium' AS event_type, 
+			pp.amount, 
+			pp.status, 
+			CAST(pp.id AS TEXT) AS reference_id
+		FROM premium_payments pp
+		LEFT JOIN worker_profiles wp ON wp.worker_id = pp.worker_id
+		LEFT JOIN zones z ON z.id = wp.zone_id
+		WHERE pp.status IN ('completed', 'captured', 'processed'))
+		UNION ALL
+		(SELECT 
+			p.created_at AS timestamp, 
+			p.worker_id, 
+			COALESCE(z.name, 'Global') AS zone, 
+			'payout' AS event_type, 
+			p.amount, 
+			p.status, 
+			CAST(p.claim_id AS TEXT) AS reference_id
+		FROM payouts p
+		LEFT JOIN claims c ON c.id = p.claim_id
+		LEFT JOIN disruptions d ON d.id = c.disruption_id
+		LEFT JOIN zones z ON z.id = d.zone_id
+		WHERE p.status IN ('processed', 'credited', 'completed'))
+		ORDER BY timestamp DESC
+		LIMIT ? OFFSET ?
+	`
+
+	countQuery := `
+		SELECT (
+			(SELECT COUNT(*) FROM premium_payments WHERE status IN ('completed', 'captured', 'processed')) + 
+			(SELECT COUNT(*) FROM payouts WHERE status IN ('processed', 'credited', 'completed'))
+		) AS total
+	`
+
+	err := s.DB.Raw(countQuery).Scan(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	err = s.DB.Raw(query, limit, offset).Scan(&raws).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	items := make([]models.LedgerItem, 0, len(raws))
+	for _, r := range raws {
+		items = append(items, models.LedgerItem{
+			Timestamp:   r.Timestamp,
+			WorkerID:    r.WorkerID,
+			Zone:        r.Zone,
+			EventType:   r.EventType,
+			Amount:      r.Amount,
+			Status:      r.Status,
+			ReferenceID: r.ReferenceID,
+		})
+	}
+
+	return items, total, nil
 }

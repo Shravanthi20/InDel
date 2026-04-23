@@ -90,6 +90,7 @@ def load_model_instance():
 
 # --- Endpoints ---
 
+@router.get("/health")
 @router.get("/premium/health")
 def health_premium():
     return {"status": "ok", "service": "premium-ml", "model_loaded": model is not None}

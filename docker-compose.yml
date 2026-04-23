@@ -246,6 +246,8 @@ services:
         condition: service_healthy
       insurer-gateway:
         condition: service_healthy
+      ml-service:
+        condition: service_healthy
     healthcheck:
       test:
       - CMD-SHELL
@@ -274,7 +276,7 @@ services:
       retries: 20
       start_period: 20s
   backend-worker-tests:
-    image: golang:1.22
+    image: golang:1.25
     working_dir: /app/backend
     command:
     - sh

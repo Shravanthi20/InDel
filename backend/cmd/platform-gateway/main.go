@@ -52,7 +52,10 @@ func main() {
 	routerpkg.SetupPlatformRoutes(router)
 
 	// Start server
-	port := os.Getenv("PLATFORM_GATEWAY_PORT")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = os.Getenv("PLATFORM_GATEWAY_PORT")
+	}
 	if port == "" {
 		port = "8003"
 	}

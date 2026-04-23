@@ -6,35 +6,35 @@ const zones = [
   {
     city: "Tambaram, Chennai",
     risk: "High",
-    riskColor: "text-red-500",
-    riskBg: "bg-red-50 border-red-100",
+    riskColor: "text-brand-dark",
+    riskBg: "bg-brand-soft border-brand-primary/20",
     premium: "₹22",
     payout: "₹800",
     note: "Monsoon + heat zone",
     barWidth: "90%",
-    barColor: "bg-red-400",
+    barColor: "bg-brand-dark shadow-[0_0_12px_rgba(190,24,93,0.3)]",
   },
   {
     city: "Rohini, Delhi",
     risk: "Medium",
-    riskColor: "text-yellow-600",
-    riskBg: "bg-yellow-50 border-yellow-100",
+    riskColor: "text-brand-primary",
+    riskBg: "bg-brand-soft/40 border-brand-primary/10",
     premium: "₹17",
     payout: "₹700",
     note: "Seasonal fog + AQI",
     barWidth: "60%",
-    barColor: "bg-yellow-400",
+    barColor: "bg-brand-primary",
   },
   {
     city: "Koramangala, Bengaluru",
     risk: "Low",
-    riskColor: "text-green-600",
-    riskBg: "bg-green-50 border-green-100",
+    riskColor: "text-brand-primary/60",
+    riskBg: "bg-gray-50 border-gray-100",
     premium: "₹12",
     payout: "₹600",
     note: "Stable climate zone",
     barWidth: "30%",
-    barColor: "bg-green-400",
+    barColor: "bg-brand-primary/40",
   },
 ];
 
@@ -113,10 +113,10 @@ export default function PricingIntelSection() {
               <div className="font-mono text-sm space-y-1.5 text-text-primary">
                 <div className="text-base font-bold text-primary">R = </div>
                 {[
-                  { label: "Order Volatility  ", weight: "×0.24", color: "text-blue-600" },
-                  { label: "Earnings Volatility", weight: "×0.22", color: "text-yellow-600" },
-                  { label: "Disruption Rate    ", weight: "×0.20", color: "text-purple-600" },
-                  { label: "Weather Signal     ", weight: "×0.34", color: "text-red-500", bold: true },
+                  { label: "Order Volatility  ", weight: "×0.24", color: "text-brand-primary/60" },
+                  { label: "Earnings Volatility", weight: "×0.22", color: "text-brand-primary/70" },
+                  { label: "Disruption Rate    ", weight: "×0.20", color: "text-brand-primary/80" },
+                  { label: "Weather Signal     ", weight: "×0.34", color: "text-brand-primary", bold: true },
                 ].map((v, i) => (
                   <div key={i} className="flex items-center gap-3 pl-4">
                     <span className={`${v.color} ${v.bold ? "font-bold" : ""}`}>{v.label}</span>

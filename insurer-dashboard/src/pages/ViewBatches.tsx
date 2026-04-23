@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getAssignedBatches, getAvailableBatches } from '../api/insurer'
-import client from '../api/client'
+import { coreClient } from '../api/client'
 import { PageShell, Panel } from './OperationsShared'
 
 type BatchRow = {
@@ -29,7 +29,7 @@ function normalize(value?: string) {
 }
 
 function getZonePaths(type: 'a' | 'b' | 'c') {
-  return client.get<ZonePathResponse>(`/api/v1/platform/zone-paths?type=${type}`)
+  return coreClient.get<ZonePathResponse>(`/api/v1/platform/zone-paths?type=${type}`)
 }
 
 export default function ViewBatches() {

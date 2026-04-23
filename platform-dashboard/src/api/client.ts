@@ -16,99 +16,44 @@ function resolveBaseUrl(envValue: unknown, port: number) {
 }
 
 const defaultGatewayBaseUrl = resolveBaseUrl(import.meta.env.VITE_PLATFORM_API_URL, 8004)
-const forecastGatewayBaseUrl = resolveBaseUrl(import.meta.env.VITE_FORECAST_API_URL, 9003)
+const coreBackendBaseUrl = resolveBaseUrl(import.meta.env.VITE_CORE_API_URL, 8000)
+const forecastGatewayBaseUrl = resolveBaseUrl(import.meta.env.VITE_FORECAST_API_URL, 8004)
+const workerGatewayBaseUrl = resolveBaseUrl(import.meta.env.VITE_WORKER_API_URL, 8001)
 
 const client = axios.create({
   baseURL: defaultGatewayBaseUrl
 })
 
-export const coreClient = client
+export const coreClient = axios.create({ baseURL: coreBackendBaseUrl })
+export const forecastClient = axios.create({ baseURL: forecastGatewayBaseUrl })
+export const workerClient = axios.create({ baseURL: workerGatewayBaseUrl })
 
 const WEBHOOK_KEY = import.meta.env.VITE_PLATFORM_WEBHOOK_KEY as string | undefined
-let bootstrapTokenPromise: Promise<string | null> | null = null
-let bootstrapAttempted = false
 
-async function ensureBootstrapToken(forceRefresh = false): Promise<string | null> {
-  const existingToken = localStorage.getItem('token')
-  if (existingToken && !forceRefresh) {
-    return existingToken
+function attachAuthHeader(config: any) {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers = config.headers || {}
+    config.headers.Authorization = `Bearer ${token}`
   }
-
-  if (!bootstrapTokenPromise) {
-    const baseURL = defaultGatewayBaseUrl.replace(/\/$/, '')
-    const demoPhone = (import.meta.env.VITE_DEMO_WORKER_PHONE as string | undefined) || '+919999999999'
-    const demoOtp = (import.meta.env.VITE_DEMO_WORKER_OTP as string | undefined) || '123456'
-
-    bootstrapTokenPromise = axios
-      .post(
-        `${baseURL}/api/v1/auth/otp/verify`,
-        { phone: demoPhone, otp: demoOtp },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 5000,
-        }
-      )
-      .then((res) => {
-        const token = res.data?.token as string | undefined
-        if (token) {
-          localStorage.setItem('token', token)
-          return token
-        }
-        return null
-      })
-      .catch(() => null)
-      .finally(() => {
-        bootstrapTokenPromise = null
-      })
-  }
-
-  return bootstrapTokenPromise
+  return config
 }
 
 client.interceptors.request.use(async (config) => {
-  const requestUrl = String(config.url || '')
-  const isAuthBootstrapCall = requestUrl.includes('/api/v1/auth/otp/verify')
-
-  let token = localStorage.getItem('token')
-  if (!isAuthBootstrapCall && !bootstrapAttempted) {
-    bootstrapAttempted = true
-    token = await ensureBootstrapToken(true)
-  } else if (!token && !isAuthBootstrapCall) {
-    token = await ensureBootstrapToken()
-  }
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  attachAuthHeader(config)
   if (WEBHOOK_KEY && typeof WEBHOOK_KEY === 'string' && config.url?.includes('/api/v1/platform/webhooks/')) {
     config.headers['X-Platform-Webhook-Key'] = WEBHOOK_KEY
   }
   return config
 })
 
+coreClient.interceptors.request.use((config) => attachAuthHeader(config))
+forecastClient.interceptors.request.use((config) => attachAuthHeader(config))
+workerClient.interceptors.request.use((config) => attachAuthHeader(config))
+
 client.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const status = error?.response?.status
-    const originalConfig = error?.config as any
-    const requestUrl = String(originalConfig?.url || '')
-    const isAuthBootstrapCall = requestUrl.includes('/api/v1/auth/otp/verify')
-
-    if (status === 401 && originalConfig && !originalConfig._retry && !isAuthBootstrapCall) {
-      originalConfig._retry = true
-      localStorage.removeItem('token')
-
-      const token = await ensureBootstrapToken()
-      if (token) {
-        originalConfig.headers = originalConfig.headers || {}
-        originalConfig.headers.Authorization = `Bearer ${token}`
-        return client(originalConfig)
-      }
-    }
-
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
-
-export const forecastClient = axios.create({ baseURL: forecastGatewayBaseUrl })
 
 export default client

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts'
-import { getMoneyExchange, getOverview, getPoolHealth } from '../api/insurer'
-import { PageShell, Panel, StatCard } from './OperationsShared'
+import { getMoneyExchange, getOverview, getPoolHealth, getLedger } from '../api/insurer'
+import { PageShell, Panel, StatCard, ImpactCard } from './OperationsShared'
 import { useLocalization } from '../context/LocalizationContext'
 
 type OverviewData = {
@@ -72,11 +72,16 @@ export default function Overview() {
   const { data: overview, error: overviewErr, refetch: refetchOverview } = useQuery<OverviewData>({ queryKey: ['overview'], queryFn: getOverview })
   const { data: pool, error: poolErr, refetch: refetchPool } = useQuery<PoolHealth>({ queryKey: ['poolHealth'], queryFn: getPoolHealth })
   const { data: moneyExchange, error: mxErr, refetch: refetchMx } = useQuery<MoneyExchangeSummary>({ queryKey: ['moneyExchange', params], queryFn: () => getMoneyExchange(params) })
+  const { data: ledgerData, refetch: refetchLedger } = useQuery({ 
+    queryKey: ['ledger', refreshTick], 
+    queryFn: () => getLedger({ limit: 10 }) 
+  })
 
-  const handleRefresh =() => {
+  const handleRefresh = () => {
     refetchOverview()
     refetchPool()
     refetchMx()
+    refetchLedger()
     setRefreshTick((v) => v + 1)
   }
 
@@ -84,9 +89,9 @@ export default function Overview() {
   const error = errorObj ? (errorObj as Error).message : null
 
   const claimsDistribution = [
-    { name: t('pages.overview.pending'), value: overview?.pending_claims ?? 0, color: '#f97316' },
+    { name: t('pages.overview.pending'), value: overview?.pending_claims ?? 0, color: '#F472B6' },
     { name: t('pages.overview.approved'), value: overview?.approved_claims ?? 0, color: '#10b981' },
-    { name: t('pages.overview.flagged'), value: 12, color: '#f43f5e' },
+    { name: t('pages.overview.flagged'), value: 12, color: '#BE185D' },
   ]
 
   const zoneRows = moneyExchange?.zone_breakdown ?? []
@@ -141,14 +146,42 @@ export default function Overview() {
       </Panel>
       
       <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label={t('pages.overview.premiumPool')} value={`Rs ${Math.round(moneyExchange?.premium_pool ?? 0).toLocaleString()}`} />
-        <StatCard label={t('pages.overview.subscribedPlan')} value={String(moneyExchange?.total_subscribed ?? Math.round(overview?.active_workers ?? 0))} />
-        <StatCard label={t('pages.overview.claimsHappened')} value={String(moneyExchange?.total_claims ?? 0)} tone="alert" />
+        <StatCard label="Economic Inflow (Premiums)" value={`₹ ${Math.round(moneyExchange?.premium_pool ?? 0).toLocaleString()}`} tone="brand" />
+        <StatCard label="Active Worker Polices" value={String(moneyExchange?.total_subscribed ?? Math.round(overview?.active_workers ?? 0))} />
+        <StatCard label="Disruptions Verified" value={String(moneyExchange?.total_claims ?? 0)} tone="warm" />
         <StatCard
-          label={t('pages.overview.moneyExchange')}
-          value={`Rs ${Math.round((moneyExchange?.total_payouts ?? 0) - (moneyExchange?.premium_pool ?? 0)).toLocaleString()}`}
+          label="Adjusted Reserve Delta"
+          value={`₹ ${Math.round((moneyExchange?.total_payouts ?? 0) - (moneyExchange?.premium_pool ?? 0)).toLocaleString()}`}
           tone={(moneyExchange?.net_pool ?? 0) < 0 ? 'alert' : 'default'}
         />
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ImpactCard 
+            loss={moneyExchange?.total_claim_amount ?? 0} 
+            payout={moneyExchange?.total_payouts ?? 0} 
+          />
+        </div>
+        <Panel title="Pool Health Meter" className="flex flex-col items-center justify-center text-center">
+          <div className="relative h-48 w-48 flex items-center justify-center">
+            <svg className="absolute inset-0 w-full h-full -rotate-90">
+              <circle cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-gray-100 dark:text-gray-800" />
+              <circle 
+                cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="12" fill="transparent" 
+                strokeDasharray={`${Math.PI * 160}`}
+                strokeDashoffset={`${Math.PI * 160 * (1 - (overview?.reserve_utilization ?? 0))}`}
+                className="text-brand-primary"
+              />
+            </svg>
+            <div className="text-center">
+              <p className="text-4xl font-black text-gray-900 dark:text-white leading-none">
+                {Math.round((overview?.reserve_utilization ?? 0) * 100)}%
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-2">Utilization</p>
+            </div>
+          </div>
+        </Panel>
       </div>
 
       <div className="grid gap-8 xl:grid-cols-3">
@@ -160,10 +193,10 @@ export default function Overview() {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
                 <Tooltip 
-                  cursor={{ stroke: '#f97316', strokeWidth: 1 }}
-                  contentStyle={{ borderRadius: '4px', border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: '12px' }}
+                  cursor={{ stroke: '#EC4899', strokeWidth: 1 }}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #FDF2F8', backgroundColor: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                 />
-                <Area type="monotone" dataKey={zoneChartData.length > 0 ? 'netFlow' : 'exposure'} stroke="#f97316" strokeWidth={2} fillOpacity={0.1} fill="#f97316" />
+                <Area type="monotone" dataKey={zoneChartData.length > 0 ? 'netFlow' : 'exposure'} stroke="#EC4899" strokeWidth={3} fillOpacity={0.15} fill="#EC4899" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -195,57 +228,61 @@ export default function Overview() {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <Panel title="Pool Posture" subtitle="Balance against paid and pending obligations.">
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div className="rounded border border-slate-100 dark:border-slate-800 p-6 bg-slate-50 dark:bg-slate-900/50">
-               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Week Premiums</p>
-               <p className="text-2xl font-black text-slate-900 dark:text-white">Rs {pool?.week_premiums ?? 0}</p>
-            </div>
-            <div className="rounded border border-slate-100 dark:border-slate-800 p-6 bg-slate-50 dark:bg-slate-900/50">
-               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Week Payouts</p>
-               <p className="text-2xl font-black text-slate-900 dark:text-white">Rs {pool?.week_payouts ?? 0}</p>
-            </div>
-            <div className="rounded border border-slate-100 dark:border-slate-800 p-6 bg-slate-50 dark:bg-slate-900/50">
-               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Net Pool</p>
-               <p className="text-2xl font-black text-slate-900 dark:text-white">Rs {pool?.net_pool ?? 0}</p>
-            </div>
-            <div className="rounded border border-slate-100 dark:border-slate-800 p-6 bg-slate-50 dark:bg-slate-900/50">
-               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Pending Payouts</p>
-               <p className="text-2xl font-black text-slate-900 dark:text-white">Rs {pool?.pending_payouts ?? 0}</p>
-            </div>
-          </div>
-        </Panel>
-
-        <Panel title="System Status" subtitle="Operational health of the book.">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between p-5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-               <div className="flex items-center gap-3">
-                  <div className={`h-2 w-2 rounded-full ${overview ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Service Connectivity</span>
-               </div>
-               <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded bg-emerald-500/10 text-emerald-600`}>
-                  {overview ? 'Operational' : 'Syncing'}
-               </span>
-            </div>
-
-            <div className="space-y-3 px-1 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-500 uppercase tracking-widest text-[9px]">Reserve Utilization</span>
-                <span className="font-black text-slate-900 dark:text-white">{Math.round((overview?.reserve_utilization ?? 0) * 100)}%</span>
-              </div>
-              <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                <div 
-                  className="h-full bg-orange-600 transition-none" 
-                  style={{ width: `${Math.round((overview?.reserve_utilization ?? 0) * 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            
-            <p className="text-[10px] leading-relaxed text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-4">
-              Premiums: Rs {Math.round(moneyExchange?.premium_pool ?? 0).toLocaleString()} | Claims: Rs {Math.round(moneyExchange?.total_claim_amount ?? 0).toLocaleString()} | Payouts: Rs {Math.round(moneyExchange?.total_payouts ?? 0).toLocaleString()}.
-            </p>
-          </div>
-        </Panel>
+      <Panel 
+        title="Audit-Grade Financial Ledger" 
+        subtitle="Immutable ledger of economic inflows (premiums) and verified disbursements (payouts)."
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800">
+                <th className="pb-4 font-black uppercase tracking-[0.2em] text-gray-400">Timestamp</th>
+                <th className="pb-4 font-black uppercase tracking-[0.2em] text-gray-400">Event</th>
+                <th className="pb-4 font-black uppercase tracking-[0.2em] text-gray-400">Zone</th>
+                <th className="pb-4 font-black uppercase tracking-[0.2em] text-gray-400">Amount</th>
+                <th className="pb-4 font-black uppercase tracking-[0.2em] text-gray-400">Status</th>
+                <th className="pb-4 font-black uppercase tracking-[0.2em] text-gray-400 text-right">Reference</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+              {(ledgerData?.data ?? []).map((item) => (
+                <tr 
+                  key={`${item.event_type}-${item.reference_id}`} 
+                  className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all ${
+                    item.event_type === 'payout' ? 'bg-pink-50/20' : ''
+                  }`}
+                >
+                  <td className="py-4 text-gray-500 font-medium">
+                    {new Date(item.timestamp).toLocaleString(undefined, { 
+                      month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+                    })}
+                  </td>
+                  <td className="py-4">
+                    <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                      item.event_type === 'premium' 
+                        ? 'bg-emerald-50 text-emerald-600' 
+                        : 'bg-brand-primary text-white shadow-sm shadow-brand-primary/20'
+                    }`}>
+                      {item.event_type}
+                    </span>
+                  </td>
+                  <td className="py-4 font-bold text-gray-900 dark:text-gray-100">{item.zone}</td>
+                  <td className="py-4 font-black text-sm">₹{Math.round(item.amount).toLocaleString()}</td>
+                  <td className="py-4">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{item.status}</span>
+                  </td>
+                  <td className="py-4 text-right font-mono text-[10px] text-gray-400">#RES-{item.reference_id}</td>
+                </tr>
+              ))}
+              {(ledgerData?.data ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-gray-400 italic">No transactions recorded in the audit ledger yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
       </div>
 
       <Panel title="Zone Money Exchange" subtitle="Check each zone after every change in disruption/claims/payouts.">

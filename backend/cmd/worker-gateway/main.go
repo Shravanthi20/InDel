@@ -15,6 +15,8 @@ import (
 )
 
 func main() {
+	// Debug: Print DATABASE_URL to verify environment variable visibility
+	log.Printf("DATABASE_URL: %q", os.Getenv("DATABASE_URL"))
 	// Load environment variables
 	if err := godotenv.Load(); err != nil && os.Getenv("INDEL_ENV") != "production" {
 		log.Println("No .env file found, using environment variables")
@@ -56,7 +58,10 @@ func main() {
 	routerpkg.SetupWorkerRoutes(router)
 
 	// Start server
-	port := os.Getenv("WORKER_GATEWAY_PORT")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = os.Getenv("WORKER_GATEWAY_PORT")
+	}
 	if port == "" {
 		port = "8001"
 	}

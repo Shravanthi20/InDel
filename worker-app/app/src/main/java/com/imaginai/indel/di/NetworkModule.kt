@@ -72,8 +72,8 @@ object NetworkModule {
     @Singleton
     @WorkerGateway
     fun provideWorkerRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        // Worker gateway base URL (port 8001) - for auth, worker, orders endpoints
-        val baseUrl = BuildConfig.API_BASE_URL.replaceFirst(":8003", ":8001").replace(":8003/", ":8001/")
+        // Worker gateway base URL for auth, worker, orders endpoints
+        val baseUrl = BuildConfig.WORKER_API_BASE_URL
         return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(okHttpClient)
@@ -85,8 +85,8 @@ object NetworkModule {
     @Singleton
     @PlatformGateway
     fun providePlatformRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        // Platform gateway base URL (port 8003) - for zone paths, zone data
-        val baseUrl = BuildConfig.API_BASE_URL.replaceFirst(":8001", ":8003").replace(":8001/", ":8003/")
+        // Platform gateway base URL for zone paths and zone data
+        val baseUrl = BuildConfig.PLATFORM_API_BASE_URL
         return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(okHttpClient)

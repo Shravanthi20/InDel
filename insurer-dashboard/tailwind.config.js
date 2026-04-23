@@ -94,6 +94,22 @@ export default {
         "tremor-title": ["1.125rem", { lineHeight: "1.75rem" }],
         "tremor-metric": ["1.875rem", { lineHeight: "2.25rem" }],
       },
+      colors: {
+        brand: {
+          primary: '#EC4899', // Modern Pink (Tailwind pink-500)
+          dark: '#BE185D',    // Dark Pink (Tailwind pink-700)
+          soft: '#FDF2F8',    // Very Light Pink (Tailwind pink-50)
+        },
+        neutral: {
+          surface: '#F9FAFB', // Slate-50
+        }
+      },
+      boxShadow: {
+        'soft-xl': '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
+      },
+      borderRadius: {
+        '2xl': '1rem',
+      }
     },
   },
   safelist: [

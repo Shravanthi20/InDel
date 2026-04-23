@@ -26,10 +26,10 @@ const opsNav: NavItem[] = [
 
 function navClass(isActive: boolean) {
   return [
-    'group flex items-center gap-3 px-4 py-2.5 text-sm font-medium border-l-2 transition-none',
+    'group flex items-center gap-3 px-6 py-3.5 text-sm font-bold transition-all relative',
     isActive
-      ? 'bg-[var(--brand-soft)] dark:bg-slate-800 border-[var(--brand-primary)] text-slate-900 dark:text-white'
-      : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50',
+      ? 'bg-brand-soft/50 text-brand-primary'
+      : 'text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800/30',
   ].join(' ')
 }
 
@@ -60,13 +60,13 @@ export default function Sidebar({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-[var(--bg-main)]">
       {/* Enterprise Sidebar */}
-      <aside className="fixed left-0 top-0 z-50 h-screen w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="flex h-full flex-col py-8">
-          <div className="mb-10 flex items-center gap-3 px-6">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-[var(--brand-primary)]">
-              <ShieldCheck className="h-4 w-4 text-white" />
+      <aside className="fixed left-0 top-0 z-50 h-screen w-72 border-r border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-soft-xl">
+        <div className="flex h-full flex-col py-10">
+          <div className="mb-12 flex items-center gap-4 px-8">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-primary shadow-lg shadow-brand-primary/20">
+              <ShieldCheck className="h-5 w-5 text-white" />
             </div>
-            <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white font-['Outfit']">InDel <span className="font-light text-slate-500">Platform</span></h1>
+            <h1 className="text-xl font-black tracking-tighter text-gray-900 dark:text-white font-['Outfit'] italic">In<span className="text-brand-primary">Del</span></h1>
           </div>
 
           <div className="flex-1 space-y-8 overflow-y-auto no-scrollbar">
@@ -124,9 +124,9 @@ export default function Sidebar({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main Surface */}
-      <div className="flex-1 pl-64">
+      <div className="flex-1 pl-72">
         <Navbar />
-        <main className="min-h-screen px-12 py-12 max-w-[1400px] mx-auto">
+        <main className="min-h-screen px-16 py-16 max-w-[1500px] mx-auto">
           {children}
         </main>
       </div>

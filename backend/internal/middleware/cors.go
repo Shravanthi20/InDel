@@ -20,16 +20,14 @@ func CORS() gin.HandlerFunc {
 		} else if origin == "" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 			c.Writer.Header().Set("Access-Control-Allow-Credentials", "false")
-		} else if strings.EqualFold(strings.TrimSpace(os.Getenv("INDEL_ENV")), "production") {
-			c.AbortWithStatus(http.StatusForbidden)
-			return
 		} else {
+			// Fail-safe for hackathon deployments: default to the request origin if no specific origins are blocked
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Vary", "Origin")
 			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Platform-Webhook-Key, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 		// Needed by newer browsers for cross-origin requests from local pages to private network hosts.
 		c.Writer.Header().Set("Access-Control-Allow-Private-Network", "true")
 

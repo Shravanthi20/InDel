@@ -34,16 +34,6 @@ interface WorkerApiService {
     @POST("api/v1/worker/heartbeat")
     suspend fun heartbeat(): Response<HeartbeatResponse>
 
-    // Zones
-    @GET("api/v1/platform/zones")
-    suspend fun getZones(): Response<ZoneListResponse>
-
-    @GET("api/v1/platform/zone-levels")
-    suspend fun getZoneLevels(): Response<ZoneLevelResponse>
-
-    @GET("api/v1/platform/zone-paths")
-    suspend fun getZonePaths(@Query("type") type: String): Response<ZonePathResponse>
-
     // Orders & Delivery
     @GET("api/v1/worker/orders/available")
     suspend fun getAvailableOrders(@Query("path") path: String?): Response<OrderListResponse>

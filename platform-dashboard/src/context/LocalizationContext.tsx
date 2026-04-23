@@ -120,6 +120,7 @@ export type TranslationKey =
   | 'pages.analytics.claimsGenerated'
   | 'pages.analytics.claimsInReview'
   | 'pages.analytics.payoutAmount'
+  | 'pages.analytics.selectZone'
   // Disruptions page
   | 'pages.disruptions.title'
   | 'pages.disruptions.description'
@@ -248,6 +249,7 @@ const enTranslations: Record<TranslationKey, string> = {
   'pages.analytics.claimsGenerated': 'Claims Generated',
   'pages.analytics.claimsInReview': 'Claims in Review',
   'pages.analytics.payoutAmount': 'Payout Amount',
+  'pages.analytics.selectZone': 'SELECT ZONE',
   // Disruptions page
   'pages.disruptions.title': 'Disruptions',
   'pages.disruptions.description': 'Real-time disruption tracking and automation',
@@ -310,6 +312,7 @@ const taTranslations: Record<TranslationKey, string> = {
   'pages.workers.neverSeen': 'இதுவரை பார்த்ததில்லை',
   'pages.workers.lastUpdated': 'கடைசியாக புதுப்பிக்கப்பட்டது',
   'pages.workers.refresh': 'புதுப்பி',
+  'pages.analytics.selectZone': 'மண்டலத்தை தேர்ந்தெடுக்கவும்',
 }
 
 const hiTranslations: Record<TranslationKey, string> = {
@@ -365,6 +368,7 @@ const hiTranslations: Record<TranslationKey, string> = {
   'pages.workers.neverSeen': 'कभी नहीं देखा गया',
   'pages.workers.lastUpdated': 'अंतिम बार अपडेट किया गया',
   'pages.workers.refresh': 'ताज़ा करें',
+  'pages.analytics.selectZone': 'ज़ोन चुनें',
 }
 
 const translations: TranslationTable = {

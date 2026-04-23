@@ -6,33 +6,31 @@
 
 @layer base {
   :root {
-    --brand-primary: #00739d;
-    --brand-primary-deep: #005a7a;
-    --brand-soft: #e6f3f7;
-    --bg-main: #f5f7f9;
-    --border-subtle: #dbe3e9;
-    --text-primary: #666766;
-    --text-secondary: #919291;
+    --brand-primary: #EC4899;
+    --brand-primary-deep: #BE185D;
+    --brand-soft: #FDF2F8;
+    --bg-main: #FFFFFF;
+    --border-subtle: #F3F4F6;
+    --text-primary: #111827;
+    --text-secondary: #4B5563;
   }
   .dark {
-    --brand-primary: #4ba6c8;
-    --brand-primary-deep: #00739d;
-    --brand-soft: #0f2733;
-    --bg-main: #0c141a;
-    --border-subtle: #1f303a;
-    --text-primary: #e7f0f4;
-    --text-secondary: #a9bbc4;
+    --brand-primary: #F472B6;
+    --brand-primary-deep: #EC4899;
+    --brand-soft: #1F2937;
+    --bg-main: #111827;
+    --border-subtle: #1F2937;
+    --text-primary: #F9FAFB;
+    --text-secondary: #9CA3AF;
   }
   
   body {
     @apply bg-[var(--bg-main)] text-[var(--text-primary)] antialiased font-['Outfit'];
   }
 
-  /* Enterprise-grade high-precision response (Instant feel) */
+  /* Responsive and snappy feel (but not disabled transitions) */
   * {
-    @apply transition-none !important;
-    @apply duration-0 !important;
-    @apply animate-none !important;
+    @apply transition-all duration-200 ease-in-out;
   }
 
   /* High precision focus states */
@@ -44,6 +42,6 @@
 
 @layer components {
   .enterprise-panel {
-    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-lg;
+    @apply bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-soft-xl rounded-2xl overflow-hidden;
   }
 }

@@ -24,44 +24,44 @@ export default function Navbar() {
   }))
 
   return (
-    <nav className="flex h-16 w-full items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-12">
+    <nav className="flex h-20 w-full items-center justify-between border-b border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md sticky top-0 z-40 px-16">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
-          <span className="text-slate-400">{t('navbar.platform')}</span>
-          {breadcrumbs.length > 0 && <span className="text-slate-300">/</span>}
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
+          <span className="text-gray-400">{t('navbar.platform')}</span>
+          {breadcrumbs.length > 0 && <span className="text-gray-300">/</span>}
           {breadcrumbs.map((bc, i) => (
-            <div key={bc.path} className="flex items-center gap-1.5">
-              <span className={i === breadcrumbs.length - 1 ? 'text-[var(--brand-primary)] dark:text-[var(--brand-soft)]' : 'text-slate-500'}>
+            <div key={bc.path} className="flex items-center gap-2">
+              <span className={i === breadcrumbs.length - 1 ? 'text-brand-primary' : 'text-gray-500'}>
                 {bc.label}
               </span>
-              {i < breadcrumbs.length - 1 && <span className="text-slate-300">/</span>}
+              {i < breadcrumbs.length - 1 && <span className="text-gray-300">/</span>}
             </div>
           ))}
-          {breadcrumbs.length === 0 && <span className="text-[var(--brand-primary)] dark:text-[var(--brand-soft)]">{t('sidebar.overview')}</span>}
+          {breadcrumbs.length === 0 && <span className="text-brand-primary">{t('sidebar.overview')}</span>}
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-8">
         <div className="relative group">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-            <Search className="h-3.5 w-3.5" />
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+            <Search className="h-4 w-4" />
           </div>
           <input
             type="text"
             placeholder={t('navbar.searchPlaceholder')}
-            className="w-48 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 py-1.5 pl-9 pr-3 text-[11px] text-slate-900 dark:text-white outline-none focus:border-[var(--brand-primary)] transition-none"
+            className="w-64 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 py-2.5 pl-11 pr-4 text-xs text-gray-900 dark:text-white outline-none focus:border-brand-primary/50 focus:ring-4 focus:ring-brand-primary/5 transition-all"
           />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <button
             onClick={toggleTheme}
-            className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-none"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 text-gray-500 hover:text-brand-primary transition-all shadow-sm"
           >
-            {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            {theme === 'light' ? <Moon className="h-4.5 w-4.5" /> : <Sun className="h-4.5 w-4.5" />}
           </button>
 
-          <div className="h-8 w-8 flex items-center justify-center rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-500 font-bold text-[10px] cursor-pointer">
+          <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-gray-900 text-white font-black text-[10px] cursor-pointer shadow-lg shadow-gray-900/10">
             AD
           </div>
         </div>

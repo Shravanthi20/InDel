@@ -106,8 +106,28 @@ export type TranslationKey =
   | 'pages.fraudQueue.headerAnomalyScore'
   | 'pages.fraudQueue.headerVerification'
   | 'pages.fraudQueue.noData'
-  // Plan Status page
   | 'pages.planStatus.title'
+  // Analytics page
+  | 'pages.analytics.title'
+  | 'pages.analytics.avgOrderDrop'
+  | 'pages.analytics.manualReview'
+  | 'pages.analytics.activeDisruptions'
+  | 'pages.analytics.timeFilter'
+  | 'pages.analytics.allTime'
+  | 'pages.analytics.weekly'
+  | 'pages.analytics.realTime'
+  | 'pages.analytics.selectedZone'
+  | 'pages.analytics.forecastMetadata'
+  | 'pages.analytics.retrainingCadence'
+  | 'pages.analytics.scope'
+  | 'pages.analytics.loadingForecast'
+  | 'pages.analytics.forecastError'
+  | 'pages.analytics.disruptions'
+  | 'pages.analytics.disruptionId'
+  | 'pages.analytics.startTime'
+  | 'pages.analytics.claimsGenerated'
+  | 'pages.analytics.claimsInReview'
+  | 'pages.analytics.payoutAmount'
 
 type TranslationTable = Record<Language, Record<TranslationKey, string>>
 
@@ -216,8 +236,28 @@ const translations: TranslationTable = {
     'pages.fraudQueue.headerAnomalyScore': 'Anomaly Score',
     'pages.fraudQueue.headerVerification': 'Verification',
     'pages.fraudQueue.noData': 'Security clearance complete. No flags.',
-    // Plan Status page
     'pages.planStatus.title': 'Plan Status Dashboard',
+    // Analytics page
+    'pages.analytics.title': 'Analytics & Disruption Intelligence',
+    'pages.analytics.avgOrderDrop': 'Avg Order Drop',
+    'pages.analytics.manualReview': 'Manual Review',
+    'pages.analytics.activeDisruptions': 'Active Disruptions',
+    'pages.analytics.timeFilter': 'Time Frame',
+    'pages.analytics.allTime': 'All Time',
+    'pages.analytics.weekly': 'Weekly',
+    'pages.analytics.realTime': 'Real-time',
+    'pages.analytics.selectedZone': 'Selected Zone',
+    'pages.analytics.forecastMetadata': 'Forecast Metadata',
+    'pages.analytics.retrainingCadence': 'Retraining Cadence',
+    'pages.analytics.scope': 'Scope',
+    'pages.analytics.loadingForecast': 'Loading forecast...',
+    'pages.analytics.forecastError': 'Failed to load forecast',
+    'pages.analytics.disruptions': 'Disruptions',
+    'pages.analytics.disruptionId': 'Disruption ID',
+    'pages.analytics.startTime': 'Start Time',
+    'pages.analytics.claimsGenerated': 'Claims Generated',
+    'pages.analytics.claimsInReview': 'Claims in Review',
+    'pages.analytics.payoutAmount': 'Payout Amount',
   },
   ta: {
     'common.language': 'மொழி',
@@ -323,8 +363,28 @@ const translations: TranslationTable = {
     'pages.fraudQueue.headerAnomalyScore': 'வேற்றுமை மதிப்பெண்',
     'pages.fraudQueue.headerVerification': 'சரிபார்ப்பு',
     'pages.fraudQueue.noData': 'பாதுகாப்பு நிষ்கலুஷ்ணி முடிந்தது. சிறப்பு ஐயமற.',
-    // Plan Status page
     'pages.planStatus.title': 'திட்ட நிலை டாஷ்போர்டு',
+    // Analytics page
+    'pages.analytics.title': 'பகுப்பாய்வு மற்றும் இடையூறு நுண்ணறிவு',
+    'pages.analytics.avgOrderDrop': 'சராசரி ஆர்டர் சரிவு',
+    'pages.analytics.manualReview': 'கைமுறை மதிப்பாய்வு',
+    'pages.analytics.activeDisruptions': 'செயலில் உள்ள இடையூறுகள்',
+    'pages.analytics.timeFilter': 'நேர இடைவெளி',
+    'pages.analytics.allTime': 'எல்லா நேரமும்',
+    'pages.analytics.weekly': 'வாராந்திரம்',
+    'pages.analytics.realTime': 'நிகழ்நேரம்',
+    'pages.analytics.selectedZone': 'தேர்ந்தெடுக்கப்பட்ட மண்டலம்',
+    'pages.analytics.forecastMetadata': 'முன்கணிப்பு மெட்டாடேட்டா',
+    'pages.analytics.retrainingCadence': 'மறுபயிற்சி இடைவெளி',
+    'pages.analytics.scope': 'நோக்கம்',
+    'pages.analytics.loadingForecast': 'முன்கணிப்பு ஏற்றப்படுகிறது...',
+    'pages.analytics.forecastError': 'முன்கணிப்பை ஏற்றுவதில் தோல்வி',
+    'pages.analytics.disruptions': 'இடையூறுகள்',
+    'pages.analytics.disruptionId': 'இடையூறு ஐடி',
+    'pages.analytics.startTime': 'தொடக்க நேரம்',
+    'pages.analytics.claimsGenerated': 'உருவாக்கப்பட்ட கோரிக்கைகள்',
+    'pages.analytics.claimsInReview': 'மதிப்பாய்வில் உள்ள கோரிக்கைகள்',
+    'pages.analytics.payoutAmount': 'கொடுப்பனவுத் தொகை',
   },
   hi: {
     'common.language': 'भाषा',
@@ -430,8 +490,28 @@ const translations: TranslationTable = {
     'pages.fraudQueue.headerAnomalyScore': 'विसंगति स्कोर',
     'pages.fraudQueue.headerVerification': 'सत्यापन',
     'pages.fraudQueue.noData': 'सुरक्षा मंजूरी पूर्ण। कोई झंडे नहीं।',
-    // Plan Status page
     'pages.planStatus.title': 'प्लान स्थिति डैशबोर्ड',
+    // Analytics page
+    'pages.analytics.title': 'एनालिटिक्स और व्यवधान इंटेलिजेंस',
+    'pages.analytics.avgOrderDrop': 'औसत ऑर्डर ड्रॉप',
+    'pages.analytics.manualReview': 'मैनुअल समीक्षा',
+    'pages.analytics.activeDisruptions': 'सक्रिय व्यवधान',
+    'pages.analytics.timeFilter': 'समय सीमा',
+    'pages.analytics.allTime': 'पूरा समय',
+    'pages.analytics.weekly': 'साप्ताहिक',
+    'pages.analytics.realTime': 'वास्तविक समय',
+    'pages.analytics.selectedZone': 'चयनित ज़ोन',
+    'pages.analytics.forecastMetadata': 'पूर्वानुमान मेटाडेटा',
+    'pages.analytics.retrainingCadence': 'रीट्रेनिंग कैडेंस',
+    'pages.analytics.scope': 'दायरा',
+    'pages.analytics.loadingForecast': 'पूर्वानुमान लोड हो रहा है...',
+    'pages.analytics.forecastError': 'पूर्वानुमान लोड करने में विफल',
+    'pages.analytics.disruptions': 'व्यवधान',
+    'pages.analytics.disruptionId': 'व्यवधान आईडी',
+    'pages.analytics.startTime': 'प्रारंभ समय',
+    'pages.analytics.claimsGenerated': 'दावे उत्पन्न हुए',
+    'pages.analytics.claimsInReview': 'समीक्षाधीन दावे',
+    'pages.analytics.payoutAmount': 'भुगतान राशि',
   },
 }
 

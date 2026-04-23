@@ -48,12 +48,28 @@ fun readEnvValue(key: String): String? {
     }
 }
 
-val apiBaseUrl = readEnvValue("API_BASE_URL")
-    ?: readEnvValue("PLATFORM_API_URL")
-    ?: "http://${getHostIpAddress()}:8003/"
+fun withTrailingSlash(url: String): String = if (url.endsWith("/")) url else "$url/"
+
+val workerApiBaseUrl = withTrailingSlash(
+    readEnvValue("WORKER_API_BASE_URL")
+        ?: readEnvValue("WORKER_API_URL")
+        ?: readEnvValue("API_BASE_URL")
+        ?: "http://${getHostIpAddress()}:8001/"
+)
+
+val platformApiBaseUrl = withTrailingSlash(
+    readEnvValue("PLATFORM_API_BASE_URL")
+        ?: readEnvValue("PLATFORM_API_URL")
+        ?: when {
+            workerApiBaseUrl.contains(":8001/") -> workerApiBaseUrl.replace(":8001/", ":8003/")
+            workerApiBaseUrl.contains(":8001") -> workerApiBaseUrl.replace(":8001", ":8003")
+            else -> "http://${getHostIpAddress()}:8003/"
+        }
+)
 val razorpayKeyId = readEnvValue("RAZORPAY_KEY_ID") ?: ""
 
-println(">>> InDel Build: Using API_BASE_URL=$apiBaseUrl")
+println(">>> InDel Build: Using WORKER_API_BASE_URL=$workerApiBaseUrl")
+println(">>> InDel Build: Using PLATFORM_API_BASE_URL=$platformApiBaseUrl")
 println(">>> InDel Build: Razorpay key configured=${razorpayKeyId.isNotBlank()}")
 
 android {
@@ -67,7 +83,8 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "WORKER_API_BASE_URL", "\"$workerApiBaseUrl\"")
+        buildConfigField("String", "PLATFORM_API_BASE_URL", "\"$platformApiBaseUrl\"")
         buildConfigField("String", "RAZORPAY_KEY_ID", "\"$razorpayKeyId\"")
     }
 

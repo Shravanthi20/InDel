@@ -1,19 +1,19 @@
 import React from "react";
 import { motion } from "framer-motion";
-import Navbar from "../app/components/Navbar";
-import HeroSection from "../app/components/HeroSection";
-import ProblemSection from "../app/components/ProblemSection";
-import InsightSection from "../app/components/InsightSection";
-import HowItWorksSection from "../app/components/HowItWorksSection";
-import FeatureSection from "../app/components/FeatureSection";
-import PricingIntelSection from "../app/components/PricingIntelSection";
-import PilotNumbersSection from "../app/components/PilotNumbersSection";
-import ProductEcosystemSection from "../app/components/ProductEcosystemSection";
-import TechStackSection from "../app/components/TechStackSection";
-import TeamSection from "../app/components/TeamSection";
-import DemoSection from "../app/components/DemoSection";
-import FooterSection from "../app/components/FooterSection";
-import "../app/globals.css";
+import Navbar from "./components/Navbar";
+import HeroSection from "./components/HeroSection";
+import ProblemSection from "./components/ProblemSection";
+import InsightSection from "./components/InsightSection";
+import HowItWorksSection from "./components/HowItWorksSection";
+import FeatureSection from "./components/FeatureSection";
+import PricingIntelSection from "./components/PricingIntelSection";
+import PilotNumbersSection from "./components/PilotNumbersSection";
+import ProductEcosystemSection from "./components/ProductEcosystemSection";
+import TechStackSection from "./components/TechStackSection";
+import TeamSection from "./components/TeamSection";
+import DemoSection from "./components/DemoSection";
+import FooterSection from "./components/FooterSection";
+import "./styles/globals.css";
 
 export default function App() {
   return (

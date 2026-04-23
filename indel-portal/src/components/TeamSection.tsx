@@ -5,32 +5,27 @@ const team = [
   {
     name: "Shravanthi S",
     built: "Core Policy Logic · Disruption Sync Cycle · Payout & Data Operations",
-      // emoji: "👩‍💻",
-    color: "bg-pink-50 border-pink-100",
+    color: "bg-brand-soft border-brand-primary/20",
   },
   {
     name: "Gayathri U",
     built: "Delivery Management · Postgres Schema · DevOps & Docker Compositions",
-      // emoji: "👩‍🔧",
-    color: "bg-blue-50 border-blue-100",
+    color: "bg-brand-soft/60 border-brand-primary/15",
   },
   {
     name: "Rithanya K A",
     built: "Python FastAPI ML Services — XGBoost Training & Inference",
-      // emoji: "👩‍🔬",
-    color: "bg-purple-50 border-purple-100",
+    color: "bg-brand-soft/40 border-brand-primary/10",
   },
   {
     name: "Saravana Priyaa C R",
     built: "Platform Integration · Chaos Engine · Disruption Engine",
-      // emoji: "👩‍🚀",
-    color: "bg-orange-50 border-orange-100",
+    color: "bg-brand-soft/30 border-brand-primary/5",
   },
   {
-    name: "Subikha MV",
+    name: "Subiksha MV",
     built: "Insurer System · Claims Intelligence & Overall System Design",
-      // emoji: "👩‍⚖️",
-    color: "bg-green-50 border-green-100",
+    color: "bg-gray-50 border-gray-100",
   },
 ];
 

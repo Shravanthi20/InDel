@@ -2,7 +2,7 @@ import sys
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 # Ensure submodules can import their own files
@@ -15,13 +15,36 @@ from forecast.main import router as forecast_router, train_all_zones as forecast
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("unified-ml")
 
+# Global status tracking
+initialization_status = {
+    "premium": "pending",
+    "forecast": "pending"
+}
+
+def run_initialization():
+    log.info("Starting background initialization...")
+    try:
+        premium_load()
+        initialization_status["premium"] = "ready"
+    except Exception as e:
+        log.error(f"Premium initialization failed: {e}")
+        initialization_status["premium"] = "failed"
+        
+    try:
+        forecast_train()
+        initialization_status["forecast"] = "ready"
+    except Exception as e:
+        log.error(f"Forecast initialization failed: {e}")
+        initialization_status["forecast"] = "failed"
+    log.info("Background initialization complete.")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Starting Unified ML Service...")
-    premium_load()
-    log.info("Premium models loaded.")
-    forecast_train()
-    log.info("Forecast models trained.")
+    log.info("Unified ML Service starting...")
+    # Initialize in background to let health checks pass immediately
+    from threading import Thread
+    thread = Thread(target=run_initialization)
+    thread.start()
     yield
     log.info("Shutting down Unified ML Service.")
 
@@ -30,7 +53,7 @@ app = FastAPI(title="InDel Unified ML Service", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -44,8 +67,10 @@ def health():
     return {
         "status": "ok",
         "service": "unified-ml",
+        "initialization": initialization_status,
         "components": ["premium", "fraud", "forecast"]
     }
+
 
 if __name__ == "__main__":
     import uvicorn

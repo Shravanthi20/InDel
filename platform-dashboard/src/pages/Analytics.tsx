@@ -177,20 +177,20 @@ export default function Analytics() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex gap-1">
-              {zones.map((zone) => (
-                <button
-                  key={zone.zone_id}
-                  id={`forecast-zone-${zone.zone_id}`}
-                  onClick={() => setSelectedZone(zone.zone_id)}
-                  className={`px-3 py-1.5 rounded border text-[10px] font-black uppercase tracking-widest transition-none ${selectedZone === zone.zone_id
-                    ? 'bg-violet-600 border-violet-600 text-white'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:border-violet-300'
-                  }`}
-                >
-                  {zone.name || `Zone ${zone.zone_id}`}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{t('pages.analytics.selectZone') || 'Select Zone'}:</span>
+              <select
+                id="forecast-zone-select"
+                value={selectedZone || ''}
+                onChange={(e) => setSelectedZone(Number(e.target.value))}
+                className="px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white outline-none focus:border-violet-300 transition-none"
+              >
+                {zones.map((zone) => (
+                  <option key={zone.zone_id} value={zone.zone_id} className="dark:bg-slate-900">
+                    {zone.name || `Zone ${zone.zone_id}`}
+                  </option>
+                ))}
+              </select>
             </div>
             {forecastLoading && <RefreshCw className="h-3.5 w-3.5 text-slate-400 animate-spin" />}
             {forecastInference === 'prophet' && (

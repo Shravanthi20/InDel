@@ -7,8 +7,8 @@ import {
 const layers = [
   {
     label: "External Layer",
-    color: "border-blue-200 bg-blue-50",
-    labelColor: "text-blue-600",
+    color: "border-brand-primary/10 bg-brand-soft/40",
+    labelColor: "text-brand-primary/80",
     nodes: [
       { name: "Worker Mobile Telemetry", icon: <IconPhone /> },
       { name: "Environmental Webhooks\n(IMD / AQI / OpenWeatherMap)", icon: <IconWeather /> },
@@ -17,8 +17,8 @@ const layers = [
   },
   {
     label: "InDel Core — Go / GORM",
-    color: "border-primary/30 bg-primary-light/40",
-    labelColor: "text-primary-dark",
+    color: "border-brand-primary/30 bg-brand-soft",
+    labelColor: "text-brand-dark",
     nodes: [
       { name: "Gin REST Handlers & Routing", icon: <IconLightning /> },
       { name: "Disruption Engine\n(Multi-Signal Validation)", icon: <IconSearch /> },
@@ -28,8 +28,8 @@ const layers = [
   },
   {
     label: "ML Intelligence Layer",
-    color: "border-purple-200 bg-purple-50",
-    labelColor: "text-purple-700",
+    color: "border-brand-primary/20 bg-brand-soft/60",
+    labelColor: "text-brand-primary",
     nodes: [
       { name: "ml-premium\nXGBoost + SHAP :9001", icon: <IconChart /> },
       { name: "ml-fraud\nIsolationForest + DBSCAN :9002", icon: <IconLab /> },
@@ -38,8 +38,8 @@ const layers = [
   },
   {
     label: "Execution Layer",
-    color: "border-green-200 bg-green-50",
-    labelColor: "text-green-700",
+    color: "border-brand-primary/10 bg-brand-soft/30",
+    labelColor: "text-brand-primary/70",
     nodes: [
       { name: "Kafka Async\nPayout Engine", icon: <IconMail /> },
       { name: "Zookeeper\nCoordination", icon: <IconLink /> },

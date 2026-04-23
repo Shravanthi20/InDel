@@ -11,30 +11,30 @@ module.exports = {
       },
       colors: {
         primary: {
-          light: '#E6F3F7',
-          DEFAULT: '#00739D',
-          dark: '#005A7A',
+          light: '#FDF2F8',
+          DEFAULT: '#EC4899',
+          dark: '#BE185D',
         },
         surface: '#FFFFFF',
-        background: '#F5F7F9',
+        background: '#F9FAFB',
         text: {
-          primary: '#1A2533',
-          secondary: '#64748B',
-          muted: '#94A3B8',
+          primary: '#111827',
+          secondary: '#4B5563',
+          muted: '#9CA3AF',
         },
-        success: '#1E9E5A',
+        success: '#10B981',
         warning: '#F59E0B',
-        error: '#D92D20',
-        dark: {
-          900: '#0A1628',
-          800: '#0F1F3D',
-          700: '#162845',
-        },
+        error: '#EF4444',
+        brand: {
+          primary: '#EC4899',
+          dark: '#BE185D',
+          soft: '#FDF2F8',
+        }
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'hero-gradient': 'linear-gradient(135deg, #0A1628 0%, #0F1F3D 50%, #003D54 100%)',
-        'card-gradient': 'linear-gradient(135deg, rgba(0,115,157,0.08) 0%, rgba(0,90,122,0.04) 100%)',
+        'hero-gradient': 'linear-gradient(135deg, #BE185D 0%, #EC4899 50%, #FDF2F8 100%)',
+        'card-gradient': 'linear-gradient(135deg, rgba(236,72,153,0.08) 0%, rgba(190,24,93,0.04) 100%)',
       },
       animation: {
         'fade-up': 'fadeUp 0.7s ease-out forwards',
@@ -65,8 +65,8 @@ module.exports = {
           '100%': { height: '100%' },
         },
         glow: {
-          '0%': { boxShadow: '0 0 20px rgba(0,115,157,0.3)' },
-          '100%': { boxShadow: '0 0 40px rgba(0,115,157,0.6)' },
+          '0%': { boxShadow: '0 0 20px rgba(236,72,153,0.3)' },
+          '100%': { boxShadow: '0 0 40px rgba(236,72,153,0.6)' },
         },
         slideDown: {
           '0%': { opacity: '0', transform: 'translateY(-8px)' },

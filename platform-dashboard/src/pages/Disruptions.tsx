@@ -50,6 +50,12 @@ export default function Disruptions() {
   const [actionStatus, setActionStatus] = useState("")
   const [delaying, setDelaying] = useState<string | null>(null)
   const [fetchLatencyMs, setFetchLatencyMs] = useState<number | null>(null)
+  const [showFlash, setShowFlash] = useState(false)
+
+  const triggerFlash = () => {
+    setShowFlash(true)
+    setTimeout(() => setShowFlash(false), 2000)
+  }
 
   const fetchData = async () => {
     const startedAt = performance.now()
@@ -131,6 +137,7 @@ export default function Disruptions() {
         source: type,
         status: active ? "active" : "resolved"
       })
+      if (active) triggerFlash()
       await fetchData()
     } finally {
       setDelaying(null)
@@ -145,6 +152,7 @@ export default function Disruptions() {
     setActionStatus('Simulating demand collapse...')
     try {
       await postTriggerDemo({ zone_id, force_order_drop: true, external_signal: '' })
+      triggerFlash()
       await new Promise((resolve) => setTimeout(resolve, 700))
       await fetchData()
     } finally {
@@ -187,9 +195,9 @@ export default function Disruptions() {
         <div className="col-span-12 lg:col-span-8 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <StatsCard label={t('pages.analytics.disruptions')} value={disruptions.length} color="text-slate-900 dark:text-white" />
-            <StatsCard label={t('pages.analytics.claimsGenerated')} value={disruptions.reduce((sum, item) => sum + item.claims_generated, 0)} color="text-orange-600" />
+            <StatsCard label={t('pages.analytics.claimsGenerated')} value={disruptions.reduce((sum, item) => sum + item.claims_generated, 0)} color="text-brand-primary" />
             <StatsCard label={t('pages.workers.title')} value={disruptions.reduce((sum, item) => sum + item.payouts_processed, 0)} color="text-emerald-600" />
-            <StatsCard label={t('pages.analytics.payoutAmount')} value={`Rs ${Math.round(disruptions.reduce((sum, item) => sum + item.payout_amount_total, 0))}`} color="text-orange-600" />
+            <StatsCard label={t('pages.analytics.payoutAmount')} value={`Rs ${Math.round(disruptions.reduce((sum, item) => sum + item.payout_amount_total, 0))}`} color="text-brand-primary" />
           </div>
 
           <div className="enterprise-panel p-8">
@@ -198,52 +206,52 @@ export default function Disruptions() {
               Real-time Zone Telemetry
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {healths.map((z) => {
                 const status = z.status.toUpperCase().replace('_', ' ')
                 const drop = Math.round(z.order_drop * 100)
                 const isDisrupted = z.status === 'disrupted'
                 
                 return (
-                  <div key={z.zone_id} className={`p-6 rounded-xl border transition-all ${
+                  <div key={z.zone_id} className={`p-8 rounded-3xl border-2 transition-all ${
                     isDisrupted 
-                      ? 'bg-rose-50 dark:bg-rose-500/5 border-rose-200 dark:border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.1)]' 
-                      : 'bg-slate-50/50 dark:bg-slate-800/20 border-slate-100 dark:border-slate-800'
+                      ? 'bg-white dark:bg-gray-950 border-brand-primary shadow-xl shadow-brand-primary/10' 
+                      : 'bg-gray-50/50 dark:bg-gray-900/30 border-gray-100 dark:border-gray-800'
                   }`}>
-                    <div className="flex justify-between items-start mb-6">
-                       <div>
-                          <div className="flex items-center gap-2">
-                             <div className={`h-1.5 w-1.5 rounded-full ${isDisrupted ? 'bg-rose-500 animate-ping' : 'bg-emerald-500'}`}></div>
-                             <span className="text-xs font-black tracking-widest text-slate-900 dark:text-white">ZONE {z.zone_id}</span>
-                          </div>
+                    <div className="flex justify-between items-start mb-8">
+                       <div className="flex items-center gap-3">
+                          <div className={`h-2.5 w-2.5 rounded-full ${isDisrupted ? 'bg-brand-primary animate-pulse' : 'bg-emerald-500'}`}></div>
+                          <span className="text-sm font-black tracking-tighter text-gray-900 dark:text-white uppercase italic">Zone {z.zone_id}</span>
                        </div>
-                       <div className={`text-[9px] font-black px-2 py-1 rounded border uppercase tracking-widest ${
-                         isDisrupted ? 'bg-rose-500 text-white border-rose-500' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-700'
+                       <div className={`text-[10px] font-black px-4 py-1.5 rounded-full border-2 uppercase tracking-widest ${
+                         isDisrupted ? 'bg-brand-primary text-white border-brand-primary' : 'bg-white dark:bg-gray-950 text-gray-400 border-gray-100 dark:border-gray-800'
                        }`}>
                           {status}
                        </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 h-16">
+                    <div className="grid grid-cols-2 gap-8 mb-8">
                        <div>
-                          <div className="text-2xl font-black text-slate-900 dark:text-white">{z.current_orders}</div>
-                          <div className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Current Volume</div>
+                          <div className="text-3xl font-black text-gray-900 dark:text-white leading-none">{z.current_orders}</div>
+                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mt-3">Live Volume</div>
                        </div>
                        <div>
-                          <div className={`text-2xl font-black ${drop >= 30 ? 'text-rose-500' : 'text-emerald-500'}`}>{drop}%</div>
-                          <div className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Drop Rate</div>
+                          <div className={`text-3xl font-black leading-none ${drop >= 30 ? 'text-brand-primary italic' : 'text-emerald-500'}`}>{drop}%</div>
+                          <div className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mt-3">Delta Gap</div>
                        </div>
                     </div>
 
-                    <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2">
+                    <div className="pt-8 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-2">
                        {Object.entries(z.active_signals).filter(([_, v]) => v).map(([sig]) => (
-                         <div key={sig} className="flex items-center gap-1 px-2 py-1 rounded bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-[9px] font-black uppercase tracking-widest">
-                            <Zap className="h-3 w-3" /> {sig.split('_')[1] || sig}
+                         <div key={sig} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-soft border border-brand-primary/10 text-brand-primary text-[10px] font-black uppercase tracking-widest">
+                            <Zap className="h-3.5 w-3.5" /> {sig.split('_')[1] || sig}
                          </div>
                        ))}
-                       <div className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border transition-colors ${drop >= 30 ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' : 'bg-slate-100 dark:bg-slate-800 border-transparent text-slate-400'}`}>
-                          <Activity className="h-3 w-3" /> DEMAND
-                       </div>
+                       {isDisrupted && (
+                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest">
+                            <Activity className="h-3.5 w-3.5" /> VERIFYING LOSS
+                         </div>
+                       )}
                     </div>
                   </div>
                 )
@@ -261,7 +269,7 @@ export default function Disruptions() {
               ) : history.map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
                    <div className="flex items-center gap-4">
-                      <div className={`h-8 w-8 rounded flex items-center justify-center ${item.severity === 'HIGH' ? 'bg-rose-500 text-white' : 'bg-orange-500 text-white'}`}>
+                      <div className={`h-8 w-8 rounded flex items-center justify-center ${item.severity === 'HIGH' ? 'bg-brand-primary text-white' : 'bg-brand-primary/80 text-white'}`}>
                          <ShieldAlert className="h-4 w-4" />
                       </div>
                       <div>
@@ -306,16 +314,16 @@ export default function Disruptions() {
                     ))}
                   </select>
                 </div>
-                <button
+                 <button
                   disabled={loadingAction || !selectedZoneId}
                   onClick={() => selectedZoneId && handleOrderDrop(selectedZoneId)}
-                  className="w-full flex items-center justify-between p-4 rounded-xl border border-orange-200 dark:border-orange-500/40 bg-orange-50/50 dark:bg-orange-500/10 hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-all text-left group"
+                  className="w-full flex items-center justify-between p-4 rounded-xl border border-brand-primary/20 bg-brand-soft hover:bg-brand-primary/10 transition-all text-left group"
                 >
                   <div className="max-w-[180px]">
-                     <div className="text-[11px] font-black uppercase text-orange-600 dark:text-orange-400">Collapse Demand</div>
+                     <div className="text-[11px] font-black uppercase text-brand-primary">Collapse Demand</div>
                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-1">Force order drop in the selected zone to test engine anomaly detection.</p>
                   </div>
-                  <PlayCircle className="h-5 w-5 text-orange-400 group-hover:scale-110 transition-transform" />
+                  <PlayCircle className="h-5 w-5 text-brand-primary group-hover:scale-110 transition-transform" />
                 </button>
               </section>
 
@@ -352,6 +360,16 @@ export default function Disruptions() {
           </div>
         </div>
       </div>
+
+      {/* Chaos Flash Overlay */}
+      {showFlash && (
+        <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 bg-brand-primary/10 animate-pulse transition-opacity duration-1000"></div>
+          <div className="relative glass p-10 rounded-full border-4 border-brand-primary shadow-2xl animate-bounce">
+             <Zap className="h-20 w-20 text-brand-primary fill-brand-primary" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -372,8 +390,8 @@ function SignalButton({ label, icon: Icon, active, onClick }: { label: string, i
       onClick={onClick}
       className={`h-14 flex flex-col items-center justify-center rounded-xl border transition-all ${
         active 
-          ? 'bg-orange-500 border-orange-500 text-white animate-pulse' 
-          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 hover:border-orange-500/50 hover:text-orange-500'
+          ? 'bg-brand-primary border-brand-primary text-white animate-pulse' 
+          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 hover:border-brand-primary/50 hover:text-brand-primary'
       }`}
     >
       <Icon className="h-4 w-4 mb-1" />
