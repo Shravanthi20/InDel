@@ -1,33 +1,34 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
 	"github.com/Shravanthi20/InDel/backend/internal/handlers/worker"
+	"github.com/Shravanthi20/InDel/backend/internal/kafka"
 	"github.com/Shravanthi20/InDel/backend/internal/middleware"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
+	workers "github.com/Shravanthi20/InDel/backend/internal/workers"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Debug: Print DATABASE_URL to verify environment variable visibility
-	log.Printf("DATABASE_URL: %q", os.Getenv("DATABASE_URL"))
-	// Load environment variables
-	if err := godotenv.Load(); err != nil && os.Getenv("INDEL_ENV") != "production" {
-		log.Println("No .env file found, using environment variables")
+	if err := config.BootstrapServiceEnv("worker-gateway"); err != nil {
+		log.Fatalf("Worker Gateway env validation failed: %v", err)
 	}
+
+	cfg := config.Load()
 
 	// Create Gin router
 	router := gin.Default()
 	router.Use(middleware.CORS())
 
 	// Initialize DB and seed minimal worker demo data if available.
-	cfg := config.Load()
 	if _, err := database.InitRedis(cfg); err != nil {
 		log.Printf("Redis unavailable: %v", err)
 	}
@@ -43,7 +44,41 @@ func main() {
 		}
 	}
 
-	// Health check endpoint
+	// Initialize Kafka producer (graceful degradation if unavailable)
+	var kafkaProducer *kafka.Producer
+	if cfg.KafkaBrokers != "" {
+		var kafkaErr error
+		kafkaProducer, kafkaErr = kafka.NewProducer(cfg.KafkaBrokers)
+		if kafkaErr != nil {
+			log.Printf("[KAFKA] Worker Gateway Kafka producer unavailable: %v", kafkaErr)
+		} else {
+			log.Printf("[KAFKA] Worker Gateway Kafka producer connected to %s", cfg.KafkaBrokers)
+			defer kafkaProducer.Close()
+		}
+	}
+
+	// Wire Kafka producer into policy handler
+	worker.SetKafkaProducer(kafkaProducer)
+
+	// Start PolicyActivationWorker (background goroutine)
+	if db != nil {
+		ctx := context.Background()
+		activationWorker := workers.NewPolicyActivationWorker(db, kafkaProducer)
+
+		// Allow shorter poll interval for demo/testing via env var
+		if pollSec := os.Getenv("POLICY_ACTIVATION_POLL_SECONDS"); pollSec != "" {
+			var secs int
+			if _, scanErr := fmt.Sscan(pollSec, &secs); scanErr == nil && secs > 0 {
+				activationWorker.PollInterval = time.Duration(secs) * time.Second
+			}
+		}
+
+		go activationWorker.Start(ctx)
+		log.Printf("[POLICY-WORKER] PolicyActivationWorker started (poll: %s, lock-in: %dh)",
+			activationWorker.PollInterval, cfg.PolicyLockInHours)
+	}
+
+	// Health check endpoints
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "worker-gateway"})
 	})

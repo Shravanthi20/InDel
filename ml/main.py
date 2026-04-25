@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 # Ensure submodules can import their own files
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -14,6 +15,40 @@ from forecast.main import router as forecast_router, train_all_zones as forecast
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("unified-ml")
+
+def load_service_env():
+    if os.getenv("INDEL_ENV", "").lower() == "production":
+        log.info("Production mode detected, using process environment only")
+        return
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = []
+    explicit = os.getenv("ENV_FILE", "").strip()
+    if explicit:
+        candidates.append(explicit)
+    candidates.extend([
+        os.path.join(base_dir, ".env.local"),
+        os.path.join(base_dir, ".env"),
+    ])
+
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            load_dotenv(candidate)
+            log.info("Loaded ML env file: %s", candidate)
+            return
+
+    log.info("No ML .env file found, using process environment")
+
+def validate_env():
+    missing = []
+    for key in ["SERVICE_PORT"]:
+        if not os.getenv(key, "").strip():
+            missing.append(key)
+    if missing:
+        raise RuntimeError(f"Missing required ML environment variables: {', '.join(missing)}")
+
+load_service_env()
+validate_env()
 
 # Global status tracking
 initialization_status = {
@@ -74,4 +109,4 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("SERVICE_PORT", "8000")))

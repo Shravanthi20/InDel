@@ -8,16 +8,15 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/database"
 	"github.com/Shravanthi20/InDel/backend/internal/handlers/platform"
+	"github.com/Shravanthi20/InDel/backend/internal/kafka"
 	"github.com/Shravanthi20/InDel/backend/internal/middleware"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(); err != nil && os.Getenv("INDEL_ENV") != "production" {
-		log.Println("No .env file found, using environment variables")
+	if err := config.BootstrapServiceEnv("platform-gateway"); err != nil {
+		log.Fatalf("Platform Gateway env validation failed: %v", err)
 	}
 
 	// Create Gin router
@@ -36,6 +35,22 @@ func main() {
 		platform.SetDB(db)
 		log.Println("Platform Gateway connected to PostgreSQL")
 	}
+
+	// Initialize Kafka producer (graceful degradation if unavailable)
+	var kafkaProducer *kafka.Producer
+	if cfg.KafkaBrokers != "" {
+		var kafkaErr error
+		kafkaProducer, kafkaErr = kafka.NewProducer(cfg.KafkaBrokers)
+		if kafkaErr != nil {
+			log.Printf("[KAFKA] Platform Gateway Kafka producer unavailable: %v", kafkaErr)
+		} else {
+			log.Printf("[KAFKA] Platform Gateway Kafka producer connected to %s", cfg.KafkaBrokers)
+			defer kafkaProducer.Close()
+		}
+	}
+
+	// Wire Kafka producer into platform handler
+	platform.SetKafkaProducer(kafkaProducer)
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {

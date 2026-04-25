@@ -1,15 +1,13 @@
 package services
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"math"
-	"net/http"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/Shravanthi20/InDel/backend/internal/clients"
 	"gorm.io/gorm"
 )
 
@@ -26,39 +24,6 @@ type PremiumQuote struct {
 type PremiumExplainItem struct {
 	Feature string  `json:"feature"`
 	Impact  float64 `json:"impact"`
-}
-
-type premiumMLRequest struct {
-	WorkerID             string  `json:"worker_id"`
-	ZoneID               string  `json:"zone_id"`
-	City                 string  `json:"city"`
-	State                string  `json:"state"`
-	ZoneType             string  `json:"zone_type"`
-	VehicleType          string  `json:"vehicle_type"`
-	Season               string  `json:"season"`
-	ExperienceDays       int     `json:"experience_days"`
-	AvgDailyOrders       float64 `json:"avg_daily_orders"`
-	AvgDailyEarnings     float64 `json:"avg_daily_earnings"`
-	ActiveHoursPerDay    float64 `json:"active_hours_per_day"`
-	RainfallMM           float64 `json:"rainfall_mm"`
-	AQI                  float64 `json:"aqi"`
-	Temperature          float64 `json:"temperature"`
-	Humidity             float64 `json:"humidity"`
-	OrderVolatility      float64 `json:"order_volatility"`
-	EarningsVolatility   float64 `json:"earnings_volatility"`
-	RecentDisruptionRate float64 `json:"recent_disruption_rate"`
-}
-
-type premiumMLResponse struct {
-	Data struct {
-		PremiumINR     float64 `json:"premium_inr"`
-		RiskScore      float64 `json:"risk_score"`
-		ModelVersion   string  `json:"model_version"`
-		Explainability []struct {
-			Feature string  `json:"feature"`
-			Impact  float64 `json:"impact"`
-		} `json:"explainability"`
-	} `json:"data"`
 }
 
 type PremiumContext struct {
@@ -100,12 +65,7 @@ func QuotePremiumForContext(context PremiumContext) *PremiumQuote {
 }
 
 func requestPremiumQuote(context PremiumContext) (*PremiumQuote, error) {
-	baseURL := strings.TrimSpace(os.Getenv("PREMIUM_ML_URL"))
-	if baseURL == "" {
-		return nil, fmt.Errorf("premium ml url missing")
-	}
-
-	payload := premiumMLRequest{
+	payload := clients.PremiumRequest{
 		WorkerID:             fmt.Sprintf("%d", context.WorkerID),
 		ZoneID:               fmt.Sprintf("%d", context.ZoneID),
 		City:                 context.City,
@@ -125,32 +85,9 @@ func requestPremiumQuote(context PremiumContext) (*PremiumQuote, error) {
 		EarningsVolatility:   context.EarningsVol,
 		RecentDisruptionRate: context.DisruptionRate,
 	}
-
-	body, err := json.Marshal(payload)
+	client := clients.NewMLClientFromEnv()
+	decoded, err := client.GetPremiumQuote(contextWithRequestID(context.WorkerID), payload)
 	if err != nil {
-		return nil, err
-	}
-
-	endpoint := strings.TrimRight(baseURL, "/") + "/ml/v1/premium/calculate"
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 4 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("premium ml returned %d", resp.StatusCode)
-	}
-
-	var decoded premiumMLResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
 		return nil, err
 	}
 
@@ -175,6 +112,10 @@ func requestPremiumQuote(context PremiumContext) (*PremiumQuote, error) {
 		Source:           "premium-ml",
 		ShapBreakdown:    shap,
 	}, nil
+}
+
+func contextWithRequestID(workerID uint) context.Context {
+	return context.WithValue(context.Background(), "request_id", fmt.Sprintf("premium-%d-%d", workerID, time.Now().UnixNano()))
 }
 
 func loadPremiumContext(db *gorm.DB, workerID uint, now time.Time) (PremiumContext, *PremiumQuote, error) {

@@ -76,13 +76,19 @@ def patch_compose(filepath):
         # Update ML URLs in environment vars
         if 'environment' in service:
             if isinstance(service['environment'], dict):
-                for key in ['PREMIUM_ML_URL', 'FRAUD_SERVICE_URL', 'FORECAST_ML_URL']:
+                for key in ['ML_SERVICE_URL', 'PREMIUM_ML_URL', 'FRAUD_SERVICE_URL', 'FORECAST_ML_URL']:
                     if key in service['environment']:
                         service['environment'][key] = 'http://ml-service:8000'
+                if any(
+                    key in service['environment']
+                    for key in ['ML_SERVICE_URL', 'PREMIUM_ML_URL', 'FRAUD_SERVICE_URL', 'FORECAST_ML_URL']
+                ):
+                    service['environment']['ML_TIMEOUT_MS'] = 3000
+                    service['environment']['ML_RETRY_COUNT'] = 2
             elif isinstance(service['environment'], list):
                 # not dict
                 for i, env in enumerate(service['environment']):
-                    if env.startswith('PREMIUM_ML_URL=') or env.startswith('FRAUD_SERVICE_URL=') or env.startswith('FORECAST_ML_URL='):
+                    if env.startswith('ML_SERVICE_URL=') or env.startswith('PREMIUM_ML_URL=') or env.startswith('FRAUD_SERVICE_URL=') or env.startswith('FORECAST_ML_URL='):
                         kw = env.split('=')[0]
                         service['environment'][i] = f"{kw}=http://ml-service:8000"
 

@@ -6,6 +6,7 @@ import "time"
 type InsurerOverview struct {
 	TotalWorkers       float64 `json:"total_workers"`
 	ActiveWorkers      float64 `json:"active_workers"`
+	LockedWorkers      float64 `json:"locked_workers"`
 	PendingClaims      float64 `json:"pending_claims"`
 	ApprovedClaims     float64 `json:"approved_claims"`
 	LossRatio          float64 `json:"loss_ratio"`

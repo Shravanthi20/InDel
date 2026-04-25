@@ -75,15 +75,56 @@ type Zone struct {
 	UpdatedAt  time.Time
 }
 
+// Policy status constants
+const (
+	PolicyStatusLocked   = "locked"
+	PolicyStatusActive   = "active"
+	PolicyStatusInactive = "inactive"
+	PolicyStatusPaused   = "paused"
+	PolicyStatusCancelled = "cancelled"
+	PolicyStatusExpired  = "expired"
+)
+
 type Policy struct {
-	ID            uint `gorm:"primaryKey"`
-	WorkerID      uint
-	PlanID        string
-	Status        string
-	PremiumAmount float64
-	PolicyCycleID uint
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID              uint       `gorm:"primaryKey"`
+	WorkerID        uint
+	PlanID          string
+	Status          string     // locked | active | inactive | paused | cancelled | expired
+	PremiumAmount   float64
+	PolicyCycleID   uint
+	LockInStartTime *time.Time `gorm:"column:lock_in_start_time"`
+	LockInEndTime   *time.Time `gorm:"column:lock_in_end_time"`
+	IdempotencyKey  string     `gorm:"column:idempotency_key"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// IsInLockIn returns true when the policy is currently in the lock-in window.
+func (p *Policy) IsInLockIn(now time.Time) bool {
+	if p.Status != PolicyStatusLocked {
+		return false
+	}
+	if p.LockInEndTime == nil {
+		return false
+	}
+	return now.Before(*p.LockInEndTime)
+}
+
+// PolicyAuditLog records every lock-in related state transition for fraud analysis.
+type PolicyAuditLog struct {
+	ID         uint      `gorm:"primaryKey"`
+	PolicyID   uint      `gorm:"index"`
+	WorkerID   uint
+	Action     string    // policy_locked | policy_activated | claim_rejected_lockin | purchase_blocked_disruption
+	FromStatus string
+	ToStatus   string
+	Reason     string
+	Metadata   string    `gorm:"type:text"` // JSON
+	CreatedAt  time.Time
+}
+
+func (PolicyAuditLog) TableName() string {
+	return "policy_audit_logs"
 }
 
 type Claim struct {

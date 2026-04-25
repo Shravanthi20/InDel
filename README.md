@@ -639,29 +639,43 @@ erDiagram
 ```
 ---
 
-## Environment Variables
+## Environment Variables (Service-Specific)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DB_HOST` | `postgres` | PostgreSQL hostname |
-| `DB_PORT` | `5432` | PostgreSQL port |
-| `DB_NAME` | `indel_demo` | Database name |
-| `DB_USER` | `indel` | Database user |
-| `DB_PASSWORD` | *(secret)* | Database password |
-| `REDIS_ADDR` | `redis:6379` | Redis cluster address |
-| `KAFKA_BROKERS` | `kafka:9092` | Kafka broker list |
-| `JWT_PRIVATE_KEY` | *(secret)* | RS256 private key for token signing |
-| `RAZORPAY_KEY_ID` | *(secret)* | Razorpay API key |
-| `RAZORPAY_KEY_SECRET` | *(secret)* | Razorpay API secret |
-| `OWM_API_KEY` | *(secret)* | OpenWeatherMap API key |
-| `OPENAQ_API_KEY` | *(secret)* | OpenAQ API key |
-| `FCM_SERVER_KEY` | *(secret)* | Firebase Cloud Messaging key |
-| `ML_SERVICE_URL` | `http://ml-service:9000` | Internal ML service endpoint |
-| `ALLOWED_ORIGINS` | `*` | CORS allowed origins |
-| `LOG_LEVEL` | `info` | Logging verbosity |
-| `ENV` | `demo` | Deployment environment |
+Each service has its own env template. There is no required shared global backend `.env`.
 
-See `.env.demo.example` for a complete reference with comments.
+| Service | Env template |
+|--------|--------------|
+| Core | `backend/cmd/core/.env.example` |
+| Worker Gateway | `backend/cmd/worker-gateway/.env.example` |
+| Insurer Gateway | `backend/cmd/insurer-gateway/.env.example` |
+| Platform Gateway | `backend/cmd/platform-gateway/.env.example` |
+| Unified ML Service | `ml/.env.example` |
+
+Optional production and secret templates are also available per service:
+- `.env.production.example`
+- `.env.secrets.example`
+
+### Local Development
+
+1. Copy each template to a local `.env` file in the same service directory.
+2. Run each service from `backend` with `go run ./cmd/<service>` (or run ML from `ml`).
+3. Use localhost URLs for inter-service calls (example: `ML_SERVICE_URL=http://localhost:5000`).
+
+Each Go service loads its own env file first (for local runs), then falls back to process environment variables.
+On startup, required variables are validated and services fail fast with clear messages when config is incomplete.
+Validation also checks key formats (for example, `PORT` ranges and absolute service URLs).
+
+### Docker Compose
+
+- Use service DNS names, not localhost between containers.
+- Example: `ML_SERVICE_URL=http://ml-service:8000`
+- Compose files already provide service-scoped env variables under each service block.
+
+### Kubernetes / Cloud
+
+- Do not rely on `.env` files in production.
+- Inject variables via `ConfigMap` and `Secret`.
+- Keep naming consistent (`SERVICE_NAME_URL`, `KAFKA_BROKERS`, `DB_URL`, `PORT`).
 
 ---
 

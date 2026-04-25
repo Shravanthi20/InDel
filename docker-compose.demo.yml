@@ -6,21 +6,23 @@ services:
       dockerfile: Dockerfile
       args:
         SERVICE: core
-    env_file:
-      - .env
     environment:
       INDEL_ENV: demo
+      PORT: 8000
+      INDEL_ALLOWED_ORIGINS: '*'
       SERVICE: core
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
       DB_PASSWORD: ${DB_PASSWORD:-demo_password}
       DB_NAME: indel_demo
+      REDIS_URL: redis:6379
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
       FRAUD_LAYER_ENABLED: 'true'
-      FRAUD_SERVICE_URL: http://ml-service:8000
-      PREMIUM_ML_URL: http://ml-service:8000
+      ML_SERVICE_URL: http://ml-service:8000
+      ML_TIMEOUT_MS: 3000
+      ML_RETRY_COUNT: 2
     ports:
       - 8000:8000
     depends_on:
@@ -147,9 +149,13 @@ services:
         SERVICE: worker-gateway
     environment:
       INDEL_ENV: demo
+      PORT: 8001
+      INDEL_ALLOWED_ORIGINS: '*'
       SERVICE: worker-gateway
       CORE_URL: http://core:8000
-      PREMIUM_ML_URL: http://ml-service:8000
+      ML_SERVICE_URL: http://ml-service:8000
+      ML_TIMEOUT_MS: 3000
+      ML_RETRY_COUNT: 2
       INDEL_DEMO_RESET_KEY: ${INDEL_DEMO_RESET_KEY:-change-me-demo-reset-key}
       INDEL_DEMO_ALLOWED_ROLES: ${INDEL_DEMO_ALLOWED_ROLES:-worker,admin,platform_admin,ops_manager}
       INDEL_DEMO_DESTRUCTIVE_ROLES: ${INDEL_DEMO_DESTRUCTIVE_ROLES:-admin,platform_admin}
@@ -194,6 +200,8 @@ services:
         SERVICE: insurer-gateway
     environment:
       INDEL_ENV: demo
+      PORT: 8002
+      INDEL_ALLOWED_ORIGINS: '*'
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
       DB_HOST: postgres
@@ -233,6 +241,8 @@ services:
         SERVICE: platform-gateway
     environment:
       INDEL_ENV: demo
+      PORT: 8003
+      INDEL_ALLOWED_ORIGINS: '*'
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
       INDEL_PLATFORM_OPERATOR_ALLOWED_ROLES: ${INDEL_PLATFORM_OPERATOR_ALLOWED_ROLES:-admin,platform_admin,ops_manager}

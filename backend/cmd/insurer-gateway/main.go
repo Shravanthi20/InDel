@@ -12,13 +12,11 @@ import (
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
 	"github.com/Shravanthi20/InDel/backend/internal/services"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(); err != nil && os.Getenv("INDEL_ENV") != "production" {
-		log.Println("No .env file found, using environment variables")
+	if err := config.BootstrapServiceEnv("insurer-gateway"); err != nil {
+		log.Fatalf("Insurer Gateway env validation failed: %v", err)
 	}
 
 	// Create Gin router

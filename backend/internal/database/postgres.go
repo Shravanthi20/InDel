@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Shravanthi20/InDel/backend/internal/config"
 	"github.com/Shravanthi20/InDel/backend/internal/models"
@@ -29,6 +30,17 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Configure connection pool to prevent connection exhaustion
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	// Set reasonable connection pool limits
+	sqlDB.SetMaxIdleConns(10)           // Maximum number of idle connections
+	sqlDB.SetMaxOpenConns(100)          // Maximum number of open connections
+	sqlDB.SetConnMaxLifetime(time.Hour) // Maximum time a connection can be reused
 
 	return db, nil
 }

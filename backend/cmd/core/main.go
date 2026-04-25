@@ -14,13 +14,11 @@ import (
 	"github.com/Shravanthi20/InDel/backend/internal/middleware"
 	routerpkg "github.com/Shravanthi20/InDel/backend/internal/router"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(); err != nil && os.Getenv("INDEL_ENV") != "production" {
-		log.Println("No .env file found, using environment variables")
+	if err := config.BootstrapServiceEnv("core"); err != nil {
+		log.Fatalf("Core service env validation failed: %v", err)
 	}
 
 	// Load configuration

@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Shravanthi20/InDel/backend/internal/events"
+	"github.com/Shravanthi20/InDel/backend/internal/kafka"
 	"github.com/Shravanthi20/InDel/backend/internal/models"
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +34,10 @@ var (
 	// Idempotency cache
 	processedOrderIds = make(map[string]time.Time)
 	idCacheMu         sync.Mutex
+
+	// Kafka producer for disruption signal events
+	platformKafkaProducer *kafka.Producer
+	producerMu           sync.RWMutex
 )
 
 // ResetEngineForTests allows the testing suite to natively flush caches before independent scenarios
@@ -42,6 +49,13 @@ func ResetEngineForTests() {
 	idCacheMu.Lock()
 	processedOrderIds = make(map[string]time.Time)
 	idCacheMu.Unlock()
+}
+
+// SetKafkaProducer wires a Kafka producer into the platform handler package.
+func SetKafkaProducer(producer *kafka.Producer) {
+	producerMu.Lock()
+	defer producerMu.Unlock()
+	platformKafkaProducer = producer
 }
 
 // getOrCreateZoneState returns a concurrency safe reference to a ZoneSignalState
@@ -270,6 +284,9 @@ func createDisruptionRecord(zoneID uint, orderDrop float64, signals map[string]b
 		log.Printf("Failed to create disruption: %v", err)
 		return
 	}
+
+	// Publish disruption signal event for policy purchase blocking
+	publishDisruptionSignalEvent(disruption)
 
 	// DYNAMIC PREMIUM: Bump the risk rating of the zone to increase future premiums
 	_ = platformDB.Exec("UPDATE zones SET risk_rating = LEAST(risk_rating + 0.25, 1.0) WHERE id = ?", zoneID).Error
@@ -515,6 +532,52 @@ func ExternalSignalWebhook(c *gin.Context) {
 			"source":  req.Source,
 			"active":  isActive,
 		},
-		"meta": gin.H{"timestamp": time.Now().UTC().Format(time.RFC3339)},
 	})
+}
+
+// publishDisruptionSignalEvent emits disruption.active or disruption.predicted events
+// to enable policy purchase blocking via the disruption guard service.
+func publishDisruptionSignalEvent(disruption models.Disruption) {
+	// Get zone name for the event
+	var zoneName string
+	if err := platformDB.Table("zones").Select("name").Where("id = ?", disruption.ZoneID).Scan(&zoneName).Error; err != nil {
+		zoneName = "Unknown"
+	}
+
+	// Determine event type based on disruption status
+	eventType := kafka.TopicDisruptionActive
+	if disruption.Status == "predicted" || disruption.Status == "pending" {
+		eventType = kafka.TopicDisruptionPredicted
+	}
+
+	evt := events.DisruptionSignalEvent{
+		EventType:      eventType,
+		DisruptionID:   disruption.ID,
+		ZoneID:         disruption.ZoneID,
+		ZoneName:       zoneName,
+		DisruptionType: disruption.Type,
+		Severity:       disruption.Severity,
+		PredictedAt:    disruption.SignalTimestamp,
+		Timestamp:      time.Now().UTC(),
+		Metadata: map[string]interface{}{
+			"confidence": disruption.Confidence,
+			"status":     disruption.Status,
+		},
+	}
+
+	// Publish via platform Kafka producer if available
+	producerMu.RLock()
+	producer := platformKafkaProducer
+	producerMu.RUnlock()
+	
+	if producer != nil {
+		if b, err := json.Marshal(evt); err == nil {
+			key := fmt.Sprintf("disruption-%d", disruption.ID)
+			if err := producer.Publish(eventType, key, b); err != nil {
+				log.Printf("[KAFKA] Failed to publish disruption signal event: %v", err)
+			} else {
+				log.Printf("[KAFKA] Disruption signal event published: %s for disruption %d", eventType, disruption.ID)
+			}
+		}
+	}
 }

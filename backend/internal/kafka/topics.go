@@ -13,7 +13,21 @@ const (
 	TopicEarningsSettled     = "indel.earnings.settled"
 	TopicClaimReviewed       = "indel.claims.reviewed"
 
-	// New disruption event topics
+	// Disruption event topics
 	TopicClaimDisruptionCreated = "claim.disruption.created"
 	TopicClaimDisruptionUpdated = "claim.disruption.updated"
+
+	// Policy lock-in lifecycle topics
+	TopicPolicyCreated      = "policy.created"
+	TopicPolicyLocked       = "policy.locked"
+	TopicPolicyActivated    = "policy.activated"
+	TopicPurchaseBlocked    = "policy.purchase_blocked"
+
+	// Claim rejection topic (used when policy is in lock-in period)
+	TopicClaimRequested = "claim.requested"
+	TopicClaimRejected  = "claim.rejected"
+
+	// Disruption signal topics (used for purchase blocking)
+	TopicDisruptionActive    = "disruption.active"
+	TopicDisruptionPredicted = "disruption.predicted"
 )

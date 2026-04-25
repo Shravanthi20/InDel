@@ -40,7 +40,7 @@ services:
     - -path
     - /migrations
     - -database
-    - postgres://indel:${POSTGRES_PASSWORD:-password}@postgres:5432/indel?sslmode=disable
+    - postgres://indel:${DB_PASSWORD:-password}@postgres:5432/indel?sslmode=disable
     - up
     volumes:
     - ./migrations:/migrations
@@ -85,15 +85,19 @@ services:
       args:
         SERVICE: core
     environment:
-      INDEL_ENV: production
+      INDEL_ENV: development
+      PORT: 8000
       INDEL_ALLOWED_ORIGINS: '*'
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
       DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_NAME: indel
+      DB_SSLMODE: disable
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis:6379
+      JWT_SECRET: indel-dev-secret-change-in-production
+      ML_SERVICE_URL: http://ml-service:8000
       RAZORPAY_API_KEY: ${RAZORPAY_API_KEY:-}
       RAZORPAY_API_SECRET: ${RAZORPAY_API_SECRET:-}
       RAZORPAY_MODE: ${RAZORPAY_MODE:-test}
@@ -102,8 +106,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
       kafka:
         condition: service_healthy
       redis:
@@ -129,10 +131,13 @@ services:
         SERVICE: worker-gateway
     environment:
       INDEL_ENV: production
+      PORT: 8001
       INDEL_ALLOWED_ORIGINS: '*'
       SERVICE: worker-gateway
       CORE_URL: http://core:8000
-      PREMIUM_ML_URL: http://ml-service:8000
+      ML_SERVICE_URL: http://ml-service:8000
+      ML_TIMEOUT_MS: 3000
+      ML_RETRY_COUNT: 2
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: indel
@@ -144,8 +149,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
       core:
         condition: service_healthy
       redis:
@@ -168,6 +171,7 @@ services:
         SERVICE: insurer-gateway
     environment:
       INDEL_ENV: production
+      PORT: 8002
       INDEL_ALLOWED_ORIGINS: '*'
       SERVICE: insurer-gateway
       CORE_URL: http://core:8000
@@ -178,13 +182,12 @@ services:
       DB_NAME: indel
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis:6379
+      ML_SERVICE_URL: http://ml-service:8000
     ports:
     - 8002:8002
     depends_on:
       postgres:
         condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
       core:
         condition: service_healthy
       redis:
@@ -205,6 +208,7 @@ services:
         SERVICE: platform-gateway
     environment:
       INDEL_ENV: production
+      PORT: 8003
       INDEL_ALLOWED_ORIGINS: '*'
       SERVICE: platform-gateway
       CORE_URL: http://core:8000
@@ -214,13 +218,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-password}
       DB_NAME: indel
       REDIS_URL: redis:6379
+      ML_SERVICE_URL: http://ml-service:8000
     ports:
     - 8003:8003
     depends_on:
       postgres:
         condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
       core:
         condition: service_healthy
       redis:
@@ -284,9 +287,6 @@ services:
     - go test ./internal/handlers/worker -v
     volumes:
     - ./:/app
-    depends_on:
-      db-migrate:
-        condition: service_completed_successfully
     restart: 'no'
     profiles:
     - test

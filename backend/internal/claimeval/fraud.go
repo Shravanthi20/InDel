@@ -1,15 +1,13 @@
 package claimeval
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/Shravanthi20/InDel/backend/internal/clients"
 )
 
 const fallbackFraudScore = 0.10
@@ -66,47 +64,10 @@ func FetchFraudScore(ctx context.Context, activity WorkerActivity) (float64, []F
 		}
 	}
 
-	endpoint := strings.TrimSpace(os.Getenv("FRAUD_SERVICE_URL"))
-	if endpoint == "" {
-		baseURL := strings.TrimSpace(os.Getenv("FRAUD_ML_URL"))
-		if baseURL == "" {
-			return fallbackFraudScore, []FraudSignal{{
-				Name:        "fraud_service_unavailable",
-				Impact:      0.05,
-				Description: "Fraud ML URL or SERVICE URL missing. Falling back to low-risk score.",
-			}}, true
-		}
-		endpoint = strings.TrimRight(baseURL, "/") + "/ml/v1/fraud/score"
-	}
-
 	payload := buildFraudRequest(activity)
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fallbackFraudScore, []FraudSignal{{
-			Name:        "fraud_payload_error",
-			Impact:      0.05,
-			Description: "Fraud payload could not be encoded. Falling back to low-risk score.",
-		}}, true
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return fallbackFraudScore, []FraudSignal{{
-			Name:        "fraud_request_error",
-			Impact:      0.05,
-			Description: "Fraud request could not be created. Falling back to low-risk score.",
-		}}, true
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	timeout := 4 * time.Second
-	if raw := strings.TrimSpace(os.Getenv("FRAUD_ML_TIMEOUT_MS")); raw != "" {
-		if parsed, parseErr := strconv.Atoi(raw); parseErr == nil && parsed > 0 {
-			timeout = time.Duration(parsed) * time.Millisecond
-		}
-	}
-
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	client := clients.NewMLClientFromEnv()
+	var decoded fraudResponse
+	err := client.GetFraudScore(withCorrelation(ctx, activity.WorkerID), payload, &decoded)
 	if err != nil {
 		return fallbackFraudScore, []FraudSignal{{
 			Name:        "fraud_service_timeout",
@@ -114,26 +75,17 @@ func FetchFraudScore(ctx context.Context, activity WorkerActivity) (float64, []F
 			Description: "Fraud ML call failed. Falling back to low-risk score.",
 		}}, true
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		return fallbackFraudScore, []FraudSignal{{
-			Name:        "fraud_service_error",
-			Impact:      0.05,
-			Description: fmt.Sprintf("Fraud ML returned HTTP %d. Falling back to low-risk score.", resp.StatusCode),
-		}}, true
-	}
-
-	var decoded fraudResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return fallbackFraudScore, []FraudSignal{{
-			Name:        "fraud_response_error",
-			Impact:      0.05,
-			Description: "Fraud ML response could not be decoded. Falling back to low-risk score.",
-		}}, true
-	}
-
 	return clamp(decoded.FraudScore, 0, 1), decoded.Signals, false
+}
+
+func withCorrelation(ctx context.Context, workerID uint) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if existing, ok := ctx.Value("request_id").(string); ok && strings.TrimSpace(existing) != "" {
+		return ctx
+	}
+	return context.WithValue(ctx, "request_id", fmt.Sprintf("fraud-%d", workerID))
 }
 
 func buildFraudRequest(activity WorkerActivity) fraudRequest {

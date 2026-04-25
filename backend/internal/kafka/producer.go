@@ -2,9 +2,11 @@ package kafka
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"hash"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/xdg/scram"
@@ -70,12 +72,25 @@ func (x *XDGSCRAMClient) Done() bool {
 }
 
 func (p *Producer) Publish(topic string, key string, message []byte) error {
-	p.producer.Input() <- &sarama.ProducerMessage{
+	if p.producer == nil {
+		return fmt.Errorf("producer not initialized")
+	}
+
+	msg := &sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.StringEncoder(key),
 		Value: sarama.ByteEncoder(message),
 	}
-	return nil
+
+	// Non-blocking publish with timeout and error handling
+	select {
+	case p.producer.Input() <- msg:
+		return nil
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("kafka producer publish timeout after 5s")
+	case err := <-p.producer.Errors():
+		return fmt.Errorf("kafka producer error: %w", err)
+	}
 }
 
 func (p *Producer) Close() error {

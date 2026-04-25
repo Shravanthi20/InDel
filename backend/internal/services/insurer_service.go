@@ -287,6 +287,7 @@ func (s *InsurerService) GetOverview() (*models.InsurerOverview, string, error) 
 	if s.DB == nil {
 		return &models.InsurerOverview{
 			ActiveWorkers:      500,
+			LockedWorkers:      25,
 			PendingClaims:      10,
 			ApprovedClaims:     120,
 			LossRatio:          0.45,
@@ -296,12 +297,14 @@ func (s *InsurerService) GetOverview() (*models.InsurerOverview, string, error) 
 	}
 
 	var activeWorkers int64
+	var lockedWorkers int64
 	var pendingClaims int64
 	var approvedClaims int64
 	var premiums float64
 	var payouts float64
 
 	_ = s.DB.Raw("SELECT COUNT(DISTINCT worker_id) FROM policies WHERE status = 'active'").Scan(&activeWorkers).Error
+	_ = s.DB.Raw("SELECT COUNT(DISTINCT worker_id) FROM policies WHERE status = 'locked'").Scan(&lockedWorkers).Error
 	_ = s.DB.Raw("SELECT COUNT(*) FROM claims WHERE status IN ('pending', 'manual_review')").Scan(&pendingClaims).Error
 	_ = s.DB.Raw("SELECT COUNT(*) FROM claims WHERE status IN ('approved', 'processed', 'paid')").Scan(&approvedClaims).Error
 	_ = s.DB.Raw("SELECT COALESCE(SUM(amount), 0) FROM premium_payments WHERE status IN ('completed', 'captured', 'processed')").Scan(&premiums).Error
@@ -324,6 +327,7 @@ func (s *InsurerService) GetOverview() (*models.InsurerOverview, string, error) 
 
 	return &models.InsurerOverview{
 		ActiveWorkers:      float64(activeWorkers),
+		LockedWorkers:      float64(lockedWorkers),
 		PendingClaims:      float64(pendingClaims),
 		ApprovedClaims:     float64(approvedClaims),
 		LossRatio:          lossRatio,
